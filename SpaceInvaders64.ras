@@ -62,8 +62,13 @@
 program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
+@use "system"
 
 var
+	Score : Integer = 9950;
+	Score2 : Integer = 0;
+	//Score : Integer = 32760;
+	//Test: ^byte;
 	
 	const useKernal : byte = 0;				// Flags whether interrupt chain should use the Kernal.
 	RasterCount : byte;						// Keeps track of the number of times the interrupt 
@@ -125,6 +130,27 @@ var
 	// sprite_x is an integer since x values range between 0 and 320
 	sprite_x : byte = 22;
 	sprite_y : byte = 226;
+	
+	monster1_x : byte;
+	monster1_y : byte;
+	
+	monster2_x : byte;
+	monster2_y : byte;
+	
+	monster3_x : byte;
+	monster3_y : byte;
+	
+	monster4_x : byte;
+	monster4_y : byte;
+	
+	monsterOffset_x : byte;
+	monsterOffset_y : byte;
+	
+	const monsterSprite1:byte = 1;
+	const monsterSprite2:byte = 2;
+	const monsterSprite3:byte = 3;
+	const monsterSprite4:byte = 4;
+	
 	// joystick_dir is used to display either left or right-pointing sprite
 	joystick_dir : byte;
 	// sprite location is where we keep the sprite in the memory.
@@ -146,7 +172,7 @@ var
 procedure InitSprites();
 begin
 	// Set all sprites to be multicolor
-	sprite_multicolor:=$ff;
+	//sprite_multicolor:=$ff;
 	// Set common sprite multicolor #1 
 	sprite_multicolor_reg1:=green;
 	// Set  common sprite multicolor #2 
@@ -157,8 +183,19 @@ begin
 	togglebit(sprite_bitmask,useSprite,1);
 end;
 
+Procedure DisplayScore();
+Begin
+Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);
+	Screen::PrintString(" ",29,3,#Screen::screen0);
+	moveto(30,3,hi(screen_char_loc));
+	PrintDecimal(Score2,4);
+	moveto(35,3,hi(screen_char_loc));
+	PrintDecimal(Score,3);	
+end;
+
 procedure UpdateSprite();
 begin
+	DisplayScore();
 	// Update sprite position based on joystick values
 	sprite_x+= (joystickright*2 - joystickleft*2);
 	//sprite_y+= joystickdown - joystickup;
@@ -189,7 +226,7 @@ begin
 end;
 
 // This interrupt is triggered one time pr raster cycle
-interrupt MainRasterSprite();
+/*interrupt MainRasterSprite();
 begin
 	startirq(1);
 	// Update joystick here
@@ -198,7 +235,7 @@ begin
 	// Update sprites
 	UpdateSprite();	
 	closeirq();
-end;
+end;*/
 
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -225,7 +262,7 @@ begin
 		
 		row := 0;
 		
-		while row <= 18 do begin
+		while row <= 17 do begin
 			
 			screenmemory := AddressTable( #saddr, col, row );
 			screenmemory[0] := currentchar;
@@ -276,12 +313,58 @@ begin
 	end;
 end;
 
+Procedure DisplayText();
+begin
+	/*Score += 9;
+
+	if (Score >= 10000) then begin
+		Score := Score - 10000;
+		Score2 += 1;
+	end;*/
+	
+	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);
+	Screen::PrintString(" ",29,3,#Screen::screen0);
+	moveto(30,3,hi(screen_char_loc));
+	PrintDecimal(Score2,4);
+	moveto(35,3,hi(screen_char_loc));
+	PrintDecimal(Score,3);
+	
+	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
+	Screen::PrintString("      1740",29,13,#Screen::screen0);
+	
+	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
+	Screen::PrintString("      1740",29,23,#Screen::screen0);
+
+	Screen::PrintString("lmn",4,19,#Screen::screen0);
+	Screen::PrintString("opq",4,20,#Screen::screen0);
+	
+	Screen::PrintString("rst",10,19,#Screen::screen0);
+	Screen::PrintString("uvw",10,20,#Screen::screen0);
+	
+	Screen::PrintString("xyz",16,19,#Screen::screen0);
+	Screen::PrintString("!#¤",16,20,#Screen::screen0);
+	
+	Screen::PrintString("¤%&",22,19,#Screen::screen0);
+	Screen::PrintString("/+*",22,20,#Screen::screen0);
+	
+	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
+	
+end;
+
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Update the starfield by redefining bytes in the character set once per frame.
 // ---------------------------------------------------------------------------------------------------------------------------------
 Procedure DoStarfield();
 	
 begin
+	Score += 9;
+
+	if (Score >= 10000) then begin
+		Score := Score - 10000;
+		Score2 += 1;
+	end;
+	
 
 	// -- Star 1 updates every other frame.
 	if (RasterCount & 1) = 1 then begin
@@ -340,35 +423,166 @@ begin
 	else begin
 		StaticStarPtr[0] := 0;
 	end;	
-	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);
-	Screen::PrintString("      1740",29,3,#Screen::screen0);
 	
-	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
-	Screen::PrintString("      1740",29,13,#Screen::screen0);
 	
-	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
-	Screen::PrintString("      1740",29,23,#Screen::screen0);
+	
+end;
 
-	Screen::PrintString("AAA",4,20,#Screen::screen0);
-	Screen::PrintString("AAA",4,21,#Screen::screen0);
+procedure UpdateMonsters();
+begin
+	// Update sprite position based on joystick values
+	monster1_x+= (joystickright*2 - joystickleft*2);
+	//sprite_y+= joystickdown - joystickup;
+	// Update the sprite position on screen for sprite number @useSprite	
+	SpritePos(monster1_x, monster1_y, monsterSprite1);
+	SpritePos(monster1_x+54, monster2_y, monsterSprite2);
+	SpritePos(monster1_x+108, monster3_y, monsterSprite3);
+	SpritePos(monster1_x+162, monster4_y, monsterSprite4);
 	
-	Screen::PrintString("BBB",10,20,#Screen::screen0);
-	Screen::PrintString("BBB",10,21,#Screen::screen0);
+	//Possible bug
+	/*SpritePos(monster1_x, monster1_y, monsterSprite1);
+	SpritePos(monster2_x, monster2_y, monsterSprite2);
+	SpritePos(monster3_x, monster3_y, monsterSprite3);
+	SpritePos(monster4_x, monster4_y, monsterSprite4);*/
 	
-	Screen::PrintString("CCC",16,20,#Screen::screen0);
-	Screen::PrintString("CCC",16,21,#Screen::screen0);
+	// Set left/right offset pointer for sprite
+	//if (joystickright) then
+	//	joystick_dir := 1;
+	if (joystickleft) then
+		joystick_dir := 0;
 	
-	Screen::PrintString("DDD",22,20,#Screen::screen0);
-	Screen::PrintString("DDD",22,21,#Screen::screen0);
+	// Set the sprite pointer to point to the sprite data + direction offset
+	//SetSpriteLoc(useSprite, @spriteLoc/64 + joystick_dir, useBank);
+
+	// If any movement is detected, play a random sound
+	/*if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
+		PlaySound(sid_channel1, 
+				13,  // Volume
+				20+Random()/16,  // Hi byte frequency
+				0*16+0,  // Attack voice 1
+				3*16 + 3,   // Sustain = 16*15 + release=6
+				1 +sid_saw,  // Waveform
+				sid_saw);  // waveform */
+				
+
+
+end;
+
+procedure UpdateMonsters2();
+begin	
+	SpritePos(monster1_x, monster1_y+26, monsterSprite1);
+	SpritePos(monster1_x+54, monster2_y+26, monsterSprite2);
+	SpritePos(monster1_x+108, monster3_y+26, monsterSprite3);
+	SpritePos(monster1_x+162, monster4_y+26, monsterSprite4);
+
+end;
+
+procedure UpdateMonsters3();
+begin	
+	SpritePos(monster1_x, monster1_y+52, monsterSprite1);
+	SpritePos(monster1_x+54, monster2_y+52, monsterSprite2);
+	SpritePos(monster1_x+108, monster3_y+52, monsterSprite3);
+	SpritePos(monster1_x+162, monster4_y+52, monsterSprite4);
+
+end;
+
+
+procedure InitMonsters();
+begin
+	monster1_y := 82;
+	monster1_x := 32;
+	
+	monster2_y := 82;
+	monster2_x := 86;
+	
+	monster3_y := 82;
+	monster3_x := 140;
+	
+	monster4_y := 82;
+	monster4_x := 194;
 	
 	
+	// Set all sprites to be multicolor
+	//sprite_multicolor:=$ff;
+	// Set common sprite multicolor #1 
+	//sprite_multicolor_reg1:=green;
+	// Set  common sprite multicolor #2 
+	//sprite_multicolor_reg2:=white;
+	// Set sprite "0" individual color value 
+	sprite_color[monsterSprite1]:=light_red;
+	/*sprite_color[monsterSprite2]:=light_red;
+	sprite_color[monsterSprite3]:=light_red;
+	sprite_color[monsterSprite4]:=light_red;*/
+	// Turn on sprite 0 (or @useSprite)
+	togglebit(sprite_bitmask,monsterSprite1,1);
+	togglebit(sprite_bitmask,monsterSprite2,1);
+	togglebit(sprite_bitmask,monsterSprite3,1);
+	togglebit(sprite_bitmask,monsterSprite4,1);
+	
+	togglebit(SPRITE_STRETCH_X,monsterSprite1,1);
+	togglebit(SPRITE_STRETCH_X,monsterSprite2,1);
+	togglebit(SPRITE_STRETCH_X,monsterSprite3,1);
+	togglebit(SPRITE_STRETCH_X,monsterSprite4,1);
+	
+end;
+
+var
+        @define useKernal 0
+
+interrupt InterruptRoutine02();
+interrupt InterruptRoutine03();
+interrupt MainRaster3();
+interrupt MainRaster2();
+
+interrupt InterruptRoutine01();
+begin		
+        StartIRQ(@useKernal);
+        //SCREEN_BG_COL:=RED;                
+		RasterIRQ(MainRaster3(),0,@useKernal);        
+		UpdateMonsters();
+        
+        WaitForRaster(103);
+        
+        //WaitForRaster(109);
+        //SCREEN_BG_COL:=GREEN;
+        UpdateMonsters2();
+        WaitForRaster(129);
+        //SCREEN_BG_COL:=BLUE;
+        UpdateMonsters3();
+        
+        CloseIRQ();
+end;
+
+interrupt InterruptRoutine02();
+begin
+        //StartIRQ(@useKernal);
+        //SCREEN_BG_COL:=BLUE;
+        WaitForRaster(140);
+        UpdateMonsters3();
+        RasterIRQ(MainRaster3(),160,@useKernal);
+        //CloseIRQ();
+end;
+
+interrupt InterruptRoutine03();
+begin
+        //StartIRQ(@useKernal);
+        //SCREEN_BG_COL:=GREEN;                
+        RasterIRQ(MainRaster3(),250,@useKernal);
+        //UpdateMonsters2();
+        //UpdateMonsters2();
+        //CloseIRQ();
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Main raster interrupt routine.
 // ---------------------------------------------------------------------------------------------------------------------------------
-interrupt MainRaster();
+interrupt MainRasterOld();
 begin
+	
+	
+        //SCREEN_BG_COL:=RED;
+
+        
 
 	startirq(1);
 	// Update joystick here
@@ -376,20 +590,89 @@ begin
 	Joystick(joystickPort);
 	// Update sprites
 	UpdateSprite();	
+	UpdateMonsters();
 	//closeirq();
+	
+	/*StartIRQ(0);
+        SCREEN_BG_COL:=BLUE;
+        RasterIRQ(InterruptRoutine02(),150,0);
+        CloseIRQ();*/
+        
+    //WaitForRaster(150);
+        //SCREEN_BG_COL:=YELLOW;
 	
 	StartIRQ(useKernal);					// All code must be between StartIrq\CloseIrq
 	inc(RasterCount);
-
+	
+	//SCREEN_BG_COL:=BLUE;
+	//RasterIRQ(InterruptRoutine02(),150,0);
+	
+	
 	// Debug
 	//moveto(10,10,$04);
 	//printnumber(RasterCount);
 
     DoStarfield();
     
+    preventirq();
+        disableciainterrupts();
+        setmemoryconfig(1,@useKernal,0);
+        enablerasterirq();
+        //rasterirq(InterruptRoutine01(),0,@useKernal);
+        enableirq();
+    
+    //rasterirq(InterruptRoutine01(),1,@useKernal);
+    
+    
 	CloseIRQ();
+	
+
+	
+	/*WaitForRaster(250);    
+    SCREEN_BG_COL:=GREEN;*/
 
 end;
+
+interrupt MainRaster2();
+begin
+		
+	//StartIRQ(useKernal);					// All code must be between StartIrq\CloseIrq
+	inc(RasterCount);
+	
+
+    DoStarfield();
+    
+    //preventirq();
+    
+    RasterIRQ(InterruptRoutine01(),0,@useKernal);
+	//CloseIRQ();
+end;
+
+
+interrupt MainRaster3();
+begin
+	
+	
+
+
+	// Update joystick here
+	Memory::Fill(#joystickup,0,5);
+	Joystick(joystickPort);
+	// Update sprites
+	UpdateSprite();	
+	//UpdateMonsters();	
+	RasterIRQ(MainRaster2(),0,@useKernal);
+	//RasterIRQ(InterruptRoutine01(),0,@useKernal);
+
+
+
+end;
+
+
+
+
+
+
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Main program loop. Turn CIA interrupts off, copy the character set from ROM into RAM and tell the machine to look at CharSetLoc
@@ -397,23 +680,32 @@ end;
 // ---------------------------------------------------------------------------------------------------------------------------------
 begin
 	InitSprites();
+	InitMonsters();
+	
+
+	
 	//StartRasterChain(MainRasterSprite(),0,1);	
 	
 	DisableCIAInterrupts();				// Stop handling timer, joystick, keyboard ...
     SCREEN_BG_COL:=BLACK;
     SCREEN_FG_COL:=BLACK;
     
-    DefineScreen();
+    
+    
+    //DefineScreen();
 
     SetCharsetLocation(CharSetLoc);
  	CopyCharsetFromRom(CharSetLoc);
 
-	
+
 	
 	CreateStarScreen();
 	
 	// -- Comment this line out to see the effect of the character set being overwritten.
 	//ClearCharacterSet();
+
+		
+
 	  
 	StarfieldPtr := #Star1Init;
 	StarfieldPtr2 := #Star2Init;
@@ -423,15 +715,44 @@ begin
 	// IO area visible at $D000-$DFFF, RAM visible at $A000-$BFFF (NO BASIC) and RAM visible at $E000-$FFFF (NO KERNAL). 
 	// This is the typical memory configuration for demo/game development. 
 	SetMemoryConfig(1, 0, 0);	
-	StartRasterChain(MainRaster(), $DC, useKernal);
 	
-	/*InitSprites();
-	StartRasterChain(MainRasterSprite(),0,1);*/	
+/*preventirq();
+        disableciainterrupts();
+        setmemoryconfig(1,@useKernal,0);
+        enablerasterirq();
+        rasterirq(InterruptRoutine01(),0,@useKernal);
+        enableirq();*/
 	
-			
+	
+	//StartRasterChain(MainRaster(), $DC, useKernal);
+	
+	PreventIRQ();
+	DisableCIAInterrupts();
+
+	
+    
+    
+	enablerasterirq();	
+	//StartIRQ(useKernal);
+	DisplayText();
+	RasterIRQ(InterruptRoutine01(),0,@useKernal);
+
+	//RasterIRQ(MainRaster2(), 250, useKernal);
+
+	//RasterIRQ(MainRaster3(), 0, useKernal);
+	//CloseIRQ();
+	
+
+	enableirq();
+	
+				
+	//InitSprites();
+	//StartRasterChain(MainRasterSprite(),0,1);
+	
+	
+
 
 	Loop(); 
 	//  Note: VICE monitor io d000
 	
 end.
-
