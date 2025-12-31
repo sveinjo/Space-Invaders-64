@@ -50,8 +50,8 @@ var
 	// image is located under sprites/sprites.flf 
 	  	
 	// Export all sprites automatically on each build
-	//@export "resources/sprites/sprites.flf" "resources/sprites/sprites.bin" 256 	  	
-	//sprites:incbin("resources/sprites/sprites.bin", @spriteLoc); 
+	@export "sprites/spritesheet.flf" "sprites/spritesheet.bin" 256 	  	
+	sprites:incbin("sprites/spritesheet.bin", @spriteLoc); 
 
 	// Declarations
 	interrupt MainRasterRow2();
@@ -100,7 +100,11 @@ begin
 		joystick_dir := 0;
 	
 	// Set the sprite pointer to point to the sprite data + direction offset
-	//SetSpriteLoc(useSprite, @spriteLoc/64 + joystick_dir, useBank);
+	SetSpriteLoc(useSprite, @spriteLoc/64 + 1, useBank);
+	SetSpriteLoc(1, @spriteLoc/64 + joystick_dir, useBank);
+	SetSpriteLoc(2, @spriteLoc/64 + joystick_dir, useBank);
+	SetSpriteLoc(3, @spriteLoc/64 + joystick_dir, useBank);
+	SetSpriteLoc(4, @spriteLoc/64 + joystick_dir, useBank);
 
 	// If any movement is detected, play a random sound
 //	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
