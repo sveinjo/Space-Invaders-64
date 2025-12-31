@@ -31,23 +31,23 @@ Screen_tab40	dc.w $00, $28, $50, $78, $a0, $c8, $f0, $118
 Memory_p	= $16
 Memory_v	dc.b	0
 Memory_v2	dc.b	0
-Score	dc.w	$26de
-Score2	dc.w	$00
-RasterCount	dc.b	0
-StarfieldPtr	= $0B
-StarfieldPtr2	= $0D
-StarfieldPtr3	= $10
-StarfieldPtr4	= $12
-StaticStarPtr	= $22
-StaticStarBlink	dc.b	0
-StarfieldRow	dc.b $3a, $5c, $49, $40, $5b, $3e, $5d, $51
+StarField_RasterCount	dc.b	0
+StarField_StarfieldPtr	= $0B
+StarField_StarfieldPtr2	= $0D
+StarField_StarfieldPtr3	= $10
+StarField_StarfieldPtr4	= $12
+StarField_StaticStarPtr	= $22
+StarField_StaticStarBlink	dc.b	0
+StarField_StarfieldRow	dc.b $3a, $5c, $49, $40, $5b, $3e, $5d, $51
 	dc.b $42, $5e, $56, $3b, $4f, $57, $50, $47
 	dc.b $4c, $43, $52, $5f, $64, $4e, $63, $3c
 	dc.b $4b, $3f, $54, $41, $53, $60, $44, $58
 	dc.b $4a, $3d, $5a, $62, $55, $65, $61, $4d
-StarfieldColours	dc.b $e, $a, $c, $f, $e, $d, $c, $b
+StarField_StarfieldColours	dc.b $e, $a, $c, $f, $e, $d, $c, $b
 	dc.b $a, $e, $e, $a, $e, $f, $e, $d
 	dc.b $c, $b, $a, $c
+Score	dc.w	$26de
+Score2	dc.w	$00
 sprite_x	dc.b	$16
 sprite_y	dc.b	$e2
 monster1_x	dc.b	0
@@ -63,10 +63,10 @@ joystick_dir	dc.b	0
 	; ***********  Defining procedure : init16x8div
 	;    Procedure type : Built-in function
 	;    Requires initialization : no
-initdiv16x8_divisor = $4C     ;$59 used for hi-byte
-initdiv16x8_dividend = $4E	  ;$fc used for hi-byte
+initdiv16x8_divisor = $4c     ;$59 used for hi-byte
+initdiv16x8_dividend = $4e	  ;$fc used for hi-byte
 initdiv16x8_remainder = $50	  ;$fe used for hi-byte
-initdiv16x8_result = $4E ;save memory by reusing divident to store the result
+initdiv16x8_result = $4e ;save memory by reusing divident to store the result
 divide16x8
 	lda #0	        ;preset remainder to 0
 	sta initdiv16x8_remainder
@@ -95,8 +95,8 @@ end_procedure_init16x8div
 	; ***********  Defining procedure : init16x8mul
 	;    Procedure type : Built-in function
 	;    Requires initialization : no
-mul16x8_num1Hi = $4C
-mul16x8_num1 = $4E
+mul16x8_num1Hi = $4c
+mul16x8_num1 = $4e
 mul16x8_num2 = $50
 mul16x8_procedure
 	lda #$00
@@ -123,8 +123,8 @@ end_procedure_init16x8mul
 	; ***********  Defining procedure : init8x8div
 	;    Procedure type : Built-in function
 	;    Requires initialization : no
-div8x8_c = $4C
-div8x8_d = $4E
+div8x8_c = $4c
+div8x8_d = $4e
 div8x8_e = $50
 	; Normal 8x8 bin div
 div8x8_procedure
@@ -149,13 +149,13 @@ end_procedure_init8x8div
 	; ***********  Defining procedure : initeightbitmul
 	;    Procedure type : Built-in function
 	;    Requires initialization : no
-multiplier = $4C
-multiplier_a = $4E
+multiplier = $4c
+multiplier_a = $4e
 multiply_eightbit
 	cpx #$00
 	beq mul_end
 	dex
-	stx $4E
+	stx $4e
 	lsr
 	sta multiplier
 	lda #$00
@@ -233,8 +233,8 @@ end_procedure_initjoystick
 	jmp initmoveto_moveto3
 screenmemory =  $fe
 colormemory =  $fb
-screen_x = $4C
-screen_y = $4E
+screen_x = $4c
+screen_y = $4e
 SetScreenPosition
 	sta screenmemory+1
 	lda #0
@@ -288,7 +288,7 @@ end_procedure_initprintdecimal
 	; ***********  Defining procedure : initprintstring
 	;    Procedure type : Built-in function
 	;    Requires initialization : no
-print_text = $4C
+print_text = $4c
 print_number_text: .dc "    ",0
 printstring
 	ldy #0
@@ -445,9 +445,6 @@ end_procedure_Memory_Fill_override_2
 ; //
 ; // By Alan Bourke in 2021 using Turbo Rascal.
 ; //
-; //
-; //
-; //
 ; //	This is a conversion of Jason Aldred's Galencia starfield, taken from his
 ; //	game of the same name. Jason extracted the starfield ASM code into a standalone
 ; //	programme (see link below), and this is an Turbo Rascal recreation of that.
@@ -500,9 +497,6 @@ end_procedure_Memory_Fill_override_2
 ; //www.youtube.com/watch?v=47LakVkR5lg&t=1251s
 ; //
 ; //
-; //
-; //Score : Integer = 32760;
-; //Test: ^byte;
 ; // Flags whether interrupt chain should use the Kernal.
 ; // Keeps track of the number of times the interrupt 
 ; // handler that draws the stars has been hit.
@@ -526,24 +520,618 @@ end_procedure_Memory_Fill_override_2
 ; // Flag used to toggle the static blinking stars on and off.
 ; // One screen row of 40 PETSCII characters.
 ; // The colour values corresponding to the characters.
-; // sprite_x is an integer since x values range between 0 and 320
-; // joystick_dir is used to display either left or right-pointing sprite
-; // sprite location is where we keep the sprite in the memory.
-; // also used for setspriteloc that needs this value divided by 64
-; // In this tuturial, we use sprite "0" as the default one
-; // Use joystick port 2
-; // Include the sprite binary file. The original 
-; // image is located under sprites/sprites.flf 
-; // Export all sprites automatically on each build
-; //@export "resources/sprites/sprites.flf" "resources/sprites/sprites.bin" 256 	  	
-; //sprites:incbin("resources/sprites/sprites.bin", 8192); 
+; // ---------------------------------------------------------------------------------------------------------------------------------
+; // Fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
+; // ---------------------------------------------------------------------------------------------------------------------------------
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : StarField_CreateStarScreen
+	;    Procedure type : User-defined procedure
+StarField_currentchar	dc.b	0
+StarField_colourindex	dc.b	0
+StarField_col	dc.b	0
+StarField_row	dc.b	0
+StarField_saddr	dc.w	 
+	org StarField_saddr+50
+StarField_caddr	dc.w	 
+	org StarField_caddr+50
+StarField_CreateStarScreen_block36
+StarField_CreateStarScreen
+	
+; //offset : integer;
+	; ----------
+	; DefineAddressTable address, StartValue, IncrementValue, TableSize
+	ldy #>$400
+	lda #<$400
+	ldx #0
+	sta StarField_saddr,x   ; Address of table
+	tya
+	sta StarField_saddr+1,x
+StarField_CreateStarScreen_dtloop37
+	tay
+	lda StarField_saddr,x
+	inx
+	inx
+	clc
+	adc #$28
+	bcc StarField_CreateStarScreen_dtnooverflow38
+	iny
+StarField_CreateStarScreen_dtnooverflow38
+	sta StarField_saddr,x
+	tya
+	sta StarField_saddr+1,x
+	cpx #$30
+	bcc StarField_CreateStarScreen_dtloop37
+	
+; // $0400 screen address, 40 characters per column, 25 rows
+	; ----------
+	; DefineAddressTable address, StartValue, IncrementValue, TableSize
+	ldy #>$d800
+	lda #<$d800
+	ldx #0
+	sta StarField_caddr,x   ; Address of table
+	tya
+	sta StarField_caddr+1,x
+StarField_CreateStarScreen_dtloop39
+	tay
+	lda StarField_caddr,x
+	inx
+	inx
+	clc
+	adc #$28
+	bcc StarField_CreateStarScreen_dtnooverflow40
+	iny
+StarField_CreateStarScreen_dtnooverflow40
+	sta StarField_caddr,x
+	tya
+	sta StarField_caddr+1,x
+	cpx #$30
+	bcc StarField_CreateStarScreen_dtloop39
+	
+; // $D800 color address, 40 characters per column, 25 rows
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta StarField_col
+StarField_CreateStarScreen_while41
+StarField_CreateStarScreen_loopstart45
+	; Optimization: replacing a <= N with a <= N-1
+	; Binary clause Simplified: LESS
+	lda StarField_col
+	; Compare with pure num / var optimization
+	cmp #$1d;keep
+	bcs StarField_CreateStarScreen_localfailed106
+	jmp StarField_CreateStarScreen_ctb42
+StarField_CreateStarScreen_localfailed106
+	jmp StarField_CreateStarScreen_edblock44
+StarField_CreateStarScreen_ctb42: ;Main true block ;keep 
+	; Load Byte array
+	; CAST type NADA
+	ldx StarField_col
+	lda StarField_StarfieldRow,x 
+	; Calling storevariable on generic assign expression
+	sta StarField_currentchar
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta StarField_row
+StarField_CreateStarScreen_while108
+StarField_CreateStarScreen_loopstart112
+	; Binary clause Simplified: LESS
+	lda StarField_row
+	; Compare with pure num / var optimization
+	cmp #$12;keep
+	bcs StarField_CreateStarScreen_edblock111
+StarField_CreateStarScreen_ctb109: ;Main true block ;keep 
+	; ----------
+	; AddressTable address, xoffset, yoffset
+	; yoffset is complex
+	lda StarField_row
+	asl ; *2
+	tax
+	lda StarField_saddr,x   ; Address of table lo
+	ldy StarField_saddr+1,x   ; Address of table hi
+	clc
+	adc StarField_col
+	bcc StarField_CreateStarScreen_dtnooverflow138
+	iny  ; overflow into high byte
+StarField_CreateStarScreen_dtnooverflow138
+	sta screenmemory
+	sty screenmemory+1
+	lda StarField_currentchar
+	; Calling storevariable on generic assign expression
+	; Storing to a pointer
+	ldy #$0
+	sta (screenmemory),y
+	; Test Inc dec D
+	inc StarField_currentchar
+	; Binary clause Simplified: EQUALS
+	; Compare with pure num / var optimization
+	cmp #$6b;keep
+	bne StarField_CreateStarScreen_eblock141
+StarField_CreateStarScreen_ctb140: ;Main true block ;keep 
+	
+; // 83 = heart, 58 = colon
+	lda #$53
+	; Calling storevariable on generic assign expression
+	sta StarField_currentchar
+	jmp StarField_CreateStarScreen_edblock142
+StarField_CreateStarScreen_eblock141
+	; Binary clause Simplified: EQUALS
+	lda StarField_currentchar
+	; Compare with pure num / var optimization
+	cmp #$53;keep
+	bne StarField_CreateStarScreen_edblock156
+StarField_CreateStarScreen_ctb154: ;Main true block ;keep 
+	
+; //currentchar := 0;
+	lda #$3a
+	; Calling storevariable on generic assign expression
+	sta StarField_currentchar
+StarField_CreateStarScreen_edblock156
+StarField_CreateStarScreen_edblock142
+	; ----------
+	; AddressTable address, xoffset, yoffset
+	; yoffset is complex
+	lda StarField_row
+	asl ; *2
+	tax
+	lda StarField_caddr,x   ; Address of table lo
+	ldy StarField_caddr+1,x   ; Address of table hi
+	clc
+	adc StarField_col
+	bcc StarField_CreateStarScreen_dtnooverflow159
+	iny  ; overflow into high byte
+StarField_CreateStarScreen_dtnooverflow159
+	sta colormemory
+	sty colormemory+1
+	; Load Byte array
+	; CAST type NADA
+	ldx StarField_colourindex
+	lda StarField_StarfieldColours,x 
+	; Calling storevariable on generic assign expression
+	; Storing to a pointer
+	ldy #$0
+	sta (colormemory),y
+	; Test Inc dec D
+	inc StarField_row
+	jmp StarField_CreateStarScreen_while108
+StarField_CreateStarScreen_edblock111
+StarField_CreateStarScreen_loopend113
+	; Test Inc dec D
+	inc StarField_colourindex
+	; Binary clause Simplified: GREATEREQUAL
+	lda StarField_colourindex
+	; Compare with pure num / var optimization
+	cmp #$14;keep
+	bcc StarField_CreateStarScreen_edblock163
+StarField_CreateStarScreen_ctb161: ;Main true block ;keep 
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta StarField_colourindex
+StarField_CreateStarScreen_edblock163
+	; Test Inc dec D
+	inc StarField_col
+	jmp StarField_CreateStarScreen_while41
+StarField_CreateStarScreen_edblock44
+StarField_CreateStarScreen_loopend46
+	rts
+end_procedure_StarField_CreateStarScreen
+	
+; // ---------------------------------------------------------------------------------------------------------------------------------
+; // Update the starfield by redefining bytes in the character set once per frame.
+; // ---------------------------------------------------------------------------------------------------------------------------------
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : StarField_DoStarfield
+	;    Procedure type : User-defined procedure
+StarField_DoStarfield
+	; Binary clause Simplified: EQUALS
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda StarField_RasterCount
+	and #$1
+	 ; end add / sub var with constant
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne StarField_DoStarfield_edblock170
+StarField_DoStarfield_ctb168: ;Main true block ;keep 
+	
+; // -- Star 1 updates every other frame.
+	; Is simple pointer assigning : p[n] := expr
+	ldy #0
+	lda #$00
+	sta (StarField_StarfieldPtr),y
+	iny
+	sta (StarField_StarfieldPtr),y
+	lda StarField_StarfieldPtr
+	clc
+	adc #$01
+	sta StarField_StarfieldPtr+0
+	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
+	bcc StarField_DoStarfield_WordAdd181
+	inc StarField_StarfieldPtr+1
+StarField_DoStarfield_WordAdd181
+	; HandleVarBinopB16bit
+	ldy #0 ; ::HandleVarBinopB16bit 0
+	; RHS is pure, optimization
+	; Load pointer array
+	lda (StarField_StarfieldPtr),y
+	pha
+	iny
+	lda (StarField_StarfieldPtr),y
+	tay
+	pla
+	ora #$03
+	; Testing for byte:  #$00
+	; RHS is word, no optimization
+	pha 
+	tya 
+	ora #$00
+	tay 
+	pla 
+	; Calling storevariable on generic assign expression
+	; Storing to a pointer
+	; Storing integer to a pointer of integer, need to move data in y to x
+	pha
+	tya
+	tax
+	pla
+	pha
+	lda #$0
+	asl
+	tay
+	pla
+	sta (StarField_StarfieldPtr),y
+	iny
+	txa
+	sta (StarField_StarfieldPtr),y
+	; Binary clause INTEGER: EQUALS
+	lda StarField_StarfieldPtr+1   ; compare high bytes
+	cmp #$32 ;keep
+	bne StarField_DoStarfield_edblock186
+	lda StarField_StarfieldPtr
+	cmp #$98 ;keep
+	bne StarField_DoStarfield_edblock186
+	jmp StarField_DoStarfield_ctb184
+StarField_DoStarfield_ctb184: ;Main true block ;keep 
+	lda #$d0
+	ldx #$31
+	sta StarField_StarfieldPtr
+	stx StarField_StarfieldPtr+1
+StarField_DoStarfield_edblock186
+StarField_DoStarfield_edblock170
+	
+; // -- Star 2 updates every frame.
+	; Is simple pointer assigning : p[n] := expr
+	ldy #0
+	lda #$00
+	sta (StarField_StarfieldPtr2),y
+	iny
+	sta (StarField_StarfieldPtr2),y
+	lda StarField_StarfieldPtr2
+	clc
+	adc #$01
+	sta StarField_StarfieldPtr2+0
+	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
+	bcc StarField_DoStarfield_WordAdd189
+	inc StarField_StarfieldPtr2+1
+StarField_DoStarfield_WordAdd189
+	; Binary clause INTEGER: EQUALS
+	lda StarField_StarfieldPtr2+1   ; compare high bytes
+	cmp #$33 ;keep
+	bne StarField_DoStarfield_edblock193
+	lda StarField_StarfieldPtr2
+	cmp #$60 ;keep
+	bne StarField_DoStarfield_edblock193
+	jmp StarField_DoStarfield_ctb191
+StarField_DoStarfield_ctb191: ;Main true block ;keep 
+	lda #$98
+	ldx #$32
+	sta StarField_StarfieldPtr2
+	stx StarField_StarfieldPtr2+1
+StarField_DoStarfield_edblock193
+	; HandleVarBinopB16bit
+	ldy #0 ; ::HandleVarBinopB16bit 0
+	; RHS is pure, optimization
+	; Load pointer array
+	lda (StarField_StarfieldPtr2),y
+	pha
+	iny
+	lda (StarField_StarfieldPtr2),y
+	tay
+	pla
+	ora #$0c
+	; Testing for byte:  #$00
+	; RHS is word, no optimization
+	pha 
+	tya 
+	ora #$00
+	tay 
+	pla 
+	; Calling storevariable on generic assign expression
+	; Storing to a pointer
+	; Storing integer to a pointer of integer, need to move data in y to x
+	pha
+	tya
+	tax
+	pla
+	pha
+	lda #$0
+	asl
+	tay
+	pla
+	sta (StarField_StarfieldPtr2),y
+	iny
+	txa
+	sta (StarField_StarfieldPtr2),y
+	; Binary clause Simplified: EQUALS
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda StarField_RasterCount
+	and #$1
+	 ; end add / sub var with constant
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne StarField_DoStarfield_edblock200
+StarField_DoStarfield_ctb198: ;Main true block ;keep 
+	
+; // -- Star 3 updates every other frame.
+	; Is simple pointer assigning : p[n] := expr
+	ldy #0
+	lda #$00
+	sta (StarField_StarfieldPtr3),y
+	iny
+	sta (StarField_StarfieldPtr3),y
+	lda StarField_StarfieldPtr3
+	clc
+	adc #$01
+	sta StarField_StarfieldPtr3+0
+	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
+	bcc StarField_DoStarfield_WordAdd211
+	inc StarField_StarfieldPtr3+1
+StarField_DoStarfield_WordAdd211
+	; HandleVarBinopB16bit
+	ldy #0 ; ::HandleVarBinopB16bit 0
+	; RHS is pure, optimization
+	; Load pointer array
+	lda (StarField_StarfieldPtr3),y
+	pha
+	iny
+	lda (StarField_StarfieldPtr3),y
+	tay
+	pla
+	ora #$30
+	; Testing for byte:  #$00
+	; RHS is word, no optimization
+	pha 
+	tya 
+	ora #$00
+	tay 
+	pla 
+	; Calling storevariable on generic assign expression
+	; Storing to a pointer
+	; Storing integer to a pointer of integer, need to move data in y to x
+	pha
+	tya
+	tax
+	pla
+	pha
+	lda #$0
+	asl
+	tay
+	pla
+	sta (StarField_StarfieldPtr3),y
+	iny
+	txa
+	sta (StarField_StarfieldPtr3),y
+	; Binary clause INTEGER: EQUALS
+	lda StarField_StarfieldPtr3+1   ; compare high bytes
+	cmp #$32 ;keep
+	bne StarField_DoStarfield_edblock216
+	lda StarField_StarfieldPtr3
+	cmp #$98 ;keep
+	bne StarField_DoStarfield_edblock216
+	jmp StarField_DoStarfield_ctb214
+StarField_DoStarfield_ctb214: ;Main true block ;keep 
+	lda #$d0
+	ldx #$31
+	sta StarField_StarfieldPtr3
+	stx StarField_StarfieldPtr3+1
+StarField_DoStarfield_edblock216
+StarField_DoStarfield_edblock200
+	
+; // -- Star 4 updates two pixels down every frame.
+	; Is simple pointer assigning : p[n] := expr
+	ldy #0
+	lda #$00
+	sta (StarField_StarfieldPtr4),y
+	iny
+	sta (StarField_StarfieldPtr4),y
+	lda StarField_StarfieldPtr4
+	clc
+	adc #$01
+	sta StarField_StarfieldPtr4+0
+	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
+	bcc StarField_DoStarfield_WordAdd219
+	inc StarField_StarfieldPtr4+1
+StarField_DoStarfield_WordAdd219
+	lda StarField_StarfieldPtr4
+	clc
+	adc #$01
+	sta StarField_StarfieldPtr4+0
+	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
+	bcc StarField_DoStarfield_WordAdd220
+	inc StarField_StarfieldPtr4+1
+StarField_DoStarfield_WordAdd220
+	; HandleVarBinopB16bit
+	ldy #0 ; ::HandleVarBinopB16bit 0
+	; RHS is pure, optimization
+	; Load pointer array
+	lda (StarField_StarfieldPtr4),y
+	pha
+	iny
+	lda (StarField_StarfieldPtr4),y
+	tay
+	pla
+	ora #$c0
+	; Testing for byte:  #$00
+	; RHS is word, no optimization
+	pha 
+	tya 
+	ora #$00
+	tay 
+	pla 
+	; Calling storevariable on generic assign expression
+	; Storing to a pointer
+	; Storing integer to a pointer of integer, need to move data in y to x
+	pha
+	tya
+	tax
+	pla
+	pha
+	lda #$0
+	asl
+	tay
+	pla
+	sta (StarField_StarfieldPtr4),y
+	iny
+	txa
+	sta (StarField_StarfieldPtr4),y
+	; Binary clause INTEGER: EQUALS
+	lda StarField_StarfieldPtr4+1   ; compare high bytes
+	cmp #$33 ;keep
+	bne StarField_DoStarfield_edblock225
+	lda StarField_StarfieldPtr4
+	cmp #$60 ;keep
+	bne StarField_DoStarfield_edblock225
+	jmp StarField_DoStarfield_ctb223
+StarField_DoStarfield_ctb223: ;Main true block ;keep 
+	lda #$98
+	ldx #$32
+	sta StarField_StarfieldPtr4
+	stx StarField_StarfieldPtr4+1
+StarField_DoStarfield_edblock225
+	
+; // -- Two static blinking stars.
+	lda #$50
+	ldx #$32
+	sta StarField_StaticStarPtr
+	stx StarField_StaticStarPtr+1
+	; Binary clause Simplified: LESS
+	lda StarField_RasterCount
+	; Compare with pure num / var optimization
+	cmp #$e6;keep
+	bcs StarField_DoStarfield_eblock230
+StarField_DoStarfield_ctb229: ;Main true block ;keep 
+	; HandleVarBinopB16bit
+	ldy #0 ; ::HandleVarBinopB16bit 0
+	; RHS is pure, optimization
+	; Load pointer array
+	lda (StarField_StaticStarPtr),y
+	pha
+	iny
+	lda (StarField_StaticStarPtr),y
+	tay
+	pla
+	ora #$10
+	; Testing for byte:  #$00
+	; RHS is word, no optimization
+	pha 
+	tya 
+	ora #$00
+	tay 
+	pla 
+	; Calling storevariable on generic assign expression
+	; Storing to a pointer
+	; Storing integer to a pointer of integer, need to move data in y to x
+	pha
+	tya
+	tax
+	pla
+	pha
+	lda #$0
+	asl
+	tay
+	pla
+	sta (StarField_StaticStarPtr),y
+	iny
+	txa
+	sta (StarField_StaticStarPtr),y
+	jmp StarField_DoStarfield_edblock231
+StarField_DoStarfield_eblock230
+	; Is simple pointer assigning : p[n] := expr
+	ldy #0
+	lda #$00
+	sta (StarField_StaticStarPtr),y
+	iny
+	sta (StarField_StaticStarPtr),y
+StarField_DoStarfield_edblock231
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda StarField_RasterCount
+	ora #$80
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta StarField_StaticStarBlink
+	lda #$e0
+	ldx #$31
+	sta StarField_StaticStarPtr
+	stx StarField_StaticStarPtr+1
+	; Binary clause Simplified: LESS
+	lda StarField_RasterCount
+	; Compare with pure num / var optimization
+	cmp #$e6;keep
+	bcs StarField_DoStarfield_eblock240
+StarField_DoStarfield_ctb239: ;Main true block ;keep 
+	; HandleVarBinopB16bit
+	ldy #0 ; ::HandleVarBinopB16bit 0
+	; RHS is pure, optimization
+	; Load pointer array
+	lda (StarField_StaticStarPtr),y
+	pha
+	iny
+	lda (StarField_StaticStarPtr),y
+	tay
+	pla
+	ora #$10
+	; Testing for byte:  #$00
+	; RHS is word, no optimization
+	pha 
+	tya 
+	ora #$00
+	tay 
+	pla 
+	; Calling storevariable on generic assign expression
+	; Storing to a pointer
+	; Storing integer to a pointer of integer, need to move data in y to x
+	pha
+	tya
+	tax
+	pla
+	pha
+	lda #$0
+	asl
+	tay
+	pla
+	sta (StarField_StaticStarPtr),y
+	iny
+	txa
+	sta (StarField_StaticStarPtr),y
+	jmp StarField_DoStarfield_edblock241
+StarField_DoStarfield_eblock240
+	; Is simple pointer assigning : p[n] := expr
+	ldy #0
+	lda #$00
+	sta (StarField_StaticStarPtr),y
+	iny
+	sta (StarField_StaticStarPtr),y
+StarField_DoStarfield_edblock241
+	rts
+end_procedure_StarField_DoStarfield
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : InitSprites
 	;    Procedure type : User-defined procedure
 InitSprites
 	
 ; // Set all sprites to be multicolor
-; //sprite_multicolor:=$ff;
+; //sprite_multicolor:=$ff;	
 ; // Set common sprite multicolor #1 
 	; Assigning memory location
 	lda #$5
@@ -568,17 +1156,17 @@ InitSprites
 	sta $d015
 	ldx #$0 ; optimized, look out for bugs
 	lda #1
-InitSprites_shiftbit37
+InitSprites_shiftbit249
 	cpx #0
-	beq InitSprites_shiftbitdone38
+	beq InitSprites_shiftbitdone250
 	asl
 	dex
-	jmp InitSprites_shiftbit37
-InitSprites_shiftbitdone38
-InitSprites_bitmask_var39 = $54
-	sta InitSprites_bitmask_var39
+	jmp InitSprites_shiftbit249
+InitSprites_shiftbitdone250
+InitSprites_bitmask_var251 = $54
+	sta InitSprites_bitmask_var251
 	lda $d015
-	ora InitSprites_bitmask_var39
+	ora InitSprites_bitmask_var251
 	sta $d015
 	rts
 end_procedure_InitSprites
@@ -588,8 +1176,8 @@ end_procedure_InitSprites
 DisplayScore
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayScore_stringassignstr42
-	ldy #>DisplayScore_stringassignstr42
+	lda #<DisplayScore_stringassignstr254
+	ldy #>DisplayScore_stringassignstr254
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -605,8 +1193,8 @@ DisplayScore
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayScore_stringassignstr44
-	ldy #>DisplayScore_stringassignstr44
+	lda #<DisplayScore_stringassignstr256
+	ldy #>DisplayScore_stringassignstr256
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -632,12 +1220,12 @@ DisplayScore
 	sta ipd_div_lo
 	sty ipd_div_hi
 	ldy #$4 ; optimized, look out for bugs
-DisplayScore_printdecimal45
+DisplayScore_printdecimal257
 	jsr init_printdecimal_div10 
 	ora #$30
 	sta (screenmemory),y
 	dey
-	bpl DisplayScore_printdecimal45
+	bpl DisplayScore_printdecimal257
 	; MoveTo optimization
 	lda #$9b
 	sta screenmemory
@@ -650,12 +1238,12 @@ DisplayScore_printdecimal45
 	sta ipd_div_lo
 	sty ipd_div_hi
 	ldy #$3 ; optimized, look out for bugs
-DisplayScore_printdecimal46
+DisplayScore_printdecimal258
 	jsr init_printdecimal_div10 
 	ora #$30
 	sta (screenmemory),y
 	dey
-	bpl DisplayScore_printdecimal46
+	bpl DisplayScore_printdecimal258
 	rts
 end_procedure_DisplayScore
 	; NodeProcedureDecl -1
@@ -674,15 +1262,15 @@ UpdateSprite
 	; Load16bitvariable : joystickleft
 	lda joystickleft
 	asl
-UpdateSprite_rightvarAddSub_var48 = $54
-	sta UpdateSprite_rightvarAddSub_var48
+UpdateSprite_rightvarAddSub_var260 = $54
+	sta UpdateSprite_rightvarAddSub_var260
 	; Right is PURE NUMERIC : Is word =0
 	; 8 bit mul of power 2
 	; Load16bitvariable : joystickright
 	lda joystickright
 	asl
 	sec
-	sbc UpdateSprite_rightvarAddSub_var48
+	sbc UpdateSprite_rightvarAddSub_var260
 	clc
 	adc sprite_x
 	 ; end add / sub var with constant
@@ -695,11 +1283,11 @@ UpdateSprite_rightvarAddSub_var48 = $54
 	; isi-pisi: value is constant
 	ldx #0
 	sta $D000,x
-UpdateSprite_spritepos49
+UpdateSprite_spritepos261
 	lda $D010
 	and #%11111110
 	sta $D010
-UpdateSprite_spriteposcontinue50
+UpdateSprite_spriteposcontinue262
 	inx
 	txa
 	tay
@@ -709,8 +1297,8 @@ UpdateSprite_spriteposcontinue50
 	clc
 	lda joystickleft
 	; cmp #$00 ignored
-	beq UpdateSprite_edblock54
-UpdateSprite_ctb52: ;Main true block ;keep 
+	beq UpdateSprite_edblock266
+UpdateSprite_ctb264: ;Main true block ;keep 
 	
 ; // Set left/right offset pointer for sprite
 ; //if (joystickright) then
@@ -718,246 +1306,35 @@ UpdateSprite_ctb52: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta joystick_dir
-UpdateSprite_edblock54
+UpdateSprite_edblock266
 	rts
 end_procedure_UpdateSprite
 	
 ; // Set the sprite pointer to point to the sprite data + direction offset
 ; //SetSpriteLoc(useSprite, 8192/64 + joystick_dir, useBank);
-; // If any movement is detected, play a random soundif ((joystickright+joystickleft) or (joystickup+joystickdown)) then
+; // If any movement is detected, play a random sound
+; //	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
 ; //		PlaySound(sid_channel1, 
-; //				13,  
+; //		13,  
 ; // Volume
-; //				20+Random()/16,  
+; //		20+Random()/16,  
 ; // Hi byte frequency
-; //				0*16+0,  
+; //		0*16+0,  
 ; // Attack voice 1
-; //				3*16 + 3,   
+; //		3*16 + 3,   
 ; // Sustain = 16*15 + release=6
-; //				1 +sid_saw,  
+; //		1 +sid_saw,  
 ; // Waveform
-; //				sid_saw);  
+; //		sid_saw);  
 ; // waveform 
-; // This interrupt is triggered one time pr raster cycleinterrupt MainRasterSprite();
-; //begin
-; //	startirq(1);
-; //	
-; // Update joystick here
-; //	Memory::Fill(#joystickup,0,5);
-; //	Joystick(joystickPort);
-; //	
-; // Update sprites
-; //	UpdateSprite();	
-; //	closeirq();
-; //end;
-; // ---------------------------------------------------------------------------------------------------------------------------------
-; // Fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
-; // ---------------------------------------------------------------------------------------------------------------------------------
-	; NodeProcedureDecl -1
-	; ***********  Defining procedure : CreateStarScreen
-	;    Procedure type : User-defined procedure
-currentchar	dc.b	0
-colourindex	dc.b	0
-col	dc.b	0
-row	dc.b	0
-saddr	dc.w	 
-	org saddr+50
-caddr	dc.w	 
-	org caddr+50
-CreateStarScreen_block57
-CreateStarScreen
-	
-; //offset : integer;
-	; ----------
-	; DefineAddressTable address, StartValue, IncrementValue, TableSize
-	ldy #>$400
-	lda #<$400
-	ldx #0
-	sta saddr,x   ; Address of table
-	tya
-	sta saddr+1,x
-CreateStarScreen_dtloop58
-	tay
-	lda saddr,x
-	inx
-	inx
-	clc
-	adc #$28
-	bcc CreateStarScreen_dtnooverflow59
-	iny
-CreateStarScreen_dtnooverflow59
-	sta saddr,x
-	tya
-	sta saddr+1,x
-	cpx #$30
-	bcc CreateStarScreen_dtloop58
-	
-; // $0400 screen address, 40 characters per column, 25 rows
-	; ----------
-	; DefineAddressTable address, StartValue, IncrementValue, TableSize
-	ldy #>$d800
-	lda #<$d800
-	ldx #0
-	sta caddr,x   ; Address of table
-	tya
-	sta caddr+1,x
-CreateStarScreen_dtloop60
-	tay
-	lda caddr,x
-	inx
-	inx
-	clc
-	adc #$28
-	bcc CreateStarScreen_dtnooverflow61
-	iny
-CreateStarScreen_dtnooverflow61
-	sta caddr,x
-	tya
-	sta caddr+1,x
-	cpx #$30
-	bcc CreateStarScreen_dtloop60
-	
-; // $D800 color address, 40 characters per column, 25 rows
-	lda #$0
-	; Calling storevariable on generic assign expression
-	sta col
-CreateStarScreen_while62
-CreateStarScreen_loopstart66
-	; Optimization: replacing a <= N with a <= N-1
-	; Binary clause Simplified: LESS
-	lda col
-	; Compare with pure num / var optimization
-	cmp #$1d;keep
-	bcs CreateStarScreen_localfailed127
-	jmp CreateStarScreen_ctb63
-CreateStarScreen_localfailed127
-	jmp CreateStarScreen_edblock65
-CreateStarScreen_ctb63: ;Main true block ;keep 
-	; Load Byte array
-	; CAST type NADA
-	ldx col
-	lda StarfieldRow,x 
-	; Calling storevariable on generic assign expression
-	sta currentchar
-	lda #$0
-	; Calling storevariable on generic assign expression
-	sta row
-CreateStarScreen_while129
-CreateStarScreen_loopstart133
-	; Binary clause Simplified: LESS
-	lda row
-	; Compare with pure num / var optimization
-	cmp #$12;keep
-	bcs CreateStarScreen_edblock132
-CreateStarScreen_ctb130: ;Main true block ;keep 
-	; ----------
-	; AddressTable address, xoffset, yoffset
-	; yoffset is complex
-	lda row
-	asl ; *2
-	tax
-	lda saddr,x   ; Address of table lo
-	ldy saddr+1,x   ; Address of table hi
-	clc
-	adc col
-	bcc CreateStarScreen_dtnooverflow159
-	iny  ; overflow into high byte
-CreateStarScreen_dtnooverflow159
-	sta screenmemory
-	sty screenmemory+1
-	lda currentchar
-	; Calling storevariable on generic assign expression
-	; Storing to a pointer
-	ldy #$0
-	sta (screenmemory),y
-	; Test Inc dec D
-	inc currentchar
-	; Binary clause Simplified: EQUALS
-	; Compare with pure num / var optimization
-	cmp #$6b;keep
-	bne CreateStarScreen_eblock162
-CreateStarScreen_ctb161: ;Main true block ;keep 
-	
-; // 83 = heart, 58 = colon
-	lda #$53
-	; Calling storevariable on generic assign expression
-	sta currentchar
-	jmp CreateStarScreen_edblock163
-CreateStarScreen_eblock162
-	; Binary clause Simplified: EQUALS
-	lda currentchar
-	; Compare with pure num / var optimization
-	cmp #$53;keep
-	bne CreateStarScreen_edblock177
-CreateStarScreen_ctb175: ;Main true block ;keep 
-	
-; //currentchar := 0;
-	lda #$3a
-	; Calling storevariable on generic assign expression
-	sta currentchar
-CreateStarScreen_edblock177
-CreateStarScreen_edblock163
-	; ----------
-	; AddressTable address, xoffset, yoffset
-	; yoffset is complex
-	lda row
-	asl ; *2
-	tax
-	lda caddr,x   ; Address of table lo
-	ldy caddr+1,x   ; Address of table hi
-	clc
-	adc col
-	bcc CreateStarScreen_dtnooverflow180
-	iny  ; overflow into high byte
-CreateStarScreen_dtnooverflow180
-	sta colormemory
-	sty colormemory+1
-	; Load Byte array
-	; CAST type NADA
-	ldx colourindex
-	lda StarfieldColours,x 
-	; Calling storevariable on generic assign expression
-	; Storing to a pointer
-	ldy #$0
-	sta (colormemory),y
-	; Test Inc dec D
-	inc row
-	jmp CreateStarScreen_while129
-CreateStarScreen_edblock132
-CreateStarScreen_loopend134
-	; Test Inc dec D
-	inc colourindex
-	; Binary clause Simplified: GREATEREQUAL
-	lda colourindex
-	; Compare with pure num / var optimization
-	cmp #$14;keep
-	bcc CreateStarScreen_edblock184
-CreateStarScreen_ctb182: ;Main true block ;keep 
-	lda #$0
-	; Calling storevariable on generic assign expression
-	sta colourindex
-CreateStarScreen_edblock184
-	; Test Inc dec D
-	inc col
-	jmp CreateStarScreen_while62
-CreateStarScreen_edblock65
-CreateStarScreen_loopend67
-	rts
-end_procedure_CreateStarScreen
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : DisplayText
 	;    Procedure type : User-defined procedure
 DisplayText
-	;Score += 9;
-; //
-; //	if (Score >= 10000) then begin
-; //		Score := Score - 10000;
-; //		Score2 += 1;
-; //	end;
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr189
-	ldy #>DisplayText_stringassignstr189
+	lda #<DisplayText_stringassignstr271
+	ldy #>DisplayText_stringassignstr271
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -973,8 +1350,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr191
-	ldy #>DisplayText_stringassignstr191
+	lda #<DisplayText_stringassignstr273
+	ldy #>DisplayText_stringassignstr273
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1000,12 +1377,12 @@ DisplayText
 	sta ipd_div_lo
 	sty ipd_div_hi
 	ldy #$4 ; optimized, look out for bugs
-DisplayText_printdecimal192
+DisplayText_printdecimal274
 	jsr init_printdecimal_div10 
 	ora #$30
 	sta (screenmemory),y
 	dey
-	bpl DisplayText_printdecimal192
+	bpl DisplayText_printdecimal274
 	; MoveTo optimization
 	lda #$9b
 	sta screenmemory
@@ -1018,16 +1395,16 @@ DisplayText_printdecimal192
 	sta ipd_div_lo
 	sty ipd_div_hi
 	ldy #$3 ; optimized, look out for bugs
-DisplayText_printdecimal193
+DisplayText_printdecimal275
 	jsr init_printdecimal_div10 
 	ora #$30
 	sta (screenmemory),y
 	dey
-	bpl DisplayText_printdecimal193
+	bpl DisplayText_printdecimal275
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr195
-	ldy #>DisplayText_stringassignstr195
+	lda #<DisplayText_stringassignstr277
+	ldy #>DisplayText_stringassignstr277
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1043,8 +1420,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr197
-	ldy #>DisplayText_stringassignstr197
+	lda #<DisplayText_stringassignstr279
+	ldy #>DisplayText_stringassignstr279
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1060,8 +1437,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr199
-	ldy #>DisplayText_stringassignstr199
+	lda #<DisplayText_stringassignstr281
+	ldy #>DisplayText_stringassignstr281
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1077,8 +1454,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr201
-	ldy #>DisplayText_stringassignstr201
+	lda #<DisplayText_stringassignstr283
+	ldy #>DisplayText_stringassignstr283
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1094,8 +1471,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr203
-	ldy #>DisplayText_stringassignstr203
+	lda #<DisplayText_stringassignstr285
+	ldy #>DisplayText_stringassignstr285
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -1111,8 +1488,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr205
-	ldy #>DisplayText_stringassignstr205
+	lda #<DisplayText_stringassignstr287
+	ldy #>DisplayText_stringassignstr287
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -1128,8 +1505,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr207
-	ldy #>DisplayText_stringassignstr207
+	lda #<DisplayText_stringassignstr289
+	ldy #>DisplayText_stringassignstr289
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$a
@@ -1145,8 +1522,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr209
-	ldy #>DisplayText_stringassignstr209
+	lda #<DisplayText_stringassignstr291
+	ldy #>DisplayText_stringassignstr291
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$a
@@ -1162,8 +1539,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr211
-	ldy #>DisplayText_stringassignstr211
+	lda #<DisplayText_stringassignstr293
+	ldy #>DisplayText_stringassignstr293
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -1179,8 +1556,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr213
-	ldy #>DisplayText_stringassignstr213
+	lda #<DisplayText_stringassignstr295
+	ldy #>DisplayText_stringassignstr295
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -1196,8 +1573,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr215
-	ldy #>DisplayText_stringassignstr215
+	lda #<DisplayText_stringassignstr297
+	ldy #>DisplayText_stringassignstr297
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -1213,8 +1590,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr217
-	ldy #>DisplayText_stringassignstr217
+	lda #<DisplayText_stringassignstr299
+	ldy #>DisplayText_stringassignstr299
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -1230,8 +1607,8 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr219
-	ldy #>DisplayText_stringassignstr219
+	lda #<DisplayText_stringassignstr301
+	ldy #>DisplayText_stringassignstr301
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$0
@@ -1247,450 +1624,6 @@ DisplayText_printdecimal193
 	jsr Screen_PrintString
 	rts
 end_procedure_DisplayText
-	
-; // ---------------------------------------------------------------------------------------------------------------------------------
-; // Update the starfield by redefining bytes in the character set once per frame.
-; // ---------------------------------------------------------------------------------------------------------------------------------
-	; NodeProcedureDecl -1
-	; ***********  Defining procedure : DoStarfield
-	;    Procedure type : User-defined procedure
-DoStarfield
-	lda Score
-	clc
-	adc #$09
-	sta Score+0
-	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc DoStarfield_WordAdd221
-	inc Score+1
-DoStarfield_WordAdd221
-	; Binary clause INTEGER: GREATEREQUAL
-	lda Score+1   ; compare high bytes
-	cmp #$27 ;keep
-	bcc DoStarfield_edblock225
-	bne DoStarfield_ctb223
-	lda Score
-	cmp #$10 ;keep
-	bcc DoStarfield_edblock225
-DoStarfield_ctb223: ;Main true block ;keep 
-	lda Score
-	sec
-	sbc #$10
-	sta Score+0
-	lda Score+1
-	sbc #$27
-	sta Score+1
-	lda Score2
-	clc
-	adc #$01
-	sta Score2+0
-	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc DoStarfield_WordAdd231
-	inc Score2+1
-DoStarfield_WordAdd231
-DoStarfield_edblock225
-	; Binary clause Simplified: EQUALS
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda RasterCount
-	and #$1
-	 ; end add / sub var with constant
-	; Compare with pure num / var optimization
-	cmp #$1;keep
-	bne DoStarfield_edblock235
-DoStarfield_ctb233: ;Main true block ;keep 
-	
-; // -- Star 1 updates every other frame.
-	; Is simple pointer assigning : p[n] := expr
-	ldy #0
-	lda #$00
-	sta (StarfieldPtr),y
-	iny
-	sta (StarfieldPtr),y
-	lda StarfieldPtr
-	clc
-	adc #$01
-	sta StarfieldPtr+0
-	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc DoStarfield_WordAdd246
-	inc StarfieldPtr+1
-DoStarfield_WordAdd246
-	; HandleVarBinopB16bit
-	ldy #0 ; ::HandleVarBinopB16bit 0
-	; RHS is pure, optimization
-	; Load pointer array
-	lda (StarfieldPtr),y
-	pha
-	iny
-	lda (StarfieldPtr),y
-	tay
-	pla
-	ora #$03
-	; Testing for byte:  #$00
-	; RHS is word, no optimization
-	pha 
-	tya 
-	ora #$00
-	tay 
-	pla 
-	; Calling storevariable on generic assign expression
-	; Storing to a pointer
-	; Storing integer to a pointer of integer, need to move data in y to x
-	pha
-	tya
-	tax
-	pla
-	pha
-	lda #$0
-	asl
-	tay
-	pla
-	sta (StarfieldPtr),y
-	iny
-	txa
-	sta (StarfieldPtr),y
-	; Binary clause INTEGER: EQUALS
-	lda StarfieldPtr+1   ; compare high bytes
-	cmp #$32 ;keep
-	bne DoStarfield_edblock251
-	lda StarfieldPtr
-	cmp #$98 ;keep
-	bne DoStarfield_edblock251
-	jmp DoStarfield_ctb249
-DoStarfield_ctb249: ;Main true block ;keep 
-	lda #$d0
-	ldx #$31
-	sta StarfieldPtr
-	stx StarfieldPtr+1
-DoStarfield_edblock251
-DoStarfield_edblock235
-	
-; // -- Star 2 updates every frame.
-	; Is simple pointer assigning : p[n] := expr
-	ldy #0
-	lda #$00
-	sta (StarfieldPtr2),y
-	iny
-	sta (StarfieldPtr2),y
-	lda StarfieldPtr2
-	clc
-	adc #$01
-	sta StarfieldPtr2+0
-	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc DoStarfield_WordAdd254
-	inc StarfieldPtr2+1
-DoStarfield_WordAdd254
-	; Binary clause INTEGER: EQUALS
-	lda StarfieldPtr2+1   ; compare high bytes
-	cmp #$33 ;keep
-	bne DoStarfield_edblock258
-	lda StarfieldPtr2
-	cmp #$60 ;keep
-	bne DoStarfield_edblock258
-	jmp DoStarfield_ctb256
-DoStarfield_ctb256: ;Main true block ;keep 
-	lda #$98
-	ldx #$32
-	sta StarfieldPtr2
-	stx StarfieldPtr2+1
-DoStarfield_edblock258
-	; HandleVarBinopB16bit
-	ldy #0 ; ::HandleVarBinopB16bit 0
-	; RHS is pure, optimization
-	; Load pointer array
-	lda (StarfieldPtr2),y
-	pha
-	iny
-	lda (StarfieldPtr2),y
-	tay
-	pla
-	ora #$0c
-	; Testing for byte:  #$00
-	; RHS is word, no optimization
-	pha 
-	tya 
-	ora #$00
-	tay 
-	pla 
-	; Calling storevariable on generic assign expression
-	; Storing to a pointer
-	; Storing integer to a pointer of integer, need to move data in y to x
-	pha
-	tya
-	tax
-	pla
-	pha
-	lda #$0
-	asl
-	tay
-	pla
-	sta (StarfieldPtr2),y
-	iny
-	txa
-	sta (StarfieldPtr2),y
-	; Binary clause Simplified: EQUALS
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda RasterCount
-	and #$1
-	 ; end add / sub var with constant
-	; Compare with pure num / var optimization
-	cmp #$1;keep
-	bne DoStarfield_edblock265
-DoStarfield_ctb263: ;Main true block ;keep 
-	
-; // -- Star 3 updates every other frame.
-	; Is simple pointer assigning : p[n] := expr
-	ldy #0
-	lda #$00
-	sta (StarfieldPtr3),y
-	iny
-	sta (StarfieldPtr3),y
-	lda StarfieldPtr3
-	clc
-	adc #$01
-	sta StarfieldPtr3+0
-	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc DoStarfield_WordAdd276
-	inc StarfieldPtr3+1
-DoStarfield_WordAdd276
-	; HandleVarBinopB16bit
-	ldy #0 ; ::HandleVarBinopB16bit 0
-	; RHS is pure, optimization
-	; Load pointer array
-	lda (StarfieldPtr3),y
-	pha
-	iny
-	lda (StarfieldPtr3),y
-	tay
-	pla
-	ora #$30
-	; Testing for byte:  #$00
-	; RHS is word, no optimization
-	pha 
-	tya 
-	ora #$00
-	tay 
-	pla 
-	; Calling storevariable on generic assign expression
-	; Storing to a pointer
-	; Storing integer to a pointer of integer, need to move data in y to x
-	pha
-	tya
-	tax
-	pla
-	pha
-	lda #$0
-	asl
-	tay
-	pla
-	sta (StarfieldPtr3),y
-	iny
-	txa
-	sta (StarfieldPtr3),y
-	; Binary clause INTEGER: EQUALS
-	lda StarfieldPtr3+1   ; compare high bytes
-	cmp #$32 ;keep
-	bne DoStarfield_edblock281
-	lda StarfieldPtr3
-	cmp #$98 ;keep
-	bne DoStarfield_edblock281
-	jmp DoStarfield_ctb279
-DoStarfield_ctb279: ;Main true block ;keep 
-	lda #$d0
-	ldx #$31
-	sta StarfieldPtr3
-	stx StarfieldPtr3+1
-DoStarfield_edblock281
-DoStarfield_edblock265
-	
-; // -- Star 4 updates two pixels down every frame.
-	; Is simple pointer assigning : p[n] := expr
-	ldy #0
-	lda #$00
-	sta (StarfieldPtr4),y
-	iny
-	sta (StarfieldPtr4),y
-	lda StarfieldPtr4
-	clc
-	adc #$01
-	sta StarfieldPtr4+0
-	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc DoStarfield_WordAdd284
-	inc StarfieldPtr4+1
-DoStarfield_WordAdd284
-	lda StarfieldPtr4
-	clc
-	adc #$01
-	sta StarfieldPtr4+0
-	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc DoStarfield_WordAdd285
-	inc StarfieldPtr4+1
-DoStarfield_WordAdd285
-	; HandleVarBinopB16bit
-	ldy #0 ; ::HandleVarBinopB16bit 0
-	; RHS is pure, optimization
-	; Load pointer array
-	lda (StarfieldPtr4),y
-	pha
-	iny
-	lda (StarfieldPtr4),y
-	tay
-	pla
-	ora #$c0
-	; Testing for byte:  #$00
-	; RHS is word, no optimization
-	pha 
-	tya 
-	ora #$00
-	tay 
-	pla 
-	; Calling storevariable on generic assign expression
-	; Storing to a pointer
-	; Storing integer to a pointer of integer, need to move data in y to x
-	pha
-	tya
-	tax
-	pla
-	pha
-	lda #$0
-	asl
-	tay
-	pla
-	sta (StarfieldPtr4),y
-	iny
-	txa
-	sta (StarfieldPtr4),y
-	; Binary clause INTEGER: EQUALS
-	lda StarfieldPtr4+1   ; compare high bytes
-	cmp #$33 ;keep
-	bne DoStarfield_edblock290
-	lda StarfieldPtr4
-	cmp #$60 ;keep
-	bne DoStarfield_edblock290
-	jmp DoStarfield_ctb288
-DoStarfield_ctb288: ;Main true block ;keep 
-	lda #$98
-	ldx #$32
-	sta StarfieldPtr4
-	stx StarfieldPtr4+1
-DoStarfield_edblock290
-	
-; // -- Two static blinking stars.
-	lda #$50
-	ldx #$32
-	sta StaticStarPtr
-	stx StaticStarPtr+1
-	; Binary clause Simplified: LESS
-	lda RasterCount
-	; Compare with pure num / var optimization
-	cmp #$e6;keep
-	bcs DoStarfield_eblock295
-DoStarfield_ctb294: ;Main true block ;keep 
-	; HandleVarBinopB16bit
-	ldy #0 ; ::HandleVarBinopB16bit 0
-	; RHS is pure, optimization
-	; Load pointer array
-	lda (StaticStarPtr),y
-	pha
-	iny
-	lda (StaticStarPtr),y
-	tay
-	pla
-	ora #$10
-	; Testing for byte:  #$00
-	; RHS is word, no optimization
-	pha 
-	tya 
-	ora #$00
-	tay 
-	pla 
-	; Calling storevariable on generic assign expression
-	; Storing to a pointer
-	; Storing integer to a pointer of integer, need to move data in y to x
-	pha
-	tya
-	tax
-	pla
-	pha
-	lda #$0
-	asl
-	tay
-	pla
-	sta (StaticStarPtr),y
-	iny
-	txa
-	sta (StaticStarPtr),y
-	jmp DoStarfield_edblock296
-DoStarfield_eblock295
-	; Is simple pointer assigning : p[n] := expr
-	ldy #0
-	lda #$00
-	sta (StaticStarPtr),y
-	iny
-	sta (StaticStarPtr),y
-DoStarfield_edblock296
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda RasterCount
-	ora #$80
-	 ; end add / sub var with constant
-	; Calling storevariable on generic assign expression
-	sta StaticStarBlink
-	lda #$e0
-	ldx #$31
-	sta StaticStarPtr
-	stx StaticStarPtr+1
-	; Binary clause Simplified: LESS
-	lda RasterCount
-	; Compare with pure num / var optimization
-	cmp #$e6;keep
-	bcs DoStarfield_eblock305
-DoStarfield_ctb304: ;Main true block ;keep 
-	; HandleVarBinopB16bit
-	ldy #0 ; ::HandleVarBinopB16bit 0
-	; RHS is pure, optimization
-	; Load pointer array
-	lda (StaticStarPtr),y
-	pha
-	iny
-	lda (StaticStarPtr),y
-	tay
-	pla
-	ora #$10
-	; Testing for byte:  #$00
-	; RHS is word, no optimization
-	pha 
-	tya 
-	ora #$00
-	tay 
-	pla 
-	; Calling storevariable on generic assign expression
-	; Storing to a pointer
-	; Storing integer to a pointer of integer, need to move data in y to x
-	pha
-	tya
-	tax
-	pla
-	pha
-	lda #$0
-	asl
-	tay
-	pla
-	sta (StaticStarPtr),y
-	iny
-	txa
-	sta (StaticStarPtr),y
-	jmp DoStarfield_edblock306
-DoStarfield_eblock305
-	; Is simple pointer assigning : p[n] := expr
-	ldy #0
-	lda #$00
-	sta (StaticStarPtr),y
-	iny
-	sta (StaticStarPtr),y
-DoStarfield_edblock306
-	rts
-end_procedure_DoStarfield
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : UpdateMonsters
 	;    Procedure type : User-defined procedure
@@ -1706,15 +1639,15 @@ UpdateMonsters
 	; Load16bitvariable : joystickleft
 	lda joystickleft
 	asl
-UpdateMonsters_rightvarAddSub_var314 = $54
-	sta UpdateMonsters_rightvarAddSub_var314
+UpdateMonsters_rightvarAddSub_var303 = $54
+	sta UpdateMonsters_rightvarAddSub_var303
 	; Right is PURE NUMERIC : Is word =0
 	; 8 bit mul of power 2
 	; Load16bitvariable : joystickright
 	lda joystickright
 	asl
 	sec
-	sbc UpdateMonsters_rightvarAddSub_var314
+	sbc UpdateMonsters_rightvarAddSub_var303
 	clc
 	adc monster1_x
 	 ; end add / sub var with constant
@@ -1727,11 +1660,11 @@ UpdateMonsters_rightvarAddSub_var314 = $54
 	; isi-pisi: value is constant
 	ldx #2
 	sta $D000,x
-UpdateMonsters_spritepos315
+UpdateMonsters_spritepos304
 	lda $D010
 	and #%11111101
 	sta $D010
-UpdateMonsters_spriteposcontinue316
+UpdateMonsters_spriteposcontinue305
 	inx
 	txa
 	tay
@@ -1747,11 +1680,11 @@ UpdateMonsters_spriteposcontinue316
 	 ; end add / sub var with constant
 	ldx #4
 	sta $D000,x
-UpdateMonsters_spritepos317
+UpdateMonsters_spritepos306
 	lda $D010
 	and #%11111011
 	sta $D010
-UpdateMonsters_spriteposcontinue318
+UpdateMonsters_spriteposcontinue307
 	inx
 	txa
 	tay
@@ -1767,11 +1700,11 @@ UpdateMonsters_spriteposcontinue318
 	 ; end add / sub var with constant
 	ldx #6
 	sta $D000,x
-UpdateMonsters_spritepos319
+UpdateMonsters_spritepos308
 	lda $D010
 	and #%11110111
 	sta $D010
-UpdateMonsters_spriteposcontinue320
+UpdateMonsters_spriteposcontinue309
 	inx
 	txa
 	tay
@@ -1787,53 +1720,41 @@ UpdateMonsters_spriteposcontinue320
 	 ; end add / sub var with constant
 	ldx #8
 	sta $D000,x
-UpdateMonsters_spritepos321
+UpdateMonsters_spritepos310
 	lda $D010
 	and #%11101111
 	sta $D010
-UpdateMonsters_spriteposcontinue322
+UpdateMonsters_spriteposcontinue311
 	inx
 	txa
 	tay
 	lda monster4_y
 	sta $D000,y
-	; Binary clause Simplified: NOTEQUALS
-	clc
-	lda joystickleft
-	; cmp #$00 ignored
-	beq UpdateMonsters_edblock326
-UpdateMonsters_ctb324: ;Main true block ;keep 
-	
-; //Possible bugSpritePos(monster1_x, monster1_y, monsterSprite1);
-; //	SpritePos(monster2_x, monster2_y, monsterSprite2);
-; //	SpritePos(monster3_x, monster3_y, monsterSprite3);
-; //	SpritePos(monster4_x, monster4_y, monsterSprite4);
-; // Set left/right offset pointer for sprite
-; //if (joystickright) then
-; //	joystick_dir := 1;
-	lda #$0
-	; Calling storevariable on generic assign expression
-	sta joystick_dir
-UpdateMonsters_edblock326
 	rts
 end_procedure_UpdateMonsters
 	
+; // Set left/right offset pointer for sprite
+; //	if (joystickright) then
+; //		joystick_dir := 1;	
+; //	if (joystickleft) then
+; //		joystick_dir := 0;
 ; // Set the sprite pointer to point to the sprite data + direction offset
-; //SetSpriteLoc(useSprite, 8192/64 + joystick_dir, useBank);
-; // If any movement is detected, play a random soundif ((joystickright+joystickleft) or (joystickup+joystickdown)) then
+; //	SetSpriteLoc(useSprite, 8192/64 + joystick_dir, useBank);
+; // If any movement is detected, play a random sound
+; //	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
 ; //		PlaySound(sid_channel1, 
-; //				13,  
+; //		13,  
 ; // Volume
-; //				20+Random()/16,  
+; //		20+Random()/16,  
 ; // Hi byte frequency
-; //				0*16+0,  
+; //		0*16+0,  
 ; // Attack voice 1
-; //				3*16 + 3,   
+; //		3*16 + 3,   
 ; // Sustain = 16*15 + release=6
-; //				1 +sid_saw,  
+; //		1 +sid_saw,  
 ; // Waveform
-; //				sid_saw);  
-; // waveform 
+; //		sid_saw);  
+; // waveform
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : UpdateMonsters2
 	;    Procedure type : User-defined procedure
@@ -1843,11 +1764,11 @@ UpdateMonsters2
 	lda monster1_x
 	ldx #2
 	sta $D000,x
-UpdateMonsters2_spritepos330
+UpdateMonsters2_spritepos313
 	lda $D010
 	and #%11111101
 	sta $D010
-UpdateMonsters2_spriteposcontinue331
+UpdateMonsters2_spriteposcontinue314
 	inx
 	txa
 	tay
@@ -1868,11 +1789,11 @@ UpdateMonsters2_spriteposcontinue331
 	 ; end add / sub var with constant
 	ldx #4
 	sta $D000,x
-UpdateMonsters2_spritepos332
+UpdateMonsters2_spritepos315
 	lda $D010
 	and #%11111011
 	sta $D010
-UpdateMonsters2_spriteposcontinue333
+UpdateMonsters2_spriteposcontinue316
 	inx
 	txa
 	tay
@@ -1893,11 +1814,11 @@ UpdateMonsters2_spriteposcontinue333
 	 ; end add / sub var with constant
 	ldx #6
 	sta $D000,x
-UpdateMonsters2_spritepos334
+UpdateMonsters2_spritepos317
 	lda $D010
 	and #%11110111
 	sta $D010
-UpdateMonsters2_spriteposcontinue335
+UpdateMonsters2_spriteposcontinue318
 	inx
 	txa
 	tay
@@ -1918,11 +1839,11 @@ UpdateMonsters2_spriteposcontinue335
 	 ; end add / sub var with constant
 	ldx #8
 	sta $D000,x
-UpdateMonsters2_spritepos336
+UpdateMonsters2_spritepos319
 	lda $D010
 	and #%11101111
 	sta $D010
-UpdateMonsters2_spriteposcontinue337
+UpdateMonsters2_spriteposcontinue320
 	inx
 	txa
 	tay
@@ -1944,11 +1865,11 @@ UpdateMonsters3
 	lda monster1_x
 	ldx #2
 	sta $D000,x
-UpdateMonsters3_spritepos339
+UpdateMonsters3_spritepos322
 	lda $D010
 	and #%11111101
 	sta $D010
-UpdateMonsters3_spriteposcontinue340
+UpdateMonsters3_spriteposcontinue323
 	inx
 	txa
 	tay
@@ -1969,11 +1890,11 @@ UpdateMonsters3_spriteposcontinue340
 	 ; end add / sub var with constant
 	ldx #4
 	sta $D000,x
-UpdateMonsters3_spritepos341
+UpdateMonsters3_spritepos324
 	lda $D010
 	and #%11111011
 	sta $D010
-UpdateMonsters3_spriteposcontinue342
+UpdateMonsters3_spriteposcontinue325
 	inx
 	txa
 	tay
@@ -1994,11 +1915,11 @@ UpdateMonsters3_spriteposcontinue342
 	 ; end add / sub var with constant
 	ldx #6
 	sta $D000,x
-UpdateMonsters3_spritepos343
+UpdateMonsters3_spritepos326
 	lda $D010
 	and #%11110111
 	sta $D010
-UpdateMonsters3_spriteposcontinue344
+UpdateMonsters3_spriteposcontinue327
 	inx
 	txa
 	tay
@@ -2019,11 +1940,11 @@ UpdateMonsters3_spriteposcontinue344
 	 ; end add / sub var with constant
 	ldx #8
 	sta $D000,x
-UpdateMonsters3_spritepos345
+UpdateMonsters3_spritepos328
 	lda $D010
 	and #%11101111
 	sta $D010
-UpdateMonsters3_spriteposcontinue346
+UpdateMonsters3_spriteposcontinue329
 	inx
 	txa
 	tay
@@ -2085,68 +2006,68 @@ InitMonsters
 	sta $d015
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-InitMonsters_shiftbit348
+InitMonsters_shiftbit331
 	cpx #0
-	beq InitMonsters_shiftbitdone349
+	beq InitMonsters_shiftbitdone332
 	asl
 	dex
-	jmp InitMonsters_shiftbit348
-InitMonsters_shiftbitdone349
-InitMonsters_bitmask_var350 = $54
-	sta InitMonsters_bitmask_var350
+	jmp InitMonsters_shiftbit331
+InitMonsters_shiftbitdone332
+InitMonsters_bitmask_var333 = $54
+	sta InitMonsters_bitmask_var333
 	lda $d015
-	ora InitMonsters_bitmask_var350
+	ora InitMonsters_bitmask_var333
 	sta $d015
 	; Toggle bit with constant
 	ora #%100
 	sta $d015
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-InitMonsters_shiftbit351
+InitMonsters_shiftbit334
 	cpx #0
-	beq InitMonsters_shiftbitdone352
+	beq InitMonsters_shiftbitdone335
 	asl
 	dex
-	jmp InitMonsters_shiftbit351
-InitMonsters_shiftbitdone352
-InitMonsters_bitmask_var353 = $54
-	sta InitMonsters_bitmask_var353
+	jmp InitMonsters_shiftbit334
+InitMonsters_shiftbitdone335
+InitMonsters_bitmask_var336 = $54
+	sta InitMonsters_bitmask_var336
 	lda $d015
-	ora InitMonsters_bitmask_var353
+	ora InitMonsters_bitmask_var336
 	sta $d015
 	; Toggle bit with constant
 	ora #%1000
 	sta $d015
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-InitMonsters_shiftbit354
+InitMonsters_shiftbit337
 	cpx #0
-	beq InitMonsters_shiftbitdone355
+	beq InitMonsters_shiftbitdone338
 	asl
 	dex
-	jmp InitMonsters_shiftbit354
-InitMonsters_shiftbitdone355
-InitMonsters_bitmask_var356 = $54
-	sta InitMonsters_bitmask_var356
+	jmp InitMonsters_shiftbit337
+InitMonsters_shiftbitdone338
+InitMonsters_bitmask_var339 = $54
+	sta InitMonsters_bitmask_var339
 	lda $d015
-	ora InitMonsters_bitmask_var356
+	ora InitMonsters_bitmask_var339
 	sta $d015
 	; Toggle bit with constant
 	ora #%10000
 	sta $d015
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-InitMonsters_shiftbit357
+InitMonsters_shiftbit340
 	cpx #0
-	beq InitMonsters_shiftbitdone358
+	beq InitMonsters_shiftbitdone341
 	asl
 	dex
-	jmp InitMonsters_shiftbit357
-InitMonsters_shiftbitdone358
-InitMonsters_bitmask_var359 = $54
-	sta InitMonsters_bitmask_var359
+	jmp InitMonsters_shiftbit340
+InitMonsters_shiftbitdone341
+InitMonsters_bitmask_var342 = $54
+	sta InitMonsters_bitmask_var342
 	lda $d015
-	ora InitMonsters_bitmask_var359
+	ora InitMonsters_bitmask_var342
 	sta $d015
 	; Toggle bit with constant
 	lda $d01d
@@ -2154,75 +2075,80 @@ InitMonsters_bitmask_var359 = $54
 	sta $d01d
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-InitMonsters_shiftbit360
+InitMonsters_shiftbit343
 	cpx #0
-	beq InitMonsters_shiftbitdone361
+	beq InitMonsters_shiftbitdone344
 	asl
 	dex
-	jmp InitMonsters_shiftbit360
-InitMonsters_shiftbitdone361
-InitMonsters_bitmask_var362 = $54
-	sta InitMonsters_bitmask_var362
+	jmp InitMonsters_shiftbit343
+InitMonsters_shiftbitdone344
+InitMonsters_bitmask_var345 = $54
+	sta InitMonsters_bitmask_var345
 	lda $d01d
-	ora InitMonsters_bitmask_var362
+	ora InitMonsters_bitmask_var345
 	sta $d01d
 	; Toggle bit with constant
 	ora #%100
 	sta $d01d
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-InitMonsters_shiftbit363
+InitMonsters_shiftbit346
 	cpx #0
-	beq InitMonsters_shiftbitdone364
+	beq InitMonsters_shiftbitdone347
 	asl
 	dex
-	jmp InitMonsters_shiftbit363
-InitMonsters_shiftbitdone364
-InitMonsters_bitmask_var365 = $54
-	sta InitMonsters_bitmask_var365
+	jmp InitMonsters_shiftbit346
+InitMonsters_shiftbitdone347
+InitMonsters_bitmask_var348 = $54
+	sta InitMonsters_bitmask_var348
 	lda $d01d
-	ora InitMonsters_bitmask_var365
+	ora InitMonsters_bitmask_var348
 	sta $d01d
 	; Toggle bit with constant
 	ora #%1000
 	sta $d01d
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-InitMonsters_shiftbit366
+InitMonsters_shiftbit349
 	cpx #0
-	beq InitMonsters_shiftbitdone367
+	beq InitMonsters_shiftbitdone350
 	asl
 	dex
-	jmp InitMonsters_shiftbit366
-InitMonsters_shiftbitdone367
-InitMonsters_bitmask_var368 = $54
-	sta InitMonsters_bitmask_var368
+	jmp InitMonsters_shiftbit349
+InitMonsters_shiftbitdone350
+InitMonsters_bitmask_var351 = $54
+	sta InitMonsters_bitmask_var351
 	lda $d01d
-	ora InitMonsters_bitmask_var368
+	ora InitMonsters_bitmask_var351
 	sta $d01d
 	; Toggle bit with constant
 	ora #%10000
 	sta $d01d
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-InitMonsters_shiftbit369
+InitMonsters_shiftbit352
 	cpx #0
-	beq InitMonsters_shiftbitdone370
+	beq InitMonsters_shiftbitdone353
 	asl
 	dex
-	jmp InitMonsters_shiftbit369
-InitMonsters_shiftbitdone370
-InitMonsters_bitmask_var371 = $54
-	sta InitMonsters_bitmask_var371
+	jmp InitMonsters_shiftbit352
+InitMonsters_shiftbitdone353
+InitMonsters_bitmask_var354 = $54
+	sta InitMonsters_bitmask_var354
 	lda $d01d
-	ora InitMonsters_bitmask_var371
+	ora InitMonsters_bitmask_var354
 	sta $d01d
 	rts
 end_procedure_InitMonsters
+	
+; // ---------------------------------------------------------------------------------------------------------------------------------
+; // Main raster interrupt routines.
+; // ---------------------------------------------------------------------------------------------------------------------------------
+; // This interrupt is triggered one time pr raster cycle
 	; NodeProcedureDecl -1
-	; ***********  Defining procedure : InterruptRoutine01
+	; ***********  Defining procedure : MainRasterRow1
 	;    Procedure type : User-defined procedure
-InterruptRoutine01
+MainRasterRow1
 	; StartIRQ
 	pha
 	txa
@@ -2231,30 +2157,58 @@ InterruptRoutine01
 	pha
 	asl $d019
 	
-; //SCREEN_BG_COL:=RED;                
-	; RasterIRQ : Hook a procedure
-	lda #$0
-	sta $d012
-	lda #<MainRaster3
-	sta $fffe
-	lda #>MainRaster3
-	sta $ffff
+; // Score counter
+	lda Score
+	clc
+	adc #$09
+	sta Score+0
+	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
+	bcc MainRasterRow1_WordAdd356
+	inc Score+1
+MainRasterRow1_WordAdd356
+	; Binary clause INTEGER: GREATEREQUAL
+	lda Score+1   ; compare high bytes
+	cmp #$27 ;keep
+	bcc MainRasterRow1_edblock360
+	bne MainRasterRow1_ctb358
+	lda Score
+	cmp #$10 ;keep
+	bcc MainRasterRow1_edblock360
+MainRasterRow1_ctb358: ;Main true block ;keep 
+	lda Score
+	sec
+	sbc #$10
+	sta Score+0
+	lda Score+1
+	sbc #$27
+	sta Score+1
+	lda Score2
+	clc
+	adc #$01
+	sta Score2+0
+	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
+	bcc MainRasterRow1_WordAdd366
+	inc Score2+1
+MainRasterRow1_WordAdd366
+MainRasterRow1_edblock360
 	jsr UpdateMonsters
-	; wait for raster
-	ldx #$67 ; optimized, look out for bugs
-	cpx $d012
-	bne *-3
+	; RasterIRQ : Hook a procedure
+	lda #$69
+	sta $d012
+	lda #<MainRasterRow2
+	sta $fffe
+	lda #>MainRasterRow2
+	sta $ffff
 	
-; //WaitForRaster(109);
-; //SCREEN_BG_COL:=GREEN;
-	jsr UpdateMonsters2
-	; wait for raster
-	ldx #$81 ; optimized, look out for bugs
-	cpx $d012
-	bne *-3
-	
-; //SCREEN_BG_COL:=BLUE;
-	jsr UpdateMonsters3
+; // WaitForRaster version. First working copy.
+; //	SCREEN_BG_COL:=RED;
+; //	RasterIRQ(MainRasterJoystick(),0,0);
+; //	WaitForRaster(103);	
+; //	SCREEN_BG_COL:=GREEN;
+; //	UpdateMonsters2();
+; //	WaitForRaster(129);
+; //	SCREEN_BG_COL:=BLUE;
+; //	UpdateMonsters3();
 	; CloseIRQ
 	pla
 	tay
@@ -2262,36 +2216,61 @@ InterruptRoutine01
 	tax
 	pla
 	rti
-end_procedure_InterruptRoutine01
-	;WaitForRaster(250);    
-; //    SCREEN_BG_COL:=GREEN;
+end_procedure_MainRasterRow1
 	; NodeProcedureDecl -1
-	; ***********  Defining procedure : MainRaster2
+	; ***********  Defining procedure : MainRasterRow2
 	;    Procedure type : User-defined procedure
-MainRaster2
+MainRasterRow2
 	
-; //StartIRQ(useKernal);					
-; // All code must be between StartIrq\CloseIrq
-	; Test Inc dec D
-	inc RasterCount
-	jsr DoStarfield
+; //SCREEN_BG_COL:=BLUE;	
+	jsr UpdateMonsters2
+	; RasterIRQ : Hook a procedure
+	lda #$81
+	sta $d012
+	lda #<MainRasterRow3
+	sta $fffe
+	lda #>MainRasterRow3
+	sta $ffff
+	rti
+end_procedure_MainRasterRow2
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : MainRasterRow3
+	;    Procedure type : User-defined procedure
+MainRasterRow3
 	
-; //preventirq();
+; //SCREEN_BG_COL:=GREEN;                	
+	jsr UpdateMonsters3
 	; RasterIRQ : Hook a procedure
 	lda #$0
 	sta $d012
-	lda #<InterruptRoutine01
+	lda #<MainRasterJoystick
 	sta $fffe
-	lda #>InterruptRoutine01
+	lda #>MainRasterJoystick
 	sta $ffff
 	rti
-end_procedure_MainRaster2
-	
-; //CloseIRQ();
+end_procedure_MainRasterRow3
 	; NodeProcedureDecl -1
-	; ***********  Defining procedure : MainRaster3
+	; ***********  Defining procedure : MainRasterStarfield
 	;    Procedure type : User-defined procedure
-MainRaster3
+MainRasterStarfield
+	; Test Inc dec D
+	inc StarField_RasterCount
+	jsr StarField_DoStarfield
+	
+; //preventirq();    
+	; RasterIRQ : Hook a procedure
+	lda #$0
+	sta $d012
+	lda #<MainRasterRow1
+	sta $fffe
+	lda #>MainRasterRow1
+	sta $ffff
+	rti
+end_procedure_MainRasterStarfield
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : MainRasterJoystick
+	;    Procedure type : User-defined procedure
+MainRasterJoystick
 	
 ; // Update joystick here
 	lda #<joystickup
@@ -2315,21 +2294,18 @@ MainRaster3
 	
 ; // Update sprites
 	jsr UpdateSprite
-	
-; //UpdateMonsters();	
 	; RasterIRQ : Hook a procedure
 	lda #$0
 	sta $d012
-	lda #<MainRaster2
+	lda #<MainRasterStarfield
 	sta $fffe
-	lda #>MainRaster2
+	lda #>MainRasterStarfield
 	sta $ffff
 	rti
-end_procedure_MainRaster3
+end_procedure_MainRasterJoystick
 block1
 main_block_begin_
 	
-; //RasterIRQ(InterruptRoutine01(),0,0);
 ; // ---------------------------------------------------------------------------------------------------------------------------------
 ; // Main program loop. Turn CIA interrupts off, copy the character set from ROM into RAM and tell the machine to look at CharSetLoc
 ; // for its character set, initialise the pointers and start the raster chain off.
@@ -2362,7 +2338,7 @@ main_block_begin_
 	lda #$33 ;from rom - rom visible at d800
 	sta $01
 	ldy #$00
-MainProgram_charsetcopy375
+MainProgram_charsetcopy371
 	lda $D000 + $00,y
 	sta $3000+$00,y
 	lda $D000 + $64,y
@@ -2380,27 +2356,27 @@ MainProgram_charsetcopy375
 	lda $D000 + $2bc,y
 	sta $3000+$2bc,y
 	dey
-	bne MainProgram_charsetcopy375
+	bne MainProgram_charsetcopy371
 	lda #$37
 	sta $01
-	jsr CreateStarScreen
+	jsr StarField_CreateStarScreen
 	
 ; // -- Comment this line out to see the effect of the character set being overwritten.
 ; //ClearCharacterSet();
 	lda #$d0
 	ldx #$31
-	sta StarfieldPtr
-	stx StarfieldPtr+1
+	sta StarField_StarfieldPtr
+	stx StarField_StarfieldPtr+1
 	lda #$98
 	ldx #$32
-	sta StarfieldPtr2
-	stx StarfieldPtr2+1
+	sta StarField_StarfieldPtr2
+	stx StarField_StarfieldPtr2+1
 	lda #$40
-	sta StarfieldPtr3
-	stx StarfieldPtr3+1
+	sta StarField_StarfieldPtr3
+	stx StarField_StarfieldPtr3+1
 	lda #$e0
-	sta StarfieldPtr4
-	stx StarfieldPtr4+1
+	sta StarField_StarfieldPtr4
+	stx StarField_StarfieldPtr4+1
 	
 ; // IO area visible at $D000-$DFFF, RAM visible at $A000-$BFFF (NO BASIC) and RAM visible at $E000-$FFFF (NO KERNAL). 
 ; // This is the typical memory configuration for demo/game development. 
@@ -2409,18 +2385,16 @@ MainProgram_charsetcopy375
 	and #%11111000
 	ora #%101
 	sta $01
-	;preventirq();
-; //        disableciainterrupts();
-; //        setmemoryconfig(1,0,0);
-; //        enablerasterirq();
-; //        rasterirq(InterruptRoutine01(),0,0);
-; //        enableirq();
+	
+; //	preventirq();
+; //	disableciainterrupts();
+; //	setmemoryconfig(1,0,0);
+; //	enablerasterirq();
+; //	rasterirq(MainRasterRow1(),0,0);
+; //	enableirq();	
 ; //StartRasterChain(MainRaster(), $DC, useKernal);
-	sei
-	; Disable interrupts
-	ldy #$7f    ; $7f = %01111111
-	sty $dc0d   ; Turn off CIAs Timer interrupts
-	sty $dd0d   ; Turn off CIAs Timer interrupts
+; //PreventIRQ();
+; //DisableCIAInterrupts();
 	; Enable raster IRQ
 	lda $d01a
 	ora #$01
@@ -2433,56 +2407,49 @@ MainProgram_charsetcopy375
 	; RasterIRQ : Hook a procedure
 	lda #$0
 	sta $d012
-	lda #<InterruptRoutine01
+	lda #<MainRasterRow1
 	sta $fffe
-	lda #>InterruptRoutine01
+	lda #>MainRasterRow1
 	sta $ffff
-	
-; //RasterIRQ(MainRaster2(), 250, useKernal);
-; //RasterIRQ(MainRaster3(), 0, useKernal);
-; //CloseIRQ();
 	asl $d019
 	cli
-	
-; //InitSprites();
-; //StartRasterChain(MainRasterSprite(),0,1);
 	jmp * ; loop like (�/%
 main_block_end_
 	; End of program
 	; Ending memory block at $810
-DisplayScore_stringassignstr42		dc.b	"  SCORE(1)"
+DisplayScore_stringassignstr254		dc.b	"  SCORE(1)"
 	dc.b	0
-DisplayScore_stringassignstr44		dc.b	" "
+DisplayScore_stringassignstr256		dc.b	" "
 	dc.b	0
-DisplayText_stringassignstr189		dc.b	"  SCORE(1)"
+DisplayText_stringassignstr271		dc.b	"  SCORE(1)"
 	dc.b	0
-DisplayText_stringassignstr191		dc.b	" "
+DisplayText_stringassignstr273		dc.b	" "
 	dc.b	0
-DisplayText_stringassignstr195		dc.b	"  HI-SCORE"
+DisplayText_stringassignstr277		dc.b	"  HI-SCORE"
 	dc.b	0
-DisplayText_stringassignstr197		dc.b	"      1740"
+DisplayText_stringassignstr279		dc.b	"      1740"
 	dc.b	0
-DisplayText_stringassignstr199		dc.b	"  SCORE(2)"
+DisplayText_stringassignstr281		dc.b	"  SCORE(2)"
 	dc.b	0
-DisplayText_stringassignstr201		dc.b	"      1740"
+DisplayText_stringassignstr283		dc.b	"      1740"
 	dc.b	0
-DisplayText_stringassignstr203		dc.b	"lmn"
+DisplayText_stringassignstr285		dc.b	"lmn"
 	dc.b	0
-DisplayText_stringassignstr205		dc.b	"opq"
+DisplayText_stringassignstr287		dc.b	"opq"
 	dc.b	0
-DisplayText_stringassignstr207		dc.b	"rst"
+DisplayText_stringassignstr289		dc.b	"rst"
 	dc.b	0
-DisplayText_stringassignstr209		dc.b	"uvw"
+DisplayText_stringassignstr291		dc.b	"uvw"
 	dc.b	0
-DisplayText_stringassignstr211		dc.b	"xyz"
+DisplayText_stringassignstr293		dc.b	"xyz"
 	dc.b	0
-DisplayText_stringassignstr213		dc.b	"!#¤"
+DisplayText_stringassignstr295		dc.b	"!#¤"
 	dc.b	0
-DisplayText_stringassignstr215		dc.b	"¤%&"
+DisplayText_stringassignstr297		dc.b	"¤%&"
 	dc.b	0
-DisplayText_stringassignstr217		dc.b	"/+*"
+DisplayText_stringassignstr299		dc.b	"/+*"
 	dc.b	0
-DisplayText_stringassignstr219		dc.b	"ooooooooooooooooooooooooooooo"
+DisplayText_stringassignstr301		dc.b	"ooooooooooooooooooooooooooooo"
 	dc.b	0
 EndBlock810:
 

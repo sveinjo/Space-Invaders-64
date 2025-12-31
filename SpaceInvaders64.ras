@@ -1,133 +1,18 @@
-//
-// galenciastars
-//
-// By Alan Bourke in 2021 using Turbo Rascal.
-//
-
-
-/*
-
-
-
-	This is a conversion of Jason Aldred's Galencia starfield, taken from his
-	game of the same name. Jason extracted the starfield ASM code into a standalone
-	programme (see link below), and this is an Turbo Rascal recreation of that.
-
-
- ---------------------------------------------------------------------------------------------------------------------------------
- How It Works 
- ---------------------------------------------------------------------------------------------------------------------------------
- CreateStarScreen fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
- The character screen starts at location $0400 and is 25 rows of 40 characters. The screen is filled in such a way that chars
- that are in sequence in the character set will be placed in vertical rows down the screen. 
- Once this procedure is finished the first 4 rows of the screen will have these characters:
-
- :.I..>.QB.V;OWPGLCR.DNC<K?TAS.DXJ=ZBUEAM
- ;.JA.?.RC.W<PXQHMD:.EOD=L.UBTAEYK>.CVFBN
- <.KB...:D.X=QYRINE;AFPE>MAVCUBFZL?.DWGCO
- =.LC.A.;EAY>RZ:JOF<BGQF?NBWDVCG.M..EXHDP
-
- Note the ':' and the ';' below it at the top left. These two characters are numbers 58 and 59 in the character set. We have copied
- the character set into RAM starting at location $3000 (12288 decimal) . 'Star1Ptr' starts off pointing at 'Star1Init', which is 
- location $31D0 (12572 decimal). 12288 - 12572 = 464 bytes or 58 characters. Therefore 'Star1Ptr' starts off pointing at the first
- byte\row of the ':' character in memory. From there the 'DoStarField()' loop will place a star shape into that memory location and 
- on the next pass erase it and draw it one byte down. This produces the falling stars.
-
- ---------------------------------------------------------------------------------------------------------------------------------
- Resources
- ---------------------------------------------------------------------------------------------------------------------------------
- https:retrocomputing.stackexchange.com/questions/12678/get-exact-position-of-raster-beam-on-c64-c128
- VICE monitor io d000
- https:retrocomputing.stackexchange.com/questions/7528/commodore-8-bit-character-sets/8278
- 
- Jason Aldred's original Galencia starfield extracted to a standalone program.
- https://github.com/Jimmy2x2x/C64-Starfield/blob/master/starfield.asm
-
- Info about the C64 character set.
- https://github.com/neilsf/XC-BASIC/tree/master/examples/invaders
- https://www.c64-wiki.com/wiki/Character_set
-
- Info about the C64 memory map.
- https://www.pagetable.com/c64ref/c64mem/
- https://github.com/Project-64/reloaded/blob/master/c64/mapc64/MAPC6412.TXT
-
- GRay Defender's breakdown of how the original ASM works - WATCH THIS.
- https://www.youtube.com/watch?v=47LakVkR5lg&t=1251s
-
-
-*/
-
-
-
 program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
+@use "starfield"
 
 var
+    @define useKernal 0
+
 	Score : Integer = 9950;
 	Score2 : Integer = 0;
-	//Score : Integer = 32760;
-	//Test: ^byte;
-	
-	const useKernal : byte = 0;				// Flags whether interrupt chain should use the Kernal.
-	RasterCount : byte;						// Keeps track of the number of times the interrupt 
-											// handler that draws the stars has been hit.
-	
-	const Star1Shape : byte = %00000011;	// Star shapes - a bit pattern representing one 
-	const Star2Shape : byte = %00001100; 	// byte in an 8-byte character.
-	const Star3Shape : byte = %00110000;
-	const Star4Shape : byte = %11000000;
-	const StarBShape : byte = %00010000;
-	
-	const CharSetLoc : address = $3000;		// The location in RAM to which the ROM-based
-																// character set will be copied.
-	
-	const Star1Init  : address = $31D0;		// Init address for each star, CharSetLoc plus offset
-											// For example:
-											// CharsetLoc = $3000 = 12288 and Star1Init = $31D0 = 12752
-											// 12752 - 12288 = 464. There are 8 bytes per char, so 464/8 = 58
-											// This corresponds to the first byte of the ':' character in the 
-										    // C64 PETSCII character set (https://www.c64-wiki.com/wiki/PETSCII)
-											
-    const Star1Limit : address = $3298;		// Limit for Star 1. This is the last byte in the 'S' character.
-	const Star1Reset : address = $31D0;		// Reset address for star 1. 
-
-	const Star2Init : address = $3298;		// As per star 1.
-	const Star2Limit : address = $3360; 		
-	const Star2Reset : address = $3298;
-
-	const Star3Init : address = $3240;
-	const Star3Limit : address = $3298;
-	const Star3Reset : address = $31D0;
-
-	const Star4Init : address = $32E0;
-	const Star4Limit : address = $3360;
-	const Star4Reset : address = $3298;
-
-	const StaticStar1 : address = $3250; 	// 2 Locations for blinking static stars
-	const StaticStar2 : address = $31E0;
-	
-	StarfieldPtr : pointer of integer;		// These pointers track the current byte offset into the RAM
-	StarfieldPtr2 : pointer of integer;		// character set for the star in question.
-	StarfieldPtr3 : pointer of integer;
-	StarfieldPtr4 : pointer of integer;
- 	StaticStarPtr : pointer of integer;
-
-	StaticStarBlink : byte;					// Flag used to toggle the static blinking stars on and off.
-
-	// One screen row of 40 PETSCII characters.
-	StarfieldRow : array[40] of byte = (058,092,073,064,091,062,093,081,066,094,
-									   086,059,079,087,080,071,076,067,082,095,
-									   100,078,099,060,075,063,084,065,083,096,
-									   068,088,074,061,090,098,085,101,097,077);
-
-	// The colour values corresponding to the characters.
-	StarfieldColours : array[20] of byte = (14,10,12,15,14,13,12,11,10,14,
-										   14,10,14,15,14,13,12,11,10,12);
-										
+								
   
-	// sprite_x is an integer since x values range between 0 and 320
+	// sprite_x is usually an integer since x values range between 
+	// 0 and 320. But we have a smaller play area.
 	sprite_x : byte = 22;
 	sprite_y : byte = 226;
 	
@@ -164,15 +49,21 @@ var
 	// Include the sprite binary file. The original 
 	// image is located under sprites/sprites.flf 
 	  	
-// Export all sprites automatically on each build
-//@export "resources/sprites/sprites.flf" "resources/sprites/sprites.bin" 256 	  	
+	// Export all sprites automatically on each build
+	//@export "resources/sprites/sprites.flf" "resources/sprites/sprites.bin" 256 	  	
 	//sprites:incbin("resources/sprites/sprites.bin", @spriteLoc); 
+
+	// Declarations
+	interrupt MainRasterRow2();
+	interrupt MainRasterRow3();
+	interrupt MainRasterJoystick();
+	//interrupt MainRaster2();
 
 	
 procedure InitSprites();
-begin
+begin	
 	// Set all sprites to be multicolor
-	//sprite_multicolor:=$ff;
+	//sprite_multicolor:=$ff;	
 	// Set common sprite multicolor #1 
 	sprite_multicolor_reg1:=green;
 	// Set  common sprite multicolor #2 
@@ -185,7 +76,7 @@ end;
 
 Procedure DisplayScore();
 Begin
-Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);
+	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);
 	Screen::PrintString(" ",29,3,#Screen::screen0);
 	moveto(30,3,hi(screen_char_loc));
 	PrintDecimal(Score2,4);
@@ -212,116 +103,19 @@ begin
 	//SetSpriteLoc(useSprite, @spriteLoc/64 + joystick_dir, useBank);
 
 	// If any movement is detected, play a random sound
-	/*if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
-		PlaySound(sid_channel1, 
-				13,  // Volume
-				20+Random()/16,  // Hi byte frequency
-				0*16+0,  // Attack voice 1
-				3*16 + 3,   // Sustain = 16*15 + release=6
-				1 +sid_saw,  // Waveform
-				sid_saw);  // waveform */
-				
-
-
-end;
-
-// This interrupt is triggered one time pr raster cycle
-/*interrupt MainRasterSprite();
-begin
-	startirq(1);
-	// Update joystick here
-	Memory::Fill(#joystickup,0,5);
-	Joystick(joystickPort);
-	// Update sprites
-	UpdateSprite();	
-	closeirq();
-end;*/
-
-
-// ---------------------------------------------------------------------------------------------------------------------------------
-// Fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
-// ---------------------------------------------------------------------------------------------------------------------------------
-procedure CreateStarScreen();
-	var
-		currentchar : byte;
-		colourindex : byte;
-		//offset : integer;
-		col : byte;
-		row : byte;
-    		saddr : array[25] of integer;
-    		caddr : array[25] of integer;		
-begin
+//	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
+//		PlaySound(sid_channel1, 
+//		13,  // Volume
+//		20+Random()/16,  // Hi byte frequency
+//		0*16+0,  // Attack voice 1
+//		3*16 + 3,   // Sustain = 16*15 + release=6
+//		1 +sid_saw,  // Waveform
+//		sid_saw);  // waveform 
 	
-	CreateAddressTable( #saddr, $0400, 40, 25 );   // $0400 screen address, 40 characters per column, 25 rows
-    CreateAddressTable( #caddr, $D800, 40, 25 );   // $D800 color address, 40 characters per column, 25 rows
-	
-	col := 0;
-	while col <= 28 do begin
-		
-		currentchar := StarfieldRow[col];
-		
-		row := 0;
-		
-		while row <= 17 do begin
-			
-			screenmemory := AddressTable( #saddr, col, row );
-			screenmemory[0] := currentchar;
-			
-			inc(currentchar);
-			
-			// 83 = heart, 58 = colon
-			if currentchar = 107 then begin
-				currentchar := 83;
-				//currentchar := 0;
-			end
-			else
-			if currentchar = 83 then begin
-				currentchar := 58;
-			end;
-			
-			colormemory := AddressTable( #caddr, col, row );
-			colormemory[0] := StarfieldColours[colourindex];
-	
-			inc(row);
-			
-		end;
-		
-		inc(colourindex);
-		
-		if colourindex > 19 then begin
-			colourindex := 0;
-		end;
-		
-		inc(col);
-		
-	end;
-
-end;
-
-// ---------------------------------------------------------------------------------------------------------------------------------
-// Blanks the character set in RAM.
-// ---------------------------------------------------------------------------------------------------------------------------------
-Procedure ClearCharacterSet();
-	var
-		charsetptr : pointer of integer;
-		counter : integer;
-begin
-	charsetptr := #CharSetLoc;
-	for counter := 0 to 2048 do begin
-		charsetptr[0] := 0;
-		inc(charsetptr);
-	end;
 end;
 
 Procedure DisplayText();
-begin
-	/*Score += 9;
-
-	if (Score >= 10000) then begin
-		Score := Score - 10000;
-		Score2 += 1;
-	end;*/
-	
+begin	
 	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);
 	Screen::PrintString(" ",29,3,#Screen::screen0);
 	moveto(30,3,hi(screen_char_loc));
@@ -347,124 +141,42 @@ begin
 	Screen::PrintString("¤%&",22,19,#Screen::screen0);
 	Screen::PrintString("/+*",22,20,#Screen::screen0);
 	
-	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
-	
+	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
 end;
 
 
-// ---------------------------------------------------------------------------------------------------------------------------------
-// Update the starfield by redefining bytes in the character set once per frame.
-// ---------------------------------------------------------------------------------------------------------------------------------
-Procedure DoStarfield();
-	
-begin
-	Score += 9;
 
-	if (Score >= 10000) then begin
-		Score := Score - 10000;
-		Score2 += 1;
-	end;
-	
-
-	// -- Star 1 updates every other frame.
-	if (RasterCount & 1) = 1 then begin
-		StarfieldPtr[0] := 0;
-		Inc(StarfieldPtr);
-		StarfieldPtr[0] := StarfieldPtr[0] | Star1Shape;
-		if StarfieldPtr = #Star1Limit then begin
-			StarfieldPtr := #Star1Reset;
-		end;
-		
-	end;
-
-	// -- Star 2 updates every frame.
-	StarfieldPtr2[0] := 0;
-	Inc(StarfieldPtr2);
-	if StarfieldPtr2 = #Star2Limit then begin
-		StarfieldPtr2 := #Star2Reset;
-	end;	
-	StarfieldPtr2[0] := StarfieldPtr2[0] | Star2Shape;
-
-	// -- Star 3 updates every other frame.
-	if (RasterCount & 1) = 1 then begin
-		StarfieldPtr3[0] := 0;
-		Inc(StarfieldPtr3);
-		StarfieldPtr3[0] := StarfieldPtr3[0] | Star3Shape;
-		if StarfieldPtr3 = #Star3Limit then begin
-			StarfieldPtr3 := #Star3Reset;
-		end;
-	end;
-
-	// -- Star 4 updates two pixels down every frame.
-	StarfieldPtr4[0] := 0;
-	Inc(StarfieldPtr4);
-	Inc(StarfieldPtr4);
-	StarfieldPtr4[0] := StarfieldPtr4[0] | Star4Shape;
-	
-	if StarfieldPtr4 = #Star4Limit then begin
-		StarfieldPtr4 := #Star4Reset;
-	end;
-	
-	// -- Two static blinking stars.
-	StaticStarPtr := #StaticStar1;
-	if RasterCount < 230 then begin
-		StaticStarPtr[0] := StaticStarPtr[0] | StarBShape;
-	end
-	else begin
-		StaticStarPtr[0] := 0;
-	end;
-	
-	StaticStarBlink := RasterCount | $80;
-	
-	StaticStarPtr := #StaticStar2;
-	if RasterCount < 230 then begin
-		StaticStarPtr[0] := StaticStarPtr[0] | StarBShape;
-	end
-	else begin
-		StaticStarPtr[0] := 0;
-	end;	
-	
-	
-	
-end;
 
 procedure UpdateMonsters();
 begin
 	// Update sprite position based on joystick values
 	monster1_x+= (joystickright*2 - joystickleft*2);
 	//sprite_y+= joystickdown - joystickup;
+	
 	// Update the sprite position on screen for sprite number @useSprite	
 	SpritePos(monster1_x, monster1_y, monsterSprite1);
 	SpritePos(monster1_x+54, monster2_y, monsterSprite2);
 	SpritePos(monster1_x+108, monster3_y, monsterSprite3);
 	SpritePos(monster1_x+162, monster4_y, monsterSprite4);
-	
-	//Possible bug
-	/*SpritePos(monster1_x, monster1_y, monsterSprite1);
-	SpritePos(monster2_x, monster2_y, monsterSprite2);
-	SpritePos(monster3_x, monster3_y, monsterSprite3);
-	SpritePos(monster4_x, monster4_y, monsterSprite4);*/
-	
+		
 	// Set left/right offset pointer for sprite
-	//if (joystickright) then
-	//	joystick_dir := 1;
-	if (joystickleft) then
-		joystick_dir := 0;
+//	if (joystickright) then
+//		joystick_dir := 1;	
+//	if (joystickleft) then
+//		joystick_dir := 0;
 	
 	// Set the sprite pointer to point to the sprite data + direction offset
-	//SetSpriteLoc(useSprite, @spriteLoc/64 + joystick_dir, useBank);
+//	SetSpriteLoc(useSprite, @spriteLoc/64 + joystick_dir, useBank);
 
 	// If any movement is detected, play a random sound
-	/*if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
-		PlaySound(sid_channel1, 
-				13,  // Volume
-				20+Random()/16,  // Hi byte frequency
-				0*16+0,  // Attack voice 1
-				3*16 + 3,   // Sustain = 16*15 + release=6
-				1 +sid_saw,  // Waveform
-				sid_saw);  // waveform */
-				
-
+//	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
+//		PlaySound(sid_channel1, 
+//		13,  // Volume
+//		20+Random()/16,  // Hi byte frequency
+//		0*16+0,  // Attack voice 1
+//		3*16 + 3,   // Sustain = 16*15 + release=6
+//		1 +sid_saw,  // Waveform
+//		sid_saw);  // waveform
 
 end;
 
@@ -522,156 +234,77 @@ begin
 	togglebit(SPRITE_STRETCH_X,monsterSprite1,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite2,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite3,1);
-	togglebit(SPRITE_STRETCH_X,monsterSprite4,1);
-	
+	togglebit(SPRITE_STRETCH_X,monsterSprite4,1);	
 end;
 
-var
-        @define useKernal 0
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Main raster interrupt routines.
+// ---------------------------------------------------------------------------------------------------------------------------------
 
-interrupt InterruptRoutine02();
-interrupt InterruptRoutine03();
-interrupt MainRaster3();
-interrupt MainRaster2();
-
-interrupt InterruptRoutine01();
+// This interrupt is triggered one time pr raster cycle
+interrupt MainRasterRow1();
 begin		
-        StartIRQ(@useKernal);
-        //SCREEN_BG_COL:=RED;                
-		RasterIRQ(MainRaster3(),0,@useKernal);        
-		UpdateMonsters();
-        
-        WaitForRaster(103);
-        
-        //WaitForRaster(109);
-        //SCREEN_BG_COL:=GREEN;
-        UpdateMonsters2();
-        WaitForRaster(129);
-        //SCREEN_BG_COL:=BLUE;
-        UpdateMonsters3();
-        
-        CloseIRQ();
-end;
+	StartIRQ(@useKernal);    
+	
+	// Score counter
+	Score += 9;
 
-interrupt InterruptRoutine02();
-begin
-        //StartIRQ(@useKernal);
-        //SCREEN_BG_COL:=BLUE;
-        WaitForRaster(140);
-        UpdateMonsters3();
-        RasterIRQ(MainRaster3(),160,@useKernal);
-        //CloseIRQ();
-end;
-
-interrupt InterruptRoutine03();
-begin
-        //StartIRQ(@useKernal);
-        //SCREEN_BG_COL:=GREEN;                
-        RasterIRQ(MainRaster3(),250,@useKernal);
-        //UpdateMonsters2();
-        //UpdateMonsters2();
-        //CloseIRQ();
-end;
-
-// ---------------------------------------------------------------------------------------------------------------------------------
-// Main raster interrupt routine.
-// ---------------------------------------------------------------------------------------------------------------------------------
-interrupt MainRasterOld();
-begin
+	if (Score >= 10000) then begin
+		Score := Score - 10000;
+		Score2 += 1;
+	end;                
 	
+	UpdateMonsters();       
+	RasterIRQ(MainRasterRow2(),105,@useKernal);
 	
-        //SCREEN_BG_COL:=RED;
-
-        
-
-	startirq(1);
-	// Update joystick here
-	Memory::Fill(#joystickup,0,5);
-	Joystick(joystickPort);
-	// Update sprites
-	UpdateSprite();	
-	UpdateMonsters();
-	//closeirq();
+	// WaitForRaster version. First working copy.
+//	SCREEN_BG_COL:=RED;
+//	RasterIRQ(MainRasterJoystick(),0,@useKernal);
+//	WaitForRaster(103);	
+//	SCREEN_BG_COL:=GREEN;
+//	UpdateMonsters2();
+//	WaitForRaster(129);
+//	SCREEN_BG_COL:=BLUE;
+//	UpdateMonsters3();
 	
-	/*StartIRQ(0);
-        SCREEN_BG_COL:=BLUE;
-        RasterIRQ(InterruptRoutine02(),150,0);
-        CloseIRQ();*/
-        
-    //WaitForRaster(150);
-        //SCREEN_BG_COL:=YELLOW;
-	
-	StartIRQ(useKernal);					// All code must be between StartIrq\CloseIrq
-	inc(RasterCount);
-	
-	//SCREEN_BG_COL:=BLUE;
-	//RasterIRQ(InterruptRoutine02(),150,0);
-	
-	
-	// Debug
-	//moveto(10,10,$04);
-	//printnumber(RasterCount);
-
-    DoStarfield();
-    
-    preventirq();
-        disableciainterrupts();
-        setmemoryconfig(1,@useKernal,0);
-        enablerasterirq();
-        //rasterirq(InterruptRoutine01(),0,@useKernal);
-        enableirq();
-    
-    //rasterirq(InterruptRoutine01(),1,@useKernal);
-    
-    
 	CloseIRQ();
-	
-
-	
-	/*WaitForRaster(250);    
-    SCREEN_BG_COL:=GREEN;*/
-
 end;
 
-interrupt MainRaster2();
-begin
-		
-	//StartIRQ(useKernal);					// All code must be between StartIrq\CloseIrq
-	inc(RasterCount);
-	
-
-    DoStarfield();
-    
-    //preventirq();
-    
-    RasterIRQ(InterruptRoutine01(),0,@useKernal);
-	//CloseIRQ();
+interrupt MainRasterRow2();
+begin	
+	//SCREEN_BG_COL:=BLUE;	
+	UpdateMonsters2();
+	RasterIRQ(MainRasterRow3(),129,@useKernal);	
 end;
 
 
-interrupt MainRaster3();
+interrupt MainRasterRow3();
+begin	
+	//SCREEN_BG_COL:=GREEN;                	
+	UpdateMonsters3();
+	RasterIRQ(MainRasterJoystick(),0,@useKernal);
+end;
+
+
+interrupt MainRasterStarfield();
+begin	
+	inc(StarField_RasterCount);
+    StarField::DoStarfield();    
+    //preventirq();    
+    RasterIRQ(MainRasterRow1(),0,@useKernal);
+end;
+
+
+interrupt MainRasterJoystick();
 begin
-	
-	
-
-
 	// Update joystick here
 	Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
 	// Update sprites
 	UpdateSprite();	
-	//UpdateMonsters();	
-	RasterIRQ(MainRaster2(),0,@useKernal);
-	//RasterIRQ(InterruptRoutine01(),0,@useKernal);
-
-
-
+	
+	RasterIRQ(MainRasterStarfield(),0,@useKernal);	
 end;
-
-
-
-
-
 
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -682,77 +315,47 @@ begin
 	InitSprites();
 	InitMonsters();
 	
-
-	
 	//StartRasterChain(MainRasterSprite(),0,1);	
 	
 	DisableCIAInterrupts();				// Stop handling timer, joystick, keyboard ...
     SCREEN_BG_COL:=BLACK;
     SCREEN_FG_COL:=BLACK;
     
-    
-    
     //DefineScreen();
-
-    SetCharsetLocation(CharSetLoc);
- 	CopyCharsetFromRom(CharSetLoc);
-
-
+    SetCharsetLocation(STARFIELD_CHARSETLOC);
+ 	CopyCharsetFromRom(STARFIELD_CHARSETLOC);
 	
-	CreateStarScreen();
+	StarField::CreateStarScreen();
 	
 	// -- Comment this line out to see the effect of the character set being overwritten.
 	//ClearCharacterSet();
-
-		
-
 	  
-	StarfieldPtr := #Star1Init;
-	StarfieldPtr2 := #Star2Init;
-	StarfieldPtr3 := #Star3Init;
-	StarfieldPtr4 := #Star4Init;
+	StarField::StarfieldPtr := #STARFIELD_STAR1INIT;
+	StarField::StarfieldPtr2 := #STARFIELD_STAR2INIT;
+	StarField::StarfieldPtr3 := #STARFIELD_STAR3INIT;
+	StarField::StarfieldPtr4 := #STARFIELD_STAR4INIT;
 	
 	// IO area visible at $D000-$DFFF, RAM visible at $A000-$BFFF (NO BASIC) and RAM visible at $E000-$FFFF (NO KERNAL). 
 	// This is the typical memory configuration for demo/game development. 
 	SetMemoryConfig(1, 0, 0);	
 	
-/*preventirq();
-        disableciainterrupts();
-        setmemoryconfig(1,@useKernal,0);
-        enablerasterirq();
-        rasterirq(InterruptRoutine01(),0,@useKernal);
-        enableirq();*/
-	
+//	preventirq();
+//	disableciainterrupts();
+//	setmemoryconfig(1,@useKernal,0);
+//	enablerasterirq();
+//	rasterirq(MainRasterRow1(),0,@useKernal);
+//	enableirq();	
 	
 	//StartRasterChain(MainRaster(), $DC, useKernal);
 	
-	PreventIRQ();
-	DisableCIAInterrupts();
-
-	
-    
-    
-	enablerasterirq();	
+	//PreventIRQ();
+	//DisableCIAInterrupts();
+	EnableRasterIrq();	
 	//StartIRQ(useKernal);
 	DisplayText();
-	RasterIRQ(InterruptRoutine01(),0,@useKernal);
-
-	//RasterIRQ(MainRaster2(), 250, useKernal);
-
-	//RasterIRQ(MainRaster3(), 0, useKernal);
-	//CloseIRQ();
-	
-
+	RasterIRQ(MainRasterRow1(),0,@useKernal);
 	enableirq();
-	
-				
-	//InitSprites();
-	//StartRasterChain(MainRasterSprite(),0,1);
-	
-	
-
 
 	Loop(); 
-	//  Note: VICE monitor io d000
-	
+	//  Note: VICE monitor io d000	
 end.

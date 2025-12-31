@@ -193,14 +193,7 @@ end;
 Procedure DoStarfield();
 	
 begin
-	/*Score += 9;
-
-	if (Score >= 10000) then begin
-		Score := Score - 10000;
-		Score2 += 1;
-	end;*/
 	
-
 	// -- Star 1 updates every other frame.
 	if (RasterCount & 1) = 1 then begin
 		StarfieldPtr[0] := 0;
@@ -260,5 +253,4 @@ begin
 		end;	
 		
 	end;
-
 end.
