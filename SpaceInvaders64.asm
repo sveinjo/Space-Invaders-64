@@ -17,8 +17,8 @@ StartBlock810:
 SpaceInvaders64
 	jmp block1
 Screen_p1	= $02
-Screen_sp	= $04
-Screen_p2	= $08
+Screen_sp	=   $04
+Screen_p2	=   $08
 Screen_i	dc.b	0
 Screen_j	dc.b	0
 Screen_x	dc.b	0
@@ -28,21 +28,27 @@ Screen_tab40	dc.w $00, $28, $50, $78, $a0, $c8, $f0, $118
 	dc.w $140, $168, $190, $1b8, $1e0, $208, $230, $258
 	dc.w $280, $2a8, $2d0, $2f8, $320, $348, $370, $398
 	dc.w $3c0
-Memory_p	= $16
+Memory_p	=   $16
 Memory_v	dc.b	0
 Memory_v2	dc.b	0
 StarField_RasterCount	dc.b	0
-StarField_StarfieldPtr	= $0B
-StarField_StarfieldPtr2	= $0D
-StarField_StarfieldPtr3	= $10
-StarField_StarfieldPtr4	= $12
-StarField_StaticStarPtr	= $22
+StarField_StarfieldPtr	=   $0B
+StarField_StarfieldPtr2	=   $0D
+StarField_StarfieldPtr3	=   $10
+StarField_StarfieldPtr4	=   $12
+StarField_StaticStarPtr	=   $22
 StarField_StaticStarBlink	dc.b	0
 StarField_StarfieldRow	dc.b $3a, $5c, $49, $40, $5b, $3e, $5d, $51
 	dc.b $42, $5e, $56, $3b, $4f, $57, $50, $47
 	dc.b $4c, $43, $52, $5f, $64, $4e, $63, $3c
 	dc.b $4b, $3f, $54, $41, $53, $60, $44, $58
 	dc.b $4a, $3d, $5a, $62, $55, $65, $61, $4d
+StarField_StarColour1	dc.b	$06
+StarField_StarColour2	dc.b	$04
+StarField_StarColour3	dc.b	$0c
+StarField_StarColour4	dc.b	$0f
+StarField_StarColour5	dc.b	$0e
+StarField_StarColour6	dc.b	$0b
 StarField_StarfieldColours	dc.b $e, $a, $c, $f, $e, $d, $c, $b
 	dc.b $a, $e, $e, $a, $e, $f, $e, $d
 	dc.b $c, $b, $a, $c
@@ -519,7 +525,15 @@ end_procedure_Memory_Fill_override_2
 ; // character set for the star in question.
 ; // Flag used to toggle the static blinking stars on and off.
 ; // One screen row of 40 PETSCII characters.
+; // 14 (Light Blue)
+; // 10 (Pink)
+; // 12 (Grey Medium)
+; // 15 (Grey Light)
+; // 13 (Green Light)
+; // 11 (Grey Dark)
+; //	14,10,12,15,13,11
 ; // The colour values corresponding to the characters.
+; //	StarfieldColours : array[20] of byte = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 ; // ---------------------------------------------------------------------------------------------------------------------------------
 ; // Fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
 ; // ---------------------------------------------------------------------------------------------------------------------------------
@@ -538,6 +552,65 @@ StarField_CreateStarScreen_block36
 StarField_CreateStarScreen
 	
 ; //offset : integer;
+	lda StarField_StarColour1
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$0
+	lda StarField_StarColour2
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$1
+	lda StarField_StarColour3
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$2
+	lda StarField_StarColour4
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$3
+	lda StarField_StarColour1
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$4
+	lda StarField_StarColour5
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$5
+	lda StarField_StarColour3
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$6
+	lda StarField_StarColour6
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$7
+	lda StarField_StarColour2
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$8
+	lda StarField_StarColour1
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$9
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$a
+	lda StarField_StarColour2
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$b
+	lda StarField_StarColour1
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$c
+	lda StarField_StarColour4
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$d
+	lda StarField_StarColour1
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$e
+	lda StarField_StarColour5
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$f
+	lda StarField_StarColour3
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$10
+	lda StarField_StarColour6
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$11
+	lda StarField_StarColour2
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$12
+	lda StarField_StarColour3
+	; Calling storevariable on generic assign expression
+	sta StarField_StarfieldColours+$13
 	; ----------
 	; DefineAddressTable address, StartValue, IncrementValue, TableSize
 	ldy #>$400
@@ -1145,7 +1218,7 @@ InitSprites
 	sta $d026
 	
 ; // Set sprite "0" individual color value 
-	lda #$a
+	lda #$e
 	; Calling storevariable on generic assign expression
 	sta $D027+$0
 	
@@ -2056,6 +2129,8 @@ end_procedure_UpdateMonsters3
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : InitMonsters
 	;    Procedure type : User-defined procedure
+monsterColour	dc.b	$03
+InitMonsters_block342
 InitMonsters
 	lda #$52
 	; Calling storevariable on generic assign expression
@@ -2089,9 +2164,15 @@ InitMonsters
 ; // Set  common sprite multicolor #2 
 ; //sprite_multicolor_reg2:=white;
 ; // Set sprite "0" individual color value 
-	lda #$a
+	lda monsterColour
 	; Calling storevariable on generic assign expression
 	sta $D027+$1
+	; Calling storevariable on generic assign expression
+	sta $D027+$2
+	; Calling storevariable on generic assign expression
+	sta $D027+$3
+	; Calling storevariable on generic assign expression
+	sta $D027+$4
 	;sprite_color[monsterSprite2]:=light_red;
 ; //	sprite_color[monsterSprite3]:=light_red;
 ; //	sprite_color[monsterSprite4]:=light_red;

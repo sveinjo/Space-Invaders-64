@@ -107,10 +107,19 @@ var
 									   100,078,099,060,075,063,084,065,083,096,
 									   068,088,074,061,090,098,085,101,097,077);
 
+	StarColour1 : byte = 6; // 14 (Light Blue)
+	StarColour2 : byte = 4; // 10 (Pink)
+	StarColour3 : byte = 12; // 12 (Grey Medium)
+	StarColour4 : byte = 15; // 15 (Grey Light)
+	StarColour5 : byte = 14; // 13 (Green Light)
+	StarColour6 : byte = 11; // 11 (Grey Dark)
+	
 	// The colour values corresponding to the characters.
 	StarfieldColours : array[20] of byte = (14,10,12,15,14,13,12,11,10,14,
 										   14,10,14,15,14,13,12,11,10,12); 
 
+	//StarfieldColours : array[20] of byte = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+	
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
@@ -126,6 +135,26 @@ var
 	caddr : array[25] of integer;		
 
 begin
+	StarfieldColours[0] := StarColour1;
+	StarfieldColours[1] := StarColour2;
+	StarfieldColours[2] := StarColour3;
+	StarfieldColours[3] := StarColour4;
+	StarfieldColours[4] := StarColour1;
+	StarfieldColours[5] := StarColour5;
+	StarfieldColours[6] := StarColour3;
+	StarfieldColours[7] := StarColour6;
+	StarfieldColours[8] := StarColour2;
+	StarfieldColours[9] := StarColour1;
+	StarfieldColours[10] := StarColour1;
+	StarfieldColours[11] := StarColour2;
+	StarfieldColours[12] := StarColour1;
+	StarfieldColours[13] := StarColour4;
+	StarfieldColours[14] := StarColour1;
+	StarfieldColours[15] := StarColour5;
+	StarfieldColours[16] := StarColour3;
+	StarfieldColours[17] := StarColour6;
+	StarfieldColours[18] := StarColour2;
+	StarfieldColours[19] := StarColour3;
 
 	CreateAddressTable( #saddr, $0400, 40, 25 );   // $0400 screen address, 40 characters per column, 25 rows
    	CreateAddressTable( #caddr, $D800, 40, 25 );   // $D800 color address, 40 characters per column, 25 rows

@@ -69,7 +69,7 @@ begin
 	// Set  common sprite multicolor #2 
 	sprite_multicolor_reg2:=white;
 	// Set sprite "0" individual color value 
-	sprite_color[useSprite]:=light_red;
+	sprite_color[useSprite]:=light_blue;
 	// Turn on sprite 0 (or @useSprite)
 	togglebit(sprite_bitmask,useSprite,1);
 end;
@@ -204,6 +204,8 @@ end;
 
 
 procedure InitMonsters();
+var 
+	monsterColour : byte = cyan;
 begin
 	monster1_y := 82;
 	monster1_x := 32;
@@ -225,7 +227,11 @@ begin
 	// Set  common sprite multicolor #2 
 	//sprite_multicolor_reg2:=white;
 	// Set sprite "0" individual color value 
-	sprite_color[monsterSprite1]:=light_red;
+	sprite_color[monsterSprite1]:= monsterColour;
+	sprite_color[monsterSprite2]:= monsterColour;
+	sprite_color[monsterSprite3]:= monsterColour;
+	sprite_color[monsterSprite4]:= monsterColour;
+	
 	/*sprite_color[monsterSprite2]:=light_red;
 	sprite_color[monsterSprite3]:=light_red;
 	sprite_color[monsterSprite4]:=light_red;*/
