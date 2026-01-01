@@ -5,10 +5,17 @@ program SpaceInvaders64;
 @use "starfield"
 
 var
-    @define useKernal 0
+	@define useKernal 0
 
 	Score : Integer = 9950;
 	Score2 : Integer = 0;
+	
+	tic : byte = 55; // equals number of invaders
+	move : byte = 0; 
+	
+	direction : byte = 1;
+	offset : byte = 8;
+
 								
   
 	// sprite_x is usually an integer since x values range between 
@@ -40,15 +47,15 @@ var
 	joystick_dir : byte;
 	// sprite location is where we keep the sprite in the memory.
 	// also used for setspriteloc that needs this value divided by 64
-   	@define spriteLoc $2000
-   	// In this tuturial, we use sprite "0" as the default one
-   	const useSprite:byte = 0;
-   	// Use joystick port 2
-   	const joystickPort: byte = 2;
-   	const useBank:byte = 0;
+	@define spriteLoc $2000
+	// In this tuturial, we use sprite "0" as the default one
+	const useSprite:byte = 0;
+	// Use joystick port 2
+	const joystickPort: byte = 2;
+	const useBank:byte = 0;
 	// Include the sprite binary file. The original 
 	// image is located under sprites/sprites.flf 
-	  	
+		
 	// Export all sprites automatically on each build
 	@export "sprites/spritesheet.flf" "sprites/spritesheet.bin" 256 	  	
 	sprites:incbin("sprites/spritesheet.bin", @spriteLoc); 
@@ -61,7 +68,7 @@ var
 	//interrupt MainRaster2();
 
 	
-procedure InitSprites();
+procedure MakeSprites();
 begin	
 	// Set all sprites to be multicolor
 	//sprite_multicolor:=$ff;	
@@ -93,17 +100,17 @@ begin
 	SpritePos(sprite_x, sprite_y, useSprite);
 	
 	// Set left/right offset pointer for sprite
-	//if (joystickright) then
-	//	joystick_dir := 1;
+	if (joystickright) then
+		joystick_dir := 1;
 	if (joystickleft) then
 		joystick_dir := 0;
 	
 	// Set the sprite pointer to point to the sprite data + direction offset
-	SetSpriteLoc(useSprite, @spriteLoc/64 + 1, useBank);
-	SetSpriteLoc(1, @spriteLoc/64 + joystick_dir, useBank);
-	SetSpriteLoc(2, @spriteLoc/64 + joystick_dir, useBank);
-	SetSpriteLoc(3, @spriteLoc/64 + joystick_dir, useBank);
-	SetSpriteLoc(4, @spriteLoc/64 + joystick_dir, useBank);
+	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
+	SetSpriteLoc(1, @spriteLoc/64 + 1 + joystick_dir, useBank);
+	SetSpriteLoc(2, @spriteLoc/64 + 1 + joystick_dir, useBank);
+	SetSpriteLoc(3, @spriteLoc/64 + 1 + joystick_dir, useBank);
+	SetSpriteLoc(4, @spriteLoc/64 + 1 + joystick_dir, useBank);
 
 	// If any movement is detected, play a random sound
 //	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
@@ -142,27 +149,54 @@ begin
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
 end;
 
-
+procedure UpdateTick();
+begin
+	dec(tic);
+	if tic <> 0 then
+	begin
+		//move := 0;
+		//break;
+		if monster1_x = 46 then
+		begin
+			direction := 0;
+			//offset := offset + 8;
+		end
+		else if monster1_x = 24 then
+		begin
+			direction := 1;
+			//offset := offset + 8;
+		end;
+			
+	end
+	else begin
+		tic := 55;
+		//move := 2;
+		if (direction <> 0) then
+		begin
+			inc(monster1_x); // := monster1_x + 2;
+			inc(monster1_x);
+			//offset := offset + 8;
+		end
+		else
+		begin
+			dec(monster1_x); // := monster1_x + 2;
+			dec(monster1_x);	
+			//offset := offset + 8;
+		end;	
+		
+		joystick_dir := joystick_dir xor 1;
+	end;
+end;
 
 
 procedure UpdateMonsters();
 begin
-	// Update sprite position based on joystick values
-	monster1_x+= (joystickright - joystickleft);
-	//sprite_y+= joystickdown - joystickup;
-	
-	// Update the sprite position on screen for sprite number @useSprite	
-	SpritePos(monster1_x, monster1_y, monsterSprite1);
-	SpritePos(monster1_x+54, monster2_y, monsterSprite2);
-	SpritePos(monster1_x+108, monster3_y, monsterSprite3);
-	SpritePos(monster1_x+162, monster4_y, monsterSprite4);
+	// Update the sprite position on screen for sprite monsterSprite
+	SpritePos(monster1_x, monster1_y+offset, monsterSprite1);
+	SpritePos(monster1_x+54, monster1_y+offset, monsterSprite2);
+	SpritePos(monster1_x+108, monster1_y+offset, monsterSprite3);
+	SpritePos(monster1_x+162, monster1_y+offset, monsterSprite4);
 		
-	// Set left/right offset pointer for sprite
-//	if (joystickright) then
-//		joystick_dir := 1;	
-//	if (joystickleft) then
-//		joystick_dir := 0;
-	
 	// Set the sprite pointer to point to the sprite data + direction offset
 //	SetSpriteLoc(useSprite, @spriteLoc/64 + joystick_dir, useBank);
 
@@ -180,26 +214,50 @@ end;
 
 procedure UpdateMonsters2();
 begin	
-	SpritePos(monster1_x, monster1_y+26, monsterSprite1);
-	SpritePos(monster1_x+54, monster2_y+26, monsterSprite2);
-	SpritePos(monster1_x+108, monster3_y+26, monsterSprite3);
-	SpritePos(monster1_x+162, monster4_y+26, monsterSprite4);
+	SpritePos(monster1_x, monster1_y+26+offset, monsterSprite1);
+	SpritePos(monster1_x+54, monster1_y+26+offset, monsterSprite2);
+	SpritePos(monster1_x+108, monster1_y+26+offset, monsterSprite3);
+	SpritePos(monster1_x+162, monster1_y+26+offset, monsterSprite4);
 
 end;
 
 procedure UpdateMonsters3();
 begin	
-	SpritePos(monster1_x, monster1_y+52, monsterSprite1);
-	SpritePos(monster1_x+54, monster2_y+52, monsterSprite2);
-	SpritePos(monster1_x+108, monster3_y+52, monsterSprite3);
-	SpritePos(monster1_x+162, monster4_y+52, monsterSprite4);
+	SpritePos(monster1_x, monster1_y+52+offset, monsterSprite1);
+	SpritePos(monster1_x+54, monster1_y+52+offset, monsterSprite2);
+	SpritePos(monster1_x+108, monster1_y+52+offset, monsterSprite3);
+	SpritePos(monster1_x+162, monster1_y+52+offset, monsterSprite4);
 
 end;
 
-
-procedure InitMonsters();
+procedure ClearMonster();
+var
+	i : byte;
+  	X : byte;
+  	p : ^byte;
+  	
+Begin
+	X := 8;          //{ number of bytes to clear }
+	//p := ($2000);
+	p := ($2040);
+	
+	
+	for i := 0 to X - 0 do
+	begin
+		p^ := 0;
+		//inc(p);
+		p := p + 3;
+	end;
+end;
+  	
+procedure MakeMonsters();
 var 
 	monsterColour : byte = cyan;
+	spriteLine : byte = 0;
+	//const P : address = $2000;
+	
+	
+	
 begin
 	monster1_y := 82;
 	monster1_x := 32;
@@ -225,6 +283,12 @@ begin
 	sprite_color[monsterSprite2]:= monsterColour;
 	sprite_color[monsterSprite3]:= monsterColour;
 	sprite_color[monsterSprite4]:= monsterColour;
+	
+	
+  
+	// Mask sprite
+	//ClearMonster();
+	
 	
 	/*sprite_color[monsterSprite2]:=light_red;
 	sprite_color[monsterSprite3]:=light_red;
@@ -262,17 +326,17 @@ begin
 	UpdateMonsters(); 
 	
 	//Async version. Faster but less reliable.      
-	//RasterIRQ(MainRasterRow2(),105,@useKernal);
+	//RasterIRQ(MainRasterRow2(),105+offset,@useKernal);
 	
 	// WaitForRaster version. First working copy.	
 	//SCREEN_BG_COL:=RED;	
-	WaitForRaster(104);	
+	WaitForRaster(104+offset);	
 	//SCREEN_BG_COL:=GREEN;
 	UpdateMonsters2();
-	WaitForRaster(130);
+	WaitForRaster(130+offset);
 	//SCREEN_BG_COL:=BLUE;
 	UpdateMonsters3();
-	WaitForRaster(157);
+	WaitForRaster(157+offset);
 	//SCREEN_BG_COL:=BLACK;
                 	
 	// Update joystick here
@@ -281,22 +345,22 @@ begin
 	// Update sprites
 	UpdateSprite();	
 	
-	RasterIRQ(MainRasterStarfield(),256,@useKernal);	
-	//RasterIRQ(MainRasterJoystick(),158,@useKernal);
+	RasterIRQ(MainRasterStarfield(),0,@useKernal);	
+	//RasterIRQ(MainRasterRow2(),105,@useKernal);
 	CloseIRQ();
 end;
 
 interrupt MainRasterRow2();
 begin	
-	SCREEN_BG_COL:=GREEN;	
+	//SCREEN_BG_COL:=GREEN;	
 	UpdateMonsters2();
-	RasterIRQ(MainRasterRow3(),129,@useKernal);	
+	RasterIRQ(MainRasterRow3(),129+offset,@useKernal);	
 end;
 
 
 interrupt MainRasterRow3();
 begin	
-	SCREEN_BG_COL:=BLUE;                	
+	//SCREEN_BG_COL:=BLUE;                	
 	UpdateMonsters3();
 	RasterIRQ(MainRasterJoystick(),0,@useKernal);
 end;
@@ -304,16 +368,17 @@ end;
 
 interrupt MainRasterStarfield();
 begin	
+	UpdateTick();
 	inc(StarField_RasterCount);
-    StarField::DoStarfield();    
-    preventirq();    
-    RasterIRQ(MainRasterRow1(),0,@useKernal);
+	StarField::DoStarfield();    
+	preventirq();    
+	RasterIRQ(MainRasterRow1(),0,@useKernal);
 end;
 
 
 interrupt MainRasterJoystick();
-begin
-	SCREEN_BG_COL:=BLACK;                	
+begin	
+	//SCREEN_BG_COL:=BLACK;                	
 	// Update joystick here
 	Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
@@ -329,8 +394,8 @@ end;
 // for its character set, initialise the pointers and start the raster chain off.
 // ---------------------------------------------------------------------------------------------------------------------------------
 begin
-	InitSprites();
-	InitMonsters();
+	MakeSprites();
+	MakeMonsters();
 	
 	//StartRasterChain(MainRasterSprite(),0,1);	
 	
