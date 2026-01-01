@@ -57,6 +57,7 @@ var
 	interrupt MainRasterRow2();
 	interrupt MainRasterRow3();
 	interrupt MainRasterJoystick();
+	interrupt MainRasterStarfield();
 	//interrupt MainRaster2();
 
 	
@@ -75,13 +76,11 @@ begin
 end;
 
 Procedure DisplayScore();
-Begin
-	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);
-	Screen::PrintString(" ",29,3,#Screen::screen0);
+Begin	
 	moveto(30,3,hi(screen_char_loc));
 	PrintDecimal(Score2,4);
 	moveto(35,3,hi(screen_char_loc));
-	PrintDecimal(Score,3);	
+	PrintDecimal(Score,3);
 end;
 
 procedure UpdateSprite();
@@ -120,12 +119,7 @@ end;
 
 Procedure DisplayText();
 begin	
-	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);
-	Screen::PrintString(" ",29,3,#Screen::screen0);
-	moveto(30,3,hi(screen_char_loc));
-	PrintDecimal(Score2,4);
-	moveto(35,3,hi(screen_char_loc));
-	PrintDecimal(Score,3);
+	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
 	
 	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
 	Screen::PrintString("      1740",29,13,#Screen::screen0);
@@ -154,7 +148,7 @@ end;
 procedure UpdateMonsters();
 begin
 	// Update sprite position based on joystick values
-	monster1_x+= (joystickright*2 - joystickleft*2);
+	monster1_x+= (joystickright - joystickleft);
 	//sprite_y+= joystickdown - joystickup;
 	
 	// Update the sprite position on screen for sprite number @useSprite	
@@ -264,25 +258,37 @@ begin
 		Score2 += 1;
 	end;                
 	
-	UpdateMonsters();       
-	RasterIRQ(MainRasterRow2(),105,@useKernal);
+	//SCREEN_BG_COL:=RED;
+	UpdateMonsters(); 
 	
-	// WaitForRaster version. First working copy.
-//	SCREEN_BG_COL:=RED;
-//	RasterIRQ(MainRasterJoystick(),0,@useKernal);
-//	WaitForRaster(103);	
-//	SCREEN_BG_COL:=GREEN;
-//	UpdateMonsters2();
-//	WaitForRaster(129);
-//	SCREEN_BG_COL:=BLUE;
-//	UpdateMonsters3();
+	//Async version. Faster but less reliable.      
+	//RasterIRQ(MainRasterRow2(),105,@useKernal);
 	
+	// WaitForRaster version. First working copy.	
+	//SCREEN_BG_COL:=RED;	
+	WaitForRaster(104);	
+	//SCREEN_BG_COL:=GREEN;
+	UpdateMonsters2();
+	WaitForRaster(130);
+	//SCREEN_BG_COL:=BLUE;
+	UpdateMonsters3();
+	WaitForRaster(157);
+	//SCREEN_BG_COL:=BLACK;
+                	
+	// Update joystick here
+	Memory::Fill(#joystickup,0,5);
+	Joystick(joystickPort);
+	// Update sprites
+	UpdateSprite();	
+	
+	RasterIRQ(MainRasterStarfield(),256,@useKernal);	
+	//RasterIRQ(MainRasterJoystick(),158,@useKernal);
 	CloseIRQ();
 end;
 
 interrupt MainRasterRow2();
 begin	
-	//SCREEN_BG_COL:=BLUE;	
+	SCREEN_BG_COL:=GREEN;	
 	UpdateMonsters2();
 	RasterIRQ(MainRasterRow3(),129,@useKernal);	
 end;
@@ -290,7 +296,7 @@ end;
 
 interrupt MainRasterRow3();
 begin	
-	//SCREEN_BG_COL:=GREEN;                	
+	SCREEN_BG_COL:=BLUE;                	
 	UpdateMonsters3();
 	RasterIRQ(MainRasterJoystick(),0,@useKernal);
 end;
@@ -300,13 +306,14 @@ interrupt MainRasterStarfield();
 begin	
 	inc(StarField_RasterCount);
     StarField::DoStarfield();    
-    //preventirq();    
+    preventirq();    
     RasterIRQ(MainRasterRow1(),0,@useKernal);
 end;
 
 
 interrupt MainRasterJoystick();
 begin
+	SCREEN_BG_COL:=BLACK;                	
 	// Update joystick here
 	Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
