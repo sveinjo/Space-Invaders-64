@@ -137,6 +137,20 @@ var
 begin
 	clearscreen( $20, ^$0400 );
 	
+	//DefineScreen();
+    SetCharsetLocation(CHARSETLOC);
+ 	CopyCharsetFromRom(CHARSETLOC);
+	
+	//StarField::CreateStarScreen();
+	
+	// -- Comment this line out to see the effect of the character set being overwritten.
+	//ClearCharacterSet();
+	  
+	//StarField::StarfieldPtr := #STARFIELD_STAR1INIT;
+	//StarField::StarfieldPtr2 := #STARFIELD_STAR2INIT;
+	//StarField::StarfieldPtr3 := #STARFIELD_STAR3INIT;
+	//StarField::StarfieldPtr4 := #STARFIELD_STAR4INIT;
+	
 	StarfieldColours[0] := StarColour1;
 	StarfieldColours[1] := StarColour2;
 	StarfieldColours[2] := StarColour3;

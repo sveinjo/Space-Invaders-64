@@ -5,7 +5,14 @@ program SpaceInvaders64;
 @use "starfield"
 
 var
-	@define useKernal 0
+	sidfile: incsid("sid/Courier.sid",2);
+	//sidfile: incsid("sid/Courier_Remix.sid",2);
+	//sidfile: incsid("sid/Jupiter_Lander.sid",2);
+	
+	//sidfile: incsid("sid/Exhale36.sid",2);
+	
+	const useKernal:byte=0;
+	//@define useKernal 0
 
 	Score : Integer = 9950;
 	Score2 : Integer = 0;
@@ -14,6 +21,7 @@ var
 	move : byte = 0; 
 	
 	direction : byte = 1;
+	numberOfEnemies : byte = 0;
 	offset : byte = 8;
 
 								
@@ -126,6 +134,9 @@ end;
 
 Procedure DisplayText();
 begin	
+	//moveto(29,1,hi(screen_char_loc));
+	Screen::PrintString(" ",29,0,#Screen::screen0);
+	
 	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
 	
 	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
@@ -151,36 +162,55 @@ end;
 
 procedure UpdateTick();
 begin
-	dec(tic);
-	if tic <> 0 then
+	
+	if tic <> 0 then	
 	begin
+		dec(tic);
 		//move := 0;
 		//break;
-		if monster1_x = 46 then
+		if monster1_x >= 46 then
 		begin
 			direction := 0;
 			//offset := offset + 8;
 		end
-		else if monster1_x = 24 then
+		else if monster1_x <= 24 then
 		begin
 			direction := 1;
 			//offset := offset + 8;
 		end;
-			
+		if tic = 2 then
+		begin
+			if (direction <> 0) then
+			begin
+				inc(monster1_x);
+			end
+			else
+			begin
+				dec(monster1_x);
+			end;	
+		end;
+		
 	end
 	else begin
-		tic := 55;
+		
+		tic := 55-numberOfEnemies;
+		// Speed up as enemies decreses
+		if (numberOfEnemies < 54) then
+		begin			
+			inc(numberOfEnemies);	
+		end;
+		
 		//move := 2;
 		if (direction <> 0) then
 		begin
 			inc(monster1_x); // := monster1_x + 2;
-			inc(monster1_x);
+			//inc(monster1_x);
 			//offset := offset + 8;
 		end
 		else
 		begin
 			dec(monster1_x); // := monster1_x + 2;
-			dec(monster1_x);	
+			//dec(monster1_x);	
 			//offset := offset + 8;
 		end;	
 		
@@ -343,9 +373,13 @@ begin
 	Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
 	// Update sprites
-	UpdateSprite();	
+	UpdateSprite();
+
+	call(sidfile_1_play);	
 	
-	RasterIRQ(MainRasterStarfield(),0,@useKernal);	
+	UpdateTick();
+	RasterIRQ(MainRasterStarfield(),0,@useKernal);
+	//RasterIRQ(MainRasterRow1(),0,@useKernal);
 	//RasterIRQ(MainRasterRow2(),105,@useKernal);
 	CloseIRQ();
 end;
@@ -368,7 +402,7 @@ end;
 
 interrupt MainRasterStarfield();
 begin	
-	UpdateTick();
+	//UpdateTick();
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();    
 	preventirq();    
@@ -389,6 +423,35 @@ begin
 end;
 
 
+	
+
+/*
+	Sid music is played by calling
+	the sidfile_1_play address for each raster interupt trigger
+
+*/
+interrupt Raster1();
+begin
+	StartIRQ(useKernal);
+	// Turn on background color only when SID file is playing
+	//screen_bg_col:=green;
+	call(sidfile_1_play);	
+	// Turn off (black) backgrund color. We can now observe how much raster time has been used!
+	screen_bg_col:=black;
+	CloseIRQ();
+end;
+/*
+begin
+	InitSid(sidfile_1_init);
+	disableciainterrupts();
+	setmemoryconfig(1,0,useKernal);
+	StartRasterChain(Raster1(),$500,useKernal);
+	//call(sidfile_1_play);
+	Loop();
+
+end.*/
+
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Main program loop. Turn CIA interrupts off, copy the character set from ROM into RAM and tell the machine to look at CharSetLoc
 // for its character set, initialise the pointers and start the raster chain off.
@@ -397,6 +460,13 @@ begin
 	MakeSprites();
 	MakeMonsters();
 	
+	InitSid(sidfile_1_init);
+	disableciainterrupts();
+	setmemoryconfig(1,0,useKernal);
+	//StartRasterChain(Raster1(),$500,useKernal);
+	//call(sidfile_1_play);
+
+	
 	//StartRasterChain(MainRasterSprite(),0,1);	
 	
 	DisableCIAInterrupts();				// Stop handling timer, joystick, keyboard ...
@@ -404,8 +474,8 @@ begin
     SCREEN_FG_COL:=BLACK;
     
     //DefineScreen();
-    SetCharsetLocation(STARFIELD_CHARSETLOC);
- 	CopyCharsetFromRom(STARFIELD_CHARSETLOC);
+    //SetCharsetLocation(STARFIELD_CHARSETLOC);
+ 	//CopyCharsetFromRom(STARFIELD_CHARSETLOC);
 	
 	StarField::CreateStarScreen();
 	
@@ -435,6 +505,7 @@ begin
 	EnableRasterIrq();	
 	//StartIRQ(useKernal);
 	DisplayText();
+	//RasterIRQ(MainRasterRow1(),0,@useKernal);
 	RasterIRQ(MainRasterRow1(),0,@useKernal);
 	enableirq();
 
