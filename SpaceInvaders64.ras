@@ -23,12 +23,14 @@ var
 	direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	offset : byte = 8;
+	
+	pos_x : Integer = 19;
 
 								
   
 	// sprite_x is usually an integer since x values range between 
 	// 0 and 320. But we have a smaller play area.
-	sprite_x : byte = 22;
+	sprite_x : byte = 19;
 	sprite_y : byte = 226;
 	
 	monster1_x : byte;
@@ -74,6 +76,8 @@ var
 	interrupt MainRasterJoystick();
 	interrupt MainRasterStarfield();
 	//interrupt MainRaster2();
+	
+
 
 	
 procedure MakeSprites();
@@ -98,12 +102,25 @@ Begin
 	PrintDecimal(Score,3);
 end;
 
+
+
 procedure UpdateSprite();
 begin
+	
 	DisplayScore();
-	// Update sprite position based on joystick values
-	sprite_x+= (joystickright*2 - joystickleft*2);
-	//sprite_y+= joystickdown - joystickup;
+	
+	// Player sprites	
+	pos_x+= joystickright - joystickleft;
+	//pos_x+= (joystickright*2 - joystickleft*2);	
+	
+	if pos_x < 19 then
+		pos_x := 19
+	else if pos_x > 238 then
+		pos_x := 238;
+	
+	sprite_x := pos_x;
+	
+	
 	// Update the sprite position on screen for sprite number @useSprite	
 	SpritePos(sprite_x, sprite_y, useSprite);
 	
@@ -375,7 +392,7 @@ begin
 	// Update sprites
 	UpdateSprite();
 
-	call(sidfile_1_play);	
+	//call(sidfile_1_play);	
 	
 	UpdateTick();
 	RasterIRQ(MainRasterStarfield(),0,@useKernal);
