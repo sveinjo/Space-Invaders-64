@@ -6,9 +6,7 @@ program SpaceInvaders64;
 
 var
 	sidfile: incsid("sid/Courier.sid",2);
-	//sidfile: incsid("sid/Courier_Remix.sid",2);
-	//sidfile: incsid("sid/Jupiter_Lander.sid",2);
-	
+	//sidfile: incsid("sid/Courier_Remix.sid",2);	
 	//sidfile: incsid("sid/Exhale36.sid",2);
 	
 	const useKernal:byte=0;
@@ -18,8 +16,6 @@ var
 	Score2 : Integer = 0;
 	
 	tic : byte = 55; // equals number of invaders
-	move : byte = 0; 
-	
 	direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	offset : byte = 8;
@@ -35,18 +31,6 @@ var
 	
 	monster1_x : byte;
 	monster1_y : byte;
-	
-	monster2_x : byte;
-	monster2_y : byte;
-	
-	monster3_x : byte;
-	monster3_y : byte;
-	
-	monster4_x : byte;
-	monster4_y : byte;
-	
-	monsterOffset_x : byte;
-	monsterOffset_y : byte;
 	
 	const monsterSprite1:byte = 1;
 	const monsterSprite2:byte = 2;
@@ -136,16 +120,6 @@ begin
 	SetSpriteLoc(2, @spriteLoc/64 + 1 + joystick_dir, useBank);
 	SetSpriteLoc(3, @spriteLoc/64 + 1 + joystick_dir, useBank);
 	SetSpriteLoc(4, @spriteLoc/64 + 1 + joystick_dir, useBank);
-
-	// If any movement is detected, play a random sound
-//	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
-//		PlaySound(sid_channel1, 
-//		13,  // Volume
-//		20+Random()/16,  // Hi byte frequency
-//		0*16+0,  // Attack voice 1
-//		3*16 + 3,   // Sustain = 16*15 + release=6
-//		1 +sid_saw,  // Waveform
-//		sid_saw);  // waveform 
 	
 end;
 
@@ -177,10 +151,43 @@ begin
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
 end;
 
+//Procedure DisplayText();
+//var
+//	TextCount : byte = 15;
+//	TextLines : array[15] of string = (
+//		" ",
+//		"  SCORE(1)",
+//		"  HI-SCORE",
+//		"      1740",
+//		"  SCORE(2)",
+//		"      1740",
+//		"lmn",
+//		"opq",
+//		"rst",
+//		"uvw",
+//		"xyz",
+//		"!#¤",
+//		"¤%&",
+//		"/+*",
+//		"ooooooooooooooooooooooooooooo"
+//	);
+//	TextX : array[15] of byte = (29,29,29,29,29,29,4,4,10,10,16,16,22,22,0);
+//	TextY : array[15] of byte = (0,1,11,13,21,23,19,20,19,20,19,20,19,20,24);
+
+//	i : byte;
+//begin	
+//moveto(29,1,hi(screen_char_loc));
+//	for i := 0 to TextCount - 1 do
+//		Screen::PrintString(TextLines[i], TextX[i], TextY[i], #Screen::screen0);
+//end;
+
 procedure UpdateTick();
+var
+	moveNow : byte;
 begin
+	moveNow := 0;
 	
-	if tic <> 0 then	
+	if tic <> 0 then
 	begin
 		dec(tic);
 		//move := 0;
@@ -196,17 +203,7 @@ begin
 			//offset := offset + 8;
 		end;
 		if tic = 2 then
-		begin
-			if (direction <> 0) then
-			begin
-				inc(monster1_x);
-			end
-			else
-			begin
-				dec(monster1_x);
-			end;	
-		end;
-		
+			moveNow := 1;
 	end
 	else begin
 		
@@ -218,6 +215,12 @@ begin
 		end;
 		
 		//move := 2;
+		joystick_dir := joystick_dir xor 1;
+		moveNow := 1;
+	end;
+	
+	if moveNow <> 0 then
+	begin
 		if (direction <> 0) then
 		begin
 			inc(monster1_x); // := monster1_x + 2;
@@ -229,12 +232,9 @@ begin
 			dec(monster1_x); // := monster1_x + 2;
 			//dec(monster1_x);	
 			//offset := offset + 8;
-		end;	
-		
-		joystick_dir := joystick_dir xor 1;
+		end;
 	end;
 end;
-
 
 procedure UpdateMonsters();
 begin
@@ -244,10 +244,10 @@ begin
 	SpritePos(monster1_x+108, monster1_y+offset, monsterSprite3);
 	SpritePos(monster1_x+162, monster1_y+offset, monsterSprite4);
 		
-	// Set the sprite pointer to point to the sprite data + direction offset
+//	// Set the sprite pointer to point to the sprite data + direction offset
 //	SetSpriteLoc(useSprite, @spriteLoc/64 + joystick_dir, useBank);
 
-	// If any movement is detected, play a random sound
+//	// If any movement is detected, play a random sound
 //	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
 //		PlaySound(sid_channel1, 
 //		13,  // Volume
@@ -277,6 +277,7 @@ begin
 
 end;
 
+
 procedure ClearMonster();
 var
 	i : byte;
@@ -296,11 +297,10 @@ Begin
 		p := p + 3;
 	end;
 end;
-  	
+
 procedure MakeMonsters();
 var 
 	monsterColour : byte = cyan;
-	spriteLine : byte = 0;
 	//const P : address = $2000;
 	
 	
@@ -308,16 +308,6 @@ var
 begin
 	monster1_y := 82;
 	monster1_x := 32;
-	
-	monster2_y := 82;
-	monster2_x := 86;
-	
-	monster3_y := 82;
-	monster3_x := 140;
-	
-	monster4_y := 82;
-	monster4_x := 194;
-	
 	
 	// Set all sprites to be multicolor
 	//sprite_multicolor:=$ff;
@@ -330,12 +320,9 @@ begin
 	sprite_color[monsterSprite2]:= monsterColour;
 	sprite_color[monsterSprite3]:= monsterColour;
 	sprite_color[monsterSprite4]:= monsterColour;
-	
-	
-  
+	  
 	// Mask sprite
-	//ClearMonster();
-	
+	//ClearMonster();	
 	
 	/*sprite_color[monsterSprite2]:=light_red;
 	sprite_color[monsterSprite3]:=light_red;
@@ -392,7 +379,7 @@ begin
 	// Update sprites
 	UpdateSprite();
 
-	//call(sidfile_1_play);	
+	call(sidfile_1_play);	
 	
 	UpdateTick();
 	RasterIRQ(MainRasterStarfield(),0,@useKernal);
@@ -439,36 +426,6 @@ begin
 	RasterIRQ(MainRasterStarfield(),0,@useKernal);	
 end;
 
-
-	
-
-/*
-	Sid music is played by calling
-	the sidfile_1_play address for each raster interupt trigger
-
-*/
-interrupt Raster1();
-begin
-	StartIRQ(useKernal);
-	// Turn on background color only when SID file is playing
-	//screen_bg_col:=green;
-	call(sidfile_1_play);	
-	// Turn off (black) backgrund color. We can now observe how much raster time has been used!
-	screen_bg_col:=black;
-	CloseIRQ();
-end;
-/*
-begin
-	InitSid(sidfile_1_init);
-	disableciainterrupts();
-	setmemoryconfig(1,0,useKernal);
-	StartRasterChain(Raster1(),$500,useKernal);
-	//call(sidfile_1_play);
-	Loop();
-
-end.*/
-
-
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Main program loop. Turn CIA interrupts off, copy the character set from ROM into RAM and tell the machine to look at CharSetLoc
 // for its character set, initialise the pointers and start the raster chain off.
@@ -508,21 +465,11 @@ begin
 	// This is the typical memory configuration for demo/game development. 
 	SetMemoryConfig(1, 0, 0);	
 	
-//	preventirq();
-//	disableciainterrupts();
-//	setmemoryconfig(1,@useKernal,0);
-//	enablerasterirq();
-//	rasterirq(MainRasterRow1(),0,@useKernal);
-//	enableirq();	
-	
-	//StartRasterChain(MainRaster(), $DC, useKernal);
-	
 	//PreventIRQ();
 	//DisableCIAInterrupts();
 	EnableRasterIrq();	
 	//StartIRQ(useKernal);
-	DisplayText();
-	//RasterIRQ(MainRasterRow1(),0,@useKernal);
+	DisplayText();	
 	RasterIRQ(MainRasterRow1(),0,@useKernal);
 	enableirq();
 
