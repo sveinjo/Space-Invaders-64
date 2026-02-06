@@ -1255,28 +1255,29 @@ Helpers_minVal	dc.w	0
 Helpers_maxVal	dc.w	0
 Helpers_Clamp_block250
 Helpers_Clamp
-; Inputs:
-;   Helpers_value (lo/hi)
-;   Helpers_minVal (lo/hi)
-;   Helpers_maxVal (lo/hi)
+    ; Inputs:
+; Helpers_value (lo/hi)
+; Helpers_minVal (lo/hi)
+; Helpers_maxVal (lo/hi)
+;
 ; Output:
-;   A = low byte, Y = high byte
+; A = low byte
+; Y = high byte
 ;Helpers_Clamp:
-    ; if value < min -> return min
-    lda Helpers_value+1
-    cmp Helpers_minVal+1
+    ; Load value once
+    ldy Helpers_value+1
+    lda Helpers_value
+; ---------- check min ----------
+    cpy Helpers_minVal+1
     bcc .ret_min
     bne .check_max
-    lda Helpers_value
     cmp Helpers_minVal
     bcc .ret_min
+; ---------- check max ----------
 .check_max:
-    ; if value > max -> return max
-    lda Helpers_value+1
-    cmp Helpers_maxVal+1
+    cpy Helpers_maxVal+1
     bcc .ret_val
     bne .ret_max
-    lda Helpers_value
     cmp Helpers_maxVal
     bcc .ret_val
     beq .ret_val
@@ -1289,8 +1290,6 @@ Helpers_Clamp
     lda Helpers_minVal
     rts
 .ret_val:
-    ldy Helpers_value+1
-    lda Helpers_value
     rts
     
 	rts
