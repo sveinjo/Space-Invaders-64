@@ -21,7 +21,7 @@ var
 	numberOfEnemies : byte = 0;
 	offset : byte = 8;
 	
-	pos_x : Integer = 19;
+	pos_x : byte = 19;
 
 								
   
@@ -103,7 +103,43 @@ begin
 //	else if pos_x > 238 then
 //		pos_x := 238;
 	
-	pos_x := Helpers::Clamp(pos_x + (joystickright*2 - joystickleft*2), 19, 238);
+	pos_x := pos_x + (joystickright*2 - joystickleft*2);
+	if pos_x < 19 then
+		pos_x := 19
+	else if pos_x > 238 then
+		pos_x := 238;
+		
+//	asm("
+//	lda joystickright
+//	sec
+//	sbc joystickleft
+//	beq US_done
+//	bpl US_move_right
+//	; move left
+//	lda pos_x
+//	cmp #21
+//	bcs US_dec2
+//	lda #19
+//	sta pos_x
+//	jmp US_done
+//US_dec2:
+//	sec
+//	sbc #2
+//	sta pos_x
+//	jmp US_done
+//US_move_right:
+//	lda pos_x
+//	cmp #236
+//	bcc US_inc2
+//	lda #238
+//	sta pos_x
+//	jmp US_done
+//US_inc2:
+//	clc
+//	adc #2
+//	sta pos_x
+//US_done:
+//");
 	sprite_x := pos_x;
 	
 	
