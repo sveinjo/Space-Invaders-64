@@ -7,63 +7,63 @@ var
 // Helpers
 //
 
-function Clamp(value, minVal, maxVal: Integer): Integer;
+function Clamp(value, minVal, maxVal: byte): byte;
 begin
-	/*if value < minVal then
+	if value < minVal then
 		temp := minVal
 	else if value > maxVal then
 		temp := maxVal
 	else
 		temp := value;
-	Clamp := temp;*/
+	Clamp := temp;
 	
-	asm("
-    ; Inputs:
-; Helpers_value (lo/hi)
-; Helpers_minVal (lo/hi)
-; Helpers_maxVal (lo/hi)
-;
-; Output:
-; A = low byte
-; Y = high byte
+//	asm("
+//    ; Inputs:
+//; Helpers_value (lo/hi)
+//; Helpers_minVal (lo/hi)
+//; Helpers_maxVal (lo/hi)
+//;
+//; Output:
+//; A = low byte
+//; Y = high byte
 
-;Helpers_Clamp:
+//;Helpers_Clamp:
 
-    ; Load value once
-    ldy Helpers_value+1
-    lda Helpers_value
+//    ; Load value once
+//    ldy Helpers_value+1
+//    lda Helpers_value
 
-; ---------- check min ----------
-    cpy Helpers_minVal+1
-    bcc .ret_min
-    bne .check_max
+//; ---------- check min ----------
+//    cpy Helpers_minVal+1
+//    bcc .ret_min
+//    bne .check_max
 
-    cmp Helpers_minVal
-    bcc .ret_min
+//    cmp Helpers_minVal
+//    bcc .ret_min
 
-; ---------- check max ----------
-.check_max:
-    cpy Helpers_maxVal+1
-    bcc .ret_val
-    bne .ret_max
+//; ---------- check max ----------
+//.check_max:
+//    cpy Helpers_maxVal+1
+//    bcc .ret_val
+//    bne .ret_max
 
-    cmp Helpers_maxVal
-    bcc .ret_val
-    beq .ret_val
+//    cmp Helpers_maxVal
+//    bcc .ret_val
+//    beq .ret_val
 
-.ret_max:
-    ldy Helpers_maxVal+1
-    lda Helpers_maxVal
-    rts
+//.ret_max:
+//    ldy Helpers_maxVal+1
+//    lda Helpers_maxVal
+//    rts
 
-.ret_min:
-    ldy Helpers_minVal+1
-    lda Helpers_minVal
-    rts
+//.ret_min:
+//    ldy Helpers_minVal+1
+//    lda Helpers_minVal
+//    rts
 
-.ret_val:
-    rts
-    ");
+//.ret_val:
+//    rts
+//    ");
 
 end;
 end.

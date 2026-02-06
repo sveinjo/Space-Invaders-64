@@ -64,13 +64,14 @@ StarField_StarColour6	dc.b	$0b
 StarField_StarfieldColours	dc.b $e, $a, $c, $f, $e, $d, $c, $b
 	dc.b $a, $e, $e, $a, $e, $f, $e, $d
 	dc.b $c, $b, $a, $c
+Helpers_temp	dc.w	0
 Score	dc.w	$26de
 Score2	dc.w	$00
 tic	dc.b	$37
 direction	dc.b	$01
 numberOfEnemies	dc.b	$00
 offset	dc.b	$08
-pos_x	dc.w	$13
+pos_x	dc.b	$13
 sprite_x	dc.b	$13
 sprite_y	dc.b	$e2
 monster1_x	dc.b	0
@@ -1250,48 +1251,50 @@ end_procedure_StarField_DoStarfield
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : Helpers_Clamp
 	;    Procedure type : User-defined procedure
-Helpers_value	dc.w	0
-Helpers_minVal	dc.w	0
-Helpers_maxVal	dc.w	0
+Helpers_value	dc.b	0
+Helpers_minVal	dc.b	0
+Helpers_maxVal	dc.b	0
 Helpers_Clamp_block250
 Helpers_Clamp
-    ; Inputs:
-; Helpers_value (lo/hi)
-; Helpers_minVal (lo/hi)
-; Helpers_maxVal (lo/hi)
-;
-; Output:
-; A = low byte
-; Y = high byte
-;Helpers_Clamp:
-    ; Load value once
-    ldy Helpers_value+1
-    lda Helpers_value
-; ---------- check min ----------
-    cpy Helpers_minVal+1
-    bcc .ret_min
-    bne .check_max
-    cmp Helpers_minVal
-    bcc .ret_min
-; ---------- check max ----------
-.check_max:
-    cpy Helpers_maxVal+1
-    bcc .ret_val
-    bne .ret_max
-    cmp Helpers_maxVal
-    bcc .ret_val
-    beq .ret_val
-.ret_max:
-    ldy Helpers_maxVal+1
-    lda Helpers_maxVal
-    rts
-.ret_min:
-    ldy Helpers_minVal+1
-    lda Helpers_minVal
-    rts
-.ret_val:
-    rts
-    
+	; Binary clause Simplified: LESS
+	lda Helpers_value
+	; Compare with pure num / var optimization
+	cmp Helpers_minVal;keep
+	bcs Helpers_Clamp_eblock253
+Helpers_Clamp_ctb252: ;Main true block ;keep 
+	ldy #0 ; Fake 16 bit
+	lda Helpers_minVal
+	; Calling storevariable on generic assign expression
+	; Casting from byte to integer
+	sta Helpers_temp
+	sty Helpers_temp+1
+	jmp Helpers_Clamp_edblock254
+Helpers_Clamp_eblock253
+	; Binary clause Simplified: GREATER
+	lda Helpers_value
+	; Compare with pure num / var optimization
+	cmp Helpers_maxVal;keep
+	bcc Helpers_Clamp_eblock269
+	beq Helpers_Clamp_eblock269
+Helpers_Clamp_ctb268: ;Main true block ;keep 
+	ldy #0 ; Fake 16 bit
+	lda Helpers_maxVal
+	; Calling storevariable on generic assign expression
+	; Casting from byte to integer
+	sta Helpers_temp
+	sty Helpers_temp+1
+	jmp Helpers_Clamp_edblock270
+Helpers_Clamp_eblock269
+	ldy #0 ; Fake 16 bit
+	lda Helpers_value
+	; Calling storevariable on generic assign expression
+	; Casting from byte to integer
+	sta Helpers_temp
+	sty Helpers_temp+1
+Helpers_Clamp_edblock270
+Helpers_Clamp_edblock254
+	ldy Helpers_temp+1 ;keep
+	lda Helpers_temp
 	rts
 end_procedure_Helpers_Clamp
 	; NodeProcedureDecl -1
@@ -1325,17 +1328,17 @@ MakeSprites
 	sta $d015
 	ldx #$0 ; optimized, look out for bugs
 	lda #1
-MakeSprites_shiftbit252
+MakeSprites_shiftbit276
 	cpx #0
-	beq MakeSprites_shiftbitdone253
+	beq MakeSprites_shiftbitdone277
 	asl
 	dex
-	jmp MakeSprites_shiftbit252
-MakeSprites_shiftbitdone253
-MakeSprites_bitmask_var254 = $54
-	sta MakeSprites_bitmask_var254
+	jmp MakeSprites_shiftbit276
+MakeSprites_shiftbitdone277
+MakeSprites_bitmask_var278 = $54
+	sta MakeSprites_bitmask_var278
 	lda $d015
-	ora MakeSprites_bitmask_var254
+	ora MakeSprites_bitmask_var278
 	sta $d015
 	rts
 end_procedure_MakeSprites
@@ -1355,12 +1358,12 @@ DisplayScore
 	sta ipd_div_lo
 	sty ipd_div_hi
 	ldy #$4 ; optimized, look out for bugs
-DisplayScore_printdecimal256
+DisplayScore_printdecimal280
 	jsr init_printdecimal_div10 
 	ora #$30
 	sta (screenmemory),y
 	dey
-	bpl DisplayScore_printdecimal256
+	bpl DisplayScore_printdecimal280
 	; MoveTo optimization
 	lda #$9b
 	sta screenmemory
@@ -1373,12 +1376,12 @@ DisplayScore_printdecimal256
 	sta ipd_div_lo
 	sty ipd_div_hi
 	ldy #$3 ; optimized, look out for bugs
-DisplayScore_printdecimal257
+DisplayScore_printdecimal281
 	jsr init_printdecimal_div10 
 	ora #$30
 	sta (screenmemory),y
 	dey
-	bpl DisplayScore_printdecimal257
+	bpl DisplayScore_printdecimal281
 	rts
 end_procedure_DisplayScore
 	; NodeProcedureDecl -1
@@ -1395,75 +1398,75 @@ UpdateSprite
 ; //		pos_x := 19
 ; //	else if pos_x > 238 then
 ; //		pos_x := 238;
-	; Generic 16 bit op
-	ldy pos_x+1 ;keep
-	lda pos_x
-UpdateSprite_rightvarInteger_var261 = $54
-	sta UpdateSprite_rightvarInteger_var261
-	sty UpdateSprite_rightvarInteger_var261+1
-	; Generic 16 bit op
-	ldy #0
-	; Right is PURE NUMERIC : Is word =1
-	; 16 bit mul or div
-	; Mul 16x8 setup
-	lda #$2
-	sta mul16x8_num1
-	sty mul16x8_num1Hi
+; //	pos_x := pos_x + (joystickright*2 - joystickleft*2);
+; //	if pos_x < 19 then
+; //		pos_x := 19
+; //	else if pos_x > 238 then
+; //		pos_x := 238;
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; 8 bit binop
+	; Add/sub right value is variable/expression
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul of power 2
 	; Load16bitvariable : joystickleft
 	lda joystickleft
-	sta mul16x8_num2
-	jsr mul16x8_procedure
-UpdateSprite_rightvarInteger_var264 = $56
-	sta UpdateSprite_rightvarInteger_var264
-	sty UpdateSprite_rightvarInteger_var264+1
-	; Right is PURE NUMERIC : Is word =1
-	; 16 bit mul or div
-	; Mul 16x8 setup
-	ldy #0   ; Force integer assignment, set y = 0 for values lower than 255
-	lda #$2
-	sta mul16x8_num1
-	sty mul16x8_num1Hi
+	asl
+UpdateSprite_rightvarAddSub_var283 = $54
+	sta UpdateSprite_rightvarAddSub_var283
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul of power 2
 	; Load16bitvariable : joystickright
 	lda joystickright
-	sta mul16x8_num2
-	jsr mul16x8_procedure
-	; Low bit binop:
+	asl
 	sec
-	sbc UpdateSprite_rightvarInteger_var264
-UpdateSprite_wordAdd262
-	sta UpdateSprite_rightvarInteger_var264
-	; High-bit binop
-	tya
-	sbc UpdateSprite_rightvarInteger_var264+1
-	tay
-	lda UpdateSprite_rightvarInteger_var264
-	; Low bit binop:
+	sbc UpdateSprite_rightvarAddSub_var283
 	clc
-	adc UpdateSprite_rightvarInteger_var261
-UpdateSprite_wordAdd259
-	sta UpdateSprite_rightvarInteger_var261
-	; High-bit binop
-	tya
-	adc UpdateSprite_rightvarInteger_var261+1
-	tay
-	lda UpdateSprite_rightvarInteger_var261
+	adc pos_x
+	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta Helpers_value
-	sty Helpers_value+1
-	ldy #0   ; Force integer assignment, set y = 0 for values lower than 255
 	lda #$13
 	; Calling storevariable on generic assign expression
 	sta Helpers_minVal
-	sty Helpers_minVal+1
 	lda #$ee
 	; Calling storevariable on generic assign expression
 	sta Helpers_maxVal
-	sty Helpers_maxVal+1
 	jsr Helpers_Clamp
 	; Calling storevariable on generic assign expression
 	sta pos_x
-	sty pos_x+1
-	ldy pos_x+1 ;keep
+	
+; //	asm("
+; //	lda joystickright
+; //	sec
+; //	sbc joystickleft
+; //	beq US_done
+; //	bpl US_move_right
+; //	; move left
+; //	lda pos_x
+; //	cmp #21
+; //	bcs US_dec2
+; //	lda #19
+; //	sta pos_x
+; //	jmp US_done
+; //US_dec2:
+; //	sec
+; //	sbc #2
+; //	sta pos_x
+; //	jmp US_done
+; //US_move_right:
+; //	lda pos_x
+; //	cmp #236
+; //	bcc US_inc2
+; //	lda #238
+; //	sta pos_x
+; //	jmp US_done
+; //US_inc2:
+; //	clc
+; //	adc #2
+; //	sta pos_x
+; //US_done:
+; //");
 	; Calling storevariable on generic assign expression
 	sta sprite_x
 	
@@ -1472,11 +1475,11 @@ UpdateSprite_wordAdd259
 	; isi-pisi: value is constant
 	ldx #0
 	sta $D000,x
-UpdateSprite_spritepos265
+UpdateSprite_spritepos284
 	lda $D010
 	and #%11111110
 	sta $D010
-UpdateSprite_spriteposcontinue266
+UpdateSprite_spriteposcontinue285
 	inx
 	txa
 	tay
@@ -1486,24 +1489,24 @@ UpdateSprite_spriteposcontinue266
 	clc
 	lda joystickright
 	; cmp #$00 ignored
-	beq UpdateSprite_edblock270
-UpdateSprite_ctb268: ;Main true block ;keep 
+	beq UpdateSprite_edblock289
+UpdateSprite_ctb287: ;Main true block ;keep 
 	
 ; // Set left/right offset pointer for sprite
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta joystick_dir
-UpdateSprite_edblock270
+UpdateSprite_edblock289
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda joystickleft
 	; cmp #$00 ignored
-	beq UpdateSprite_edblock276
-UpdateSprite_ctb274: ;Main true block ;keep 
+	beq UpdateSprite_edblock295
+UpdateSprite_ctb293: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta joystick_dir
-UpdateSprite_edblock276
+UpdateSprite_edblock295
 	
 ; // Set the sprite pointer to point to the sprite data + direction offset
 	; Set sprite location
@@ -1516,21 +1519,21 @@ UpdateSprite_edblock276
 	; Generic 16 bit op
 	ldy #0
 	lda joystick_dir
-UpdateSprite_rightvarInteger_var281 = $54
-	sta UpdateSprite_rightvarInteger_var281
-	sty UpdateSprite_rightvarInteger_var281+1
+UpdateSprite_rightvarInteger_var300 = $54
+	sta UpdateSprite_rightvarInteger_var300
+	sty UpdateSprite_rightvarInteger_var300+1
 	lda #129
 	ldy #0
 	; Low bit binop:
 	clc
-	adc UpdateSprite_rightvarInteger_var281
-UpdateSprite_wordAdd279
-	sta UpdateSprite_rightvarInteger_var281
+	adc UpdateSprite_rightvarInteger_var300
+UpdateSprite_wordAdd298
+	sta UpdateSprite_rightvarInteger_var300
 	; High-bit binop
 	tya
-	adc UpdateSprite_rightvarInteger_var281+1
+	adc UpdateSprite_rightvarInteger_var300+1
 	tay
-	lda UpdateSprite_rightvarInteger_var281
+	lda UpdateSprite_rightvarInteger_var300
 	ldx $50
 	sta $07f8 + $0,x
 	; Set sprite location
@@ -1539,21 +1542,21 @@ UpdateSprite_wordAdd279
 	; Generic 16 bit op
 	ldy #0
 	lda joystick_dir
-UpdateSprite_rightvarInteger_var284 = $54
-	sta UpdateSprite_rightvarInteger_var284
-	sty UpdateSprite_rightvarInteger_var284+1
+UpdateSprite_rightvarInteger_var303 = $54
+	sta UpdateSprite_rightvarInteger_var303
+	sty UpdateSprite_rightvarInteger_var303+1
 	lda #129
 	ldy #0
 	; Low bit binop:
 	clc
-	adc UpdateSprite_rightvarInteger_var284
-UpdateSprite_wordAdd282
-	sta UpdateSprite_rightvarInteger_var284
+	adc UpdateSprite_rightvarInteger_var303
+UpdateSprite_wordAdd301
+	sta UpdateSprite_rightvarInteger_var303
 	; High-bit binop
 	tya
-	adc UpdateSprite_rightvarInteger_var284+1
+	adc UpdateSprite_rightvarInteger_var303+1
 	tay
-	lda UpdateSprite_rightvarInteger_var284
+	lda UpdateSprite_rightvarInteger_var303
 	ldx $50
 	sta $07f8 + $0,x
 	; Set sprite location
@@ -1562,21 +1565,21 @@ UpdateSprite_wordAdd282
 	; Generic 16 bit op
 	ldy #0
 	lda joystick_dir
-UpdateSprite_rightvarInteger_var287 = $54
-	sta UpdateSprite_rightvarInteger_var287
-	sty UpdateSprite_rightvarInteger_var287+1
+UpdateSprite_rightvarInteger_var306 = $54
+	sta UpdateSprite_rightvarInteger_var306
+	sty UpdateSprite_rightvarInteger_var306+1
 	lda #129
 	ldy #0
 	; Low bit binop:
 	clc
-	adc UpdateSprite_rightvarInteger_var287
-UpdateSprite_wordAdd285
-	sta UpdateSprite_rightvarInteger_var287
+	adc UpdateSprite_rightvarInteger_var306
+UpdateSprite_wordAdd304
+	sta UpdateSprite_rightvarInteger_var306
 	; High-bit binop
 	tya
-	adc UpdateSprite_rightvarInteger_var287+1
+	adc UpdateSprite_rightvarInteger_var306+1
 	tay
-	lda UpdateSprite_rightvarInteger_var287
+	lda UpdateSprite_rightvarInteger_var306
 	ldx $50
 	sta $07f8 + $0,x
 	; Set sprite location
@@ -1585,21 +1588,21 @@ UpdateSprite_wordAdd285
 	; Generic 16 bit op
 	ldy #0
 	lda joystick_dir
-UpdateSprite_rightvarInteger_var290 = $54
-	sta UpdateSprite_rightvarInteger_var290
-	sty UpdateSprite_rightvarInteger_var290+1
+UpdateSprite_rightvarInteger_var309 = $54
+	sta UpdateSprite_rightvarInteger_var309
+	sty UpdateSprite_rightvarInteger_var309+1
 	lda #129
 	ldy #0
 	; Low bit binop:
 	clc
-	adc UpdateSprite_rightvarInteger_var290
-UpdateSprite_wordAdd288
-	sta UpdateSprite_rightvarInteger_var290
+	adc UpdateSprite_rightvarInteger_var309
+UpdateSprite_wordAdd307
+	sta UpdateSprite_rightvarInteger_var309
 	; High-bit binop
 	tya
-	adc UpdateSprite_rightvarInteger_var290+1
+	adc UpdateSprite_rightvarInteger_var309+1
 	tay
-	lda UpdateSprite_rightvarInteger_var290
+	lda UpdateSprite_rightvarInteger_var309
 	ldx $50
 	sta $07f8 + $0,x
 	rts
@@ -1612,8 +1615,8 @@ DisplayText
 ; //moveto(29,1,hi(screen_char_loc));
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr293
-	ldy #>DisplayText_stringassignstr293
+	lda #<DisplayText_stringassignstr312
+	ldy #>DisplayText_stringassignstr312
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1629,8 +1632,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr295
-	ldy #>DisplayText_stringassignstr295
+	lda #<DisplayText_stringassignstr314
+	ldy #>DisplayText_stringassignstr314
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1646,8 +1649,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr297
-	ldy #>DisplayText_stringassignstr297
+	lda #<DisplayText_stringassignstr316
+	ldy #>DisplayText_stringassignstr316
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1663,8 +1666,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr299
-	ldy #>DisplayText_stringassignstr299
+	lda #<DisplayText_stringassignstr318
+	ldy #>DisplayText_stringassignstr318
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1680,8 +1683,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr301
-	ldy #>DisplayText_stringassignstr301
+	lda #<DisplayText_stringassignstr320
+	ldy #>DisplayText_stringassignstr320
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1697,8 +1700,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr303
-	ldy #>DisplayText_stringassignstr303
+	lda #<DisplayText_stringassignstr322
+	ldy #>DisplayText_stringassignstr322
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -1714,8 +1717,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr305
-	ldy #>DisplayText_stringassignstr305
+	lda #<DisplayText_stringassignstr324
+	ldy #>DisplayText_stringassignstr324
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -1731,8 +1734,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr307
-	ldy #>DisplayText_stringassignstr307
+	lda #<DisplayText_stringassignstr326
+	ldy #>DisplayText_stringassignstr326
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -1748,8 +1751,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr309
-	ldy #>DisplayText_stringassignstr309
+	lda #<DisplayText_stringassignstr328
+	ldy #>DisplayText_stringassignstr328
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$a
@@ -1765,8 +1768,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr311
-	ldy #>DisplayText_stringassignstr311
+	lda #<DisplayText_stringassignstr330
+	ldy #>DisplayText_stringassignstr330
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$a
@@ -1782,8 +1785,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr313
-	ldy #>DisplayText_stringassignstr313
+	lda #<DisplayText_stringassignstr332
+	ldy #>DisplayText_stringassignstr332
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -1799,8 +1802,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr315
-	ldy #>DisplayText_stringassignstr315
+	lda #<DisplayText_stringassignstr334
+	ldy #>DisplayText_stringassignstr334
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -1816,8 +1819,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr317
-	ldy #>DisplayText_stringassignstr317
+	lda #<DisplayText_stringassignstr336
+	ldy #>DisplayText_stringassignstr336
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -1833,8 +1836,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr319
-	ldy #>DisplayText_stringassignstr319
+	lda #<DisplayText_stringassignstr338
+	ldy #>DisplayText_stringassignstr338
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -1850,8 +1853,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr321
-	ldy #>DisplayText_stringassignstr321
+	lda #<DisplayText_stringassignstr340
+	ldy #>DisplayText_stringassignstr340
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$0
@@ -1900,7 +1903,7 @@ end_procedure_DisplayText
 	; ***********  Defining procedure : UpdateTick
 	;    Procedure type : User-defined procedure
 moveNow	dc.b	0
-UpdateTick_block322
+UpdateTick_block341
 UpdateTick
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -1909,51 +1912,51 @@ UpdateTick
 	clc
 	lda tic
 	; cmp #$00 ignored
-	beq UpdateTick_eblock325
-UpdateTick_ctb324: ;Main true block ;keep 
+	beq UpdateTick_eblock344
+UpdateTick_ctb343: ;Main true block ;keep 
 	; Test Inc dec D
 	dec tic
 	; Binary clause Simplified: GREATEREQUAL
 	lda monster1_x
 	; Compare with pure num / var optimization
 	cmp #$2e;keep
-	bcc UpdateTick_eblock364
-UpdateTick_ctb363: ;Main true block ;keep 
+	bcc UpdateTick_eblock383
+UpdateTick_ctb382: ;Main true block ;keep 
 	
 ; //move := 0;
 ; //break;
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta direction
-	jmp UpdateTick_edblock365
-UpdateTick_eblock364
+	jmp UpdateTick_edblock384
+UpdateTick_eblock383
 	
 ; //offset := offset + 8;
 	; Binary clause Simplified: LESS
 	lda monster1_x
 	; Compare with pure num / var optimization
 	cmp #$19;keep
-	bcs UpdateTick_edblock379
-UpdateTick_ctb377: ;Main true block ;keep 
+	bcs UpdateTick_edblock398
+UpdateTick_ctb396: ;Main true block ;keep 
 	
 ; //offset := offset + 8;
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta direction
-UpdateTick_edblock379
-UpdateTick_edblock365
+UpdateTick_edblock398
+UpdateTick_edblock384
 	; Binary clause Simplified: EQUALS
 	lda tic
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne UpdateTick_edblock385
-UpdateTick_ctb383: ;Main true block ;keep 
+	bne UpdateTick_edblock404
+UpdateTick_ctb402: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta moveNow
-UpdateTick_edblock385
-	jmp UpdateTick_edblock326
-UpdateTick_eblock325
+UpdateTick_edblock404
+	jmp UpdateTick_edblock345
+UpdateTick_eblock344
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #$37
@@ -1966,13 +1969,13 @@ UpdateTick_eblock325
 	lda numberOfEnemies
 	; Compare with pure num / var optimization
 	cmp #$36;keep
-	bcs UpdateTick_edblock392
-UpdateTick_ctb390: ;Main true block ;keep 
+	bcs UpdateTick_edblock411
+UpdateTick_ctb409: ;Main true block ;keep 
 	
 ; // Speed up as enemies decreses
 	; Test Inc dec D
 	inc numberOfEnemies
-UpdateTick_edblock392
+UpdateTick_edblock411
 	
 ; //move := 2;
 	; 8 bit binop
@@ -1985,13 +1988,13 @@ UpdateTick_edblock392
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta moveNow
-UpdateTick_edblock326
+UpdateTick_edblock345
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda moveNow
 	; cmp #$00 ignored
-	beq UpdateTick_edblock398
-UpdateTick_ctb396: ;Main true block ;keep 
+	beq UpdateTick_edblock417
+UpdateTick_ctb415: ;Main true block ;keep 
 	
 ; // := monster1_x + 2;
 ; //dec(monster1_x);	
@@ -2000,20 +2003,20 @@ UpdateTick_ctb396: ;Main true block ;keep
 	clc
 	lda direction
 	; cmp #$00 ignored
-	beq UpdateTick_eblock411
-UpdateTick_ctb410: ;Main true block ;keep 
+	beq UpdateTick_eblock430
+UpdateTick_ctb429: ;Main true block ;keep 
 	; Test Inc dec D
 	inc monster1_x
-	jmp UpdateTick_edblock412
-UpdateTick_eblock411
+	jmp UpdateTick_edblock431
+UpdateTick_eblock430
 	
 ; // := monster1_x + 2;
 ; //inc(monster1_x);
 ; //offset := offset + 8;
 	; Test Inc dec D
 	dec monster1_x
-UpdateTick_edblock412
-UpdateTick_edblock398
+UpdateTick_edblock431
+UpdateTick_edblock417
 	rts
 end_procedure_UpdateTick
 	; NodeProcedureDecl -1
@@ -2027,11 +2030,11 @@ UpdateMonsters
 	lda monster1_x
 	ldx #2
 	sta $D000,x
-UpdateMonsters_spritepos418
+UpdateMonsters_spritepos437
 	lda $D010
 	and #%11111101
 	sta $D010
-UpdateMonsters_spriteposcontinue419
+UpdateMonsters_spriteposcontinue438
 	inx
 	txa
 	tay
@@ -2052,11 +2055,11 @@ UpdateMonsters_spriteposcontinue419
 	 ; end add / sub var with constant
 	ldx #4
 	sta $D000,x
-UpdateMonsters_spritepos420
+UpdateMonsters_spritepos439
 	lda $D010
 	and #%11111011
 	sta $D010
-UpdateMonsters_spriteposcontinue421
+UpdateMonsters_spriteposcontinue440
 	inx
 	txa
 	tay
@@ -2077,11 +2080,11 @@ UpdateMonsters_spriteposcontinue421
 	 ; end add / sub var with constant
 	ldx #6
 	sta $D000,x
-UpdateMonsters_spritepos422
+UpdateMonsters_spritepos441
 	lda $D010
 	and #%11110111
 	sta $D010
-UpdateMonsters_spriteposcontinue423
+UpdateMonsters_spriteposcontinue442
 	inx
 	txa
 	tay
@@ -2102,11 +2105,11 @@ UpdateMonsters_spriteposcontinue423
 	 ; end add / sub var with constant
 	ldx #8
 	sta $D000,x
-UpdateMonsters_spritepos424
+UpdateMonsters_spritepos443
 	lda $D010
 	and #%11101111
 	sta $D010
-UpdateMonsters_spriteposcontinue425
+UpdateMonsters_spriteposcontinue444
 	inx
 	txa
 	tay
@@ -2148,11 +2151,11 @@ UpdateMonsters2
 	lda monster1_x
 	ldx #2
 	sta $D000,x
-UpdateMonsters2_spritepos427
+UpdateMonsters2_spritepos446
 	lda $D010
 	and #%11111101
 	sta $D010
-UpdateMonsters2_spriteposcontinue428
+UpdateMonsters2_spriteposcontinue447
 	inx
 	txa
 	tay
@@ -2178,11 +2181,11 @@ UpdateMonsters2_spriteposcontinue428
 	 ; end add / sub var with constant
 	ldx #4
 	sta $D000,x
-UpdateMonsters2_spritepos429
+UpdateMonsters2_spritepos448
 	lda $D010
 	and #%11111011
 	sta $D010
-UpdateMonsters2_spriteposcontinue430
+UpdateMonsters2_spriteposcontinue449
 	inx
 	txa
 	tay
@@ -2208,11 +2211,11 @@ UpdateMonsters2_spriteposcontinue430
 	 ; end add / sub var with constant
 	ldx #6
 	sta $D000,x
-UpdateMonsters2_spritepos431
+UpdateMonsters2_spritepos450
 	lda $D010
 	and #%11110111
 	sta $D010
-UpdateMonsters2_spriteposcontinue432
+UpdateMonsters2_spriteposcontinue451
 	inx
 	txa
 	tay
@@ -2238,11 +2241,11 @@ UpdateMonsters2_spriteposcontinue432
 	 ; end add / sub var with constant
 	ldx #8
 	sta $D000,x
-UpdateMonsters2_spritepos433
+UpdateMonsters2_spritepos452
 	lda $D010
 	and #%11101111
 	sta $D010
-UpdateMonsters2_spriteposcontinue434
+UpdateMonsters2_spriteposcontinue453
 	inx
 	txa
 	tay
@@ -2269,11 +2272,11 @@ UpdateMonsters3
 	lda monster1_x
 	ldx #2
 	sta $D000,x
-UpdateMonsters3_spritepos436
+UpdateMonsters3_spritepos455
 	lda $D010
 	and #%11111101
 	sta $D010
-UpdateMonsters3_spriteposcontinue437
+UpdateMonsters3_spriteposcontinue456
 	inx
 	txa
 	tay
@@ -2299,11 +2302,11 @@ UpdateMonsters3_spriteposcontinue437
 	 ; end add / sub var with constant
 	ldx #4
 	sta $D000,x
-UpdateMonsters3_spritepos438
+UpdateMonsters3_spritepos457
 	lda $D010
 	and #%11111011
 	sta $D010
-UpdateMonsters3_spriteposcontinue439
+UpdateMonsters3_spriteposcontinue458
 	inx
 	txa
 	tay
@@ -2329,11 +2332,11 @@ UpdateMonsters3_spriteposcontinue439
 	 ; end add / sub var with constant
 	ldx #6
 	sta $D000,x
-UpdateMonsters3_spritepos440
+UpdateMonsters3_spritepos459
 	lda $D010
 	and #%11110111
 	sta $D010
-UpdateMonsters3_spriteposcontinue441
+UpdateMonsters3_spriteposcontinue460
 	inx
 	txa
 	tay
@@ -2359,11 +2362,11 @@ UpdateMonsters3_spriteposcontinue441
 	 ; end add / sub var with constant
 	ldx #8
 	sta $D000,x
-UpdateMonsters3_spritepos442
+UpdateMonsters3_spritepos461
 	lda $D010
 	and #%11101111
 	sta $D010
-UpdateMonsters3_spriteposcontinue443
+UpdateMonsters3_spriteposcontinue462
 	inx
 	txa
 	tay
@@ -2385,7 +2388,7 @@ end_procedure_UpdateMonsters3
 	; ***********  Defining procedure : MakeMonsters
 	;    Procedure type : User-defined procedure
 monsterColour	dc.b	$03
-MakeMonsters_block444
+MakeMonsters_block463
 MakeMonsters
 	
 ; //const P : address = $2000;
@@ -2424,68 +2427,68 @@ MakeMonsters
 	sta $d015
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit445
+MakeMonsters_shiftbit464
 	cpx #0
-	beq MakeMonsters_shiftbitdone446
+	beq MakeMonsters_shiftbitdone465
 	asl
 	dex
-	jmp MakeMonsters_shiftbit445
-MakeMonsters_shiftbitdone446
-MakeMonsters_bitmask_var447 = $54
-	sta MakeMonsters_bitmask_var447
+	jmp MakeMonsters_shiftbit464
+MakeMonsters_shiftbitdone465
+MakeMonsters_bitmask_var466 = $54
+	sta MakeMonsters_bitmask_var466
 	lda $d015
-	ora MakeMonsters_bitmask_var447
+	ora MakeMonsters_bitmask_var466
 	sta $d015
 	; Toggle bit with constant
 	ora #%100
 	sta $d015
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit448
+MakeMonsters_shiftbit467
 	cpx #0
-	beq MakeMonsters_shiftbitdone449
+	beq MakeMonsters_shiftbitdone468
 	asl
 	dex
-	jmp MakeMonsters_shiftbit448
-MakeMonsters_shiftbitdone449
-MakeMonsters_bitmask_var450 = $54
-	sta MakeMonsters_bitmask_var450
+	jmp MakeMonsters_shiftbit467
+MakeMonsters_shiftbitdone468
+MakeMonsters_bitmask_var469 = $54
+	sta MakeMonsters_bitmask_var469
 	lda $d015
-	ora MakeMonsters_bitmask_var450
+	ora MakeMonsters_bitmask_var469
 	sta $d015
 	; Toggle bit with constant
 	ora #%1000
 	sta $d015
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit451
+MakeMonsters_shiftbit470
 	cpx #0
-	beq MakeMonsters_shiftbitdone452
+	beq MakeMonsters_shiftbitdone471
 	asl
 	dex
-	jmp MakeMonsters_shiftbit451
-MakeMonsters_shiftbitdone452
-MakeMonsters_bitmask_var453 = $54
-	sta MakeMonsters_bitmask_var453
+	jmp MakeMonsters_shiftbit470
+MakeMonsters_shiftbitdone471
+MakeMonsters_bitmask_var472 = $54
+	sta MakeMonsters_bitmask_var472
 	lda $d015
-	ora MakeMonsters_bitmask_var453
+	ora MakeMonsters_bitmask_var472
 	sta $d015
 	; Toggle bit with constant
 	ora #%10000
 	sta $d015
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit454
+MakeMonsters_shiftbit473
 	cpx #0
-	beq MakeMonsters_shiftbitdone455
+	beq MakeMonsters_shiftbitdone474
 	asl
 	dex
-	jmp MakeMonsters_shiftbit454
-MakeMonsters_shiftbitdone455
-MakeMonsters_bitmask_var456 = $54
-	sta MakeMonsters_bitmask_var456
+	jmp MakeMonsters_shiftbit473
+MakeMonsters_shiftbitdone474
+MakeMonsters_bitmask_var475 = $54
+	sta MakeMonsters_bitmask_var475
 	lda $d015
-	ora MakeMonsters_bitmask_var456
+	ora MakeMonsters_bitmask_var475
 	sta $d015
 	; Toggle bit with constant
 	lda $d01d
@@ -2493,68 +2496,68 @@ MakeMonsters_bitmask_var456 = $54
 	sta $d01d
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit457
+MakeMonsters_shiftbit476
 	cpx #0
-	beq MakeMonsters_shiftbitdone458
+	beq MakeMonsters_shiftbitdone477
 	asl
 	dex
-	jmp MakeMonsters_shiftbit457
-MakeMonsters_shiftbitdone458
-MakeMonsters_bitmask_var459 = $54
-	sta MakeMonsters_bitmask_var459
+	jmp MakeMonsters_shiftbit476
+MakeMonsters_shiftbitdone477
+MakeMonsters_bitmask_var478 = $54
+	sta MakeMonsters_bitmask_var478
 	lda $d01d
-	ora MakeMonsters_bitmask_var459
+	ora MakeMonsters_bitmask_var478
 	sta $d01d
 	; Toggle bit with constant
 	ora #%100
 	sta $d01d
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit460
+MakeMonsters_shiftbit479
 	cpx #0
-	beq MakeMonsters_shiftbitdone461
+	beq MakeMonsters_shiftbitdone480
 	asl
 	dex
-	jmp MakeMonsters_shiftbit460
-MakeMonsters_shiftbitdone461
-MakeMonsters_bitmask_var462 = $54
-	sta MakeMonsters_bitmask_var462
+	jmp MakeMonsters_shiftbit479
+MakeMonsters_shiftbitdone480
+MakeMonsters_bitmask_var481 = $54
+	sta MakeMonsters_bitmask_var481
 	lda $d01d
-	ora MakeMonsters_bitmask_var462
+	ora MakeMonsters_bitmask_var481
 	sta $d01d
 	; Toggle bit with constant
 	ora #%1000
 	sta $d01d
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit463
+MakeMonsters_shiftbit482
 	cpx #0
-	beq MakeMonsters_shiftbitdone464
+	beq MakeMonsters_shiftbitdone483
 	asl
 	dex
-	jmp MakeMonsters_shiftbit463
-MakeMonsters_shiftbitdone464
-MakeMonsters_bitmask_var465 = $54
-	sta MakeMonsters_bitmask_var465
+	jmp MakeMonsters_shiftbit482
+MakeMonsters_shiftbitdone483
+MakeMonsters_bitmask_var484 = $54
+	sta MakeMonsters_bitmask_var484
 	lda $d01d
-	ora MakeMonsters_bitmask_var465
+	ora MakeMonsters_bitmask_var484
 	sta $d01d
 	; Toggle bit with constant
 	ora #%10000
 	sta $d01d
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit466
+MakeMonsters_shiftbit485
 	cpx #0
-	beq MakeMonsters_shiftbitdone467
+	beq MakeMonsters_shiftbitdone486
 	asl
 	dex
-	jmp MakeMonsters_shiftbit466
-MakeMonsters_shiftbitdone467
-MakeMonsters_bitmask_var468 = $54
-	sta MakeMonsters_bitmask_var468
+	jmp MakeMonsters_shiftbit485
+MakeMonsters_shiftbitdone486
+MakeMonsters_bitmask_var487 = $54
+	sta MakeMonsters_bitmask_var487
 	lda $d01d
-	ora MakeMonsters_bitmask_var468
+	ora MakeMonsters_bitmask_var487
 	sta $d01d
 	rts
 end_procedure_MakeMonsters
@@ -2581,18 +2584,18 @@ MainRasterRow1
 	adc #$09
 	sta Score+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc MainRasterRow1_WordAdd470
+	bcc MainRasterRow1_WordAdd489
 	inc Score+1
-MainRasterRow1_WordAdd470
+MainRasterRow1_WordAdd489
 	; Binary clause INTEGER: GREATEREQUAL
 	lda Score+1   ; compare high bytes
 	cmp #$27 ;keep
-	bcc MainRasterRow1_edblock474
-	bne MainRasterRow1_ctb472
+	bcc MainRasterRow1_edblock493
+	bne MainRasterRow1_ctb491
 	lda Score
 	cmp #$10 ;keep
-	bcc MainRasterRow1_edblock474
-MainRasterRow1_ctb472: ;Main true block ;keep 
+	bcc MainRasterRow1_edblock493
+MainRasterRow1_ctb491: ;Main true block ;keep 
 	lda Score
 	sec
 	sbc #$10
@@ -2605,10 +2608,10 @@ MainRasterRow1_ctb472: ;Main true block ;keep
 	adc #$01
 	sta Score2+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc MainRasterRow1_WordAdd480
+	bcc MainRasterRow1_WordAdd499
 	inc Score2+1
-MainRasterRow1_WordAdd480
-MainRasterRow1_edblock474
+MainRasterRow1_WordAdd499
+MainRasterRow1_edblock493
 	
 ; //SCREEN_BG_COL:=RED;
 	jsr UpdateMonsters
@@ -2810,35 +2813,35 @@ main_block_begin_
 main_block_end_
 	; End of program
 	; Ending memory block at $5810
-DisplayText_stringassignstr293		dc.b	" "
+DisplayText_stringassignstr312		dc.b	" "
 	dc.b	0
-DisplayText_stringassignstr295		dc.b	"  SCORE(1)"
+DisplayText_stringassignstr314		dc.b	"  SCORE(1)"
 	dc.b	0
-DisplayText_stringassignstr297		dc.b	"  HI-SCORE"
+DisplayText_stringassignstr316		dc.b	"  HI-SCORE"
 	dc.b	0
-DisplayText_stringassignstr299		dc.b	"      1740"
+DisplayText_stringassignstr318		dc.b	"      1740"
 	dc.b	0
-DisplayText_stringassignstr301		dc.b	"  SCORE(2)"
+DisplayText_stringassignstr320		dc.b	"  SCORE(2)"
 	dc.b	0
-DisplayText_stringassignstr303		dc.b	"      1740"
+DisplayText_stringassignstr322		dc.b	"      1740"
 	dc.b	0
-DisplayText_stringassignstr305		dc.b	"lmn"
+DisplayText_stringassignstr324		dc.b	"lmn"
 	dc.b	0
-DisplayText_stringassignstr307		dc.b	"opq"
+DisplayText_stringassignstr326		dc.b	"opq"
 	dc.b	0
-DisplayText_stringassignstr309		dc.b	"rst"
+DisplayText_stringassignstr328		dc.b	"rst"
 	dc.b	0
-DisplayText_stringassignstr311		dc.b	"uvw"
+DisplayText_stringassignstr330		dc.b	"uvw"
 	dc.b	0
-DisplayText_stringassignstr313		dc.b	"xyz"
+DisplayText_stringassignstr332		dc.b	"xyz"
 	dc.b	0
-DisplayText_stringassignstr315		dc.b	"!#¤"
+DisplayText_stringassignstr334		dc.b	"!#¤"
 	dc.b	0
-DisplayText_stringassignstr317		dc.b	"¤%&"
+DisplayText_stringassignstr336		dc.b	"¤%&"
 	dc.b	0
-DisplayText_stringassignstr319		dc.b	"/+*"
+DisplayText_stringassignstr338		dc.b	"/+*"
 	dc.b	0
-DisplayText_stringassignstr321		dc.b	"ooooooooooooooooooooooooooooo"
+DisplayText_stringassignstr340		dc.b	"ooooooooooooooooooooooooooooo"
 	dc.b	0
 EndBlock5810:
 

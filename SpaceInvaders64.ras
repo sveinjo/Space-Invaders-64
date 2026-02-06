@@ -103,11 +103,13 @@ begin
 //	else if pos_x > 238 then
 //		pos_x := 238;
 	
-	pos_x := pos_x + (joystickright*2 - joystickleft*2);
-	if pos_x < 19 then
-		pos_x := 19
-	else if pos_x > 238 then
-		pos_x := 238;
+//	pos_x := pos_x + (joystickright*2 - joystickleft*2);
+//	if pos_x < 19 then
+//		pos_x := 19
+//	else if pos_x > 238 then
+//		pos_x := 238;
+		
+	pos_x := Helpers::Clamp(pos_x + (joystickright*2 - joystickleft*2), 19, 238);
 		
 //	asm("
 //	lda joystickright
