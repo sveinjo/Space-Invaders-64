@@ -3,6 +3,7 @@ program SpaceInvaders64;
 @use "system/memory"
 @use "system"
 @use "starfield"
+@use "helpers"
 
 var
 	sidfile: incsid("sid/Courier.sid",2);
@@ -94,14 +95,15 @@ begin
 	DisplayScore();
 	
 	// Player sprites	
-	pos_x+= joystickright - joystickleft;
-	//pos_x+= (joystickright*2 - joystickleft*2);	
+//	//pos_x+= joystickright - joystickleft;
+//	pos_x+= (joystickright*2 - joystickleft*2);	
 	
-	if pos_x < 19 then
-		pos_x := 19
-	else if pos_x > 238 then
-		pos_x := 238;
+//	if pos_x < 19 then
+//		pos_x := 19
+//	else if pos_x > 238 then
+//		pos_x := 238;
 	
+	pos_x := Helpers::Clamp(pos_x + (joystickright*2 - joystickleft*2), 19, 238);
 	sprite_x := pos_x;
 	
 	
