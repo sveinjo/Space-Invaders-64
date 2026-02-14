@@ -25,6 +25,7 @@ var
 	direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	offset : byte = 8;
+	randomCounter : byte = 0; // Used for pseudo-random monster clearing
 	
 	pos_x : byte = PLAYER_MIN_X;
 
@@ -66,7 +67,7 @@ var
 	interrupt MainRasterRow1();
 	interrupt MainRasterJoystick();
 	interrupt MainRasterStarfield();
-	procedure ClearMonster();
+	procedure ClearMonster(blockIndex: byte; numBlocks: byte);
 	procedure animateMonsters(enemyRow: byte);
 	procedure UpdateMonsters(rowOffset: byte; updateMonsterRow: byte);
 	
@@ -99,7 +100,7 @@ var
 begin
 	// Copy monster sprite data (frames 1 and 2) into 24 consecutive sprite locations
 	// Each of the 12 monster blocks gets 2 animation frames
-	for i := 0 to 12 do
+	for i := 0 to 6 do
 	begin
 		// Copy frame 1 (sprite index 1 from spritesheet)
 		srcPtr := @spriteLoc + 64;  // Source: sprite 1
@@ -210,6 +211,12 @@ begin
 			inc(numberOfEnemies);	
 		
 		monster_animation_frame := monster_animation_frame xor 1;
+		
+		// Clear a random monster block on each animation
+		randomCounter := (randomCounter + 7) & 15; // Generate pseudo-random 0-15
+		if randomCounter < 12 then // Only use 0-11 for valid block indices
+			ClearMonster(randomCounter, 1);
+		
 		shouldMoveEnemy := 1;
 	end;
 	
@@ -264,20 +271,28 @@ begin
 end;
 
 
-procedure ClearMonster();
+procedure ClearMonster(blockIndex: byte; numBlocks: byte);
 var
-	k : byte;
-  	X : byte;
-  	p : ^byte;
-  	
+	l, m : byte;
+	spritePtr : ^byte;
+	startSprite : byte;
+	endSprite : byte;
 Begin
-	X := 8; // number of bytes to clear
-	p := ($2040);
+	// Calculate sprite range to clear
+	// Each block has 2 sprites (animation frames)
+	// Block 0 = sprites 3-4, Block 1 = sprites 5-6, etc.
+	startSprite := 3 + (blockIndex * 2);
+	endSprite := startSprite + (numBlocks * 2) - 1;
 	
-	for k := 0 to X do
+	// Clear each sprite (64 bytes per sprite)
+	for l := startSprite to endSprite do
 	begin
-		p^ := 0;
-		p := p + 3;
+		spritePtr := @spriteLoc + (l * 64);
+		for m := 0 to 63 do
+		begin
+			spritePtr^ := 0;
+			spritePtr := spritePtr + 1;
+		end;
 	end;
 end;
 
@@ -306,9 +321,7 @@ begin
 	togglebit(SPRITE_STRETCH_X,monsterSprite2,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite3,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite4,1);	
-	
-	initializeMonsters();
-	ClearMonster();
+		
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -375,6 +388,9 @@ end;
 // ---------------------------------------------------------------------------------------------------------------------------------
 begin
 	MakeSprites();
+	
+	initializeMonsters();
+	//ClearMonster();
 	MakeMonsters();
 	
 	InitSid(sidfile_1_init);
