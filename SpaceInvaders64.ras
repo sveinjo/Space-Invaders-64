@@ -89,7 +89,15 @@ Begin
 	PrintDecimal(Score,3);
 end;
 
-
+procedure animateMonsters();
+begin
+	// Set the sprite pointer to point to the sprite data + direction offset
+	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
+	SetSpriteLoc(1, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
+	SetSpriteLoc(2, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
+	SetSpriteLoc(3, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
+	SetSpriteLoc(4, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
+end;
 
 procedure UpdateSprite();
 begin
@@ -110,12 +118,7 @@ begin
 	if (joystickleft) then
 		joystick_dir := 0;
 	
-	// Set the sprite pointer to point to the sprite data + direction offset
-	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
-	SetSpriteLoc(1, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
-	SetSpriteLoc(2, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
-	SetSpriteLoc(3, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
-	SetSpriteLoc(4, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
+	// animateMonsters();
 	
 end;
 
@@ -204,6 +207,8 @@ begin
 	SpritePos(monster1_x+MONSTER_SPACING, monster1_y+rowOffset+offset, monsterSprite2);
 	SpritePos(monster1_x+MONSTER_SPACING*2, monster1_y+rowOffset+offset, monsterSprite3);
 	SpritePos(monster1_x+MONSTER_SPACING*3, monster1_y+rowOffset+offset, monsterSprite4);
+	
+	animateMonsters();
 end;
 
 
