@@ -66,6 +66,9 @@ var
 	interrupt MainRasterRow1();
 	interrupt MainRasterJoystick();
 	interrupt MainRasterStarfield();
+	procedure ClearMonster();
+	procedure animateMonsters(enemyRow: byte);
+	procedure UpdateMonsters(rowOffset: byte; updateMonsterRow: byte);
 	
 
 
@@ -89,15 +92,45 @@ Begin
 	PrintDecimal(Score,3);
 end;
 
-procedure animateMonsters();
+procedure initializeMonsters();
+var
+	i, j : byte;
+	srcPtr, destPtr : ^byte;
 begin
-	// Set the sprite pointer to point to the sprite data + direction offset
-	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
+	// Copy monster sprite data (frames 1 and 2) into 24 consecutive sprite locations
+	// Each of the 12 monster blocks gets 2 animation frames
+	for i := 0 to 12 do
+	begin
+		// Copy frame 1 (sprite index 1 from spritesheet)
+		srcPtr := @spriteLoc + 64;  // Source: sprite 1
+		destPtr := @spriteLoc + (3 + i * 2) * 64;  // Destination: sprite 3, 5, 7, 9...
+		for j := 0 to 63 do
+		begin
+			destPtr^ := srcPtr^;
+			srcPtr := srcPtr + 1;
+			destPtr := destPtr + 1;
+		end;
+		
+		// Copy frame 2 (sprite index 2 from spritesheet)
+		srcPtr := @spriteLoc + 128;  // Source: sprite 2
+		destPtr := @spriteLoc + (4 + i * 2) * 64;  // Destination: sprite 4, 6, 8, 10...
+		for j := 0 to 63 do
+		begin
+			destPtr^ := srcPtr^;
+			srcPtr := srcPtr + 1;
+			destPtr := destPtr + 1;
+		end;
+	end;
+end;
+
+/*procedure animateMonsters();
+begin
+	// Set the sprite pointer to point to the sprite data + direction offset	
 	SetSpriteLoc(1, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
 	SetSpriteLoc(2, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
 	SetSpriteLoc(3, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
 	SetSpriteLoc(4, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
-end;
+end;*/
 
 procedure UpdateSprite();
 begin
@@ -117,8 +150,9 @@ begin
 		joystick_dir := 1;
 	if (joystickleft) then
 		joystick_dir := 0;
-	
-	// animateMonsters();
+		
+	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
+	//animateMonsters();
 	
 end;
 
@@ -200,7 +234,25 @@ begin
 	end;
 end;
 
-procedure UpdateMonsters(rowOffset: byte);
+procedure animateMonsters(enemyRow: byte);
+var
+	baseSprite: byte;
+begin
+	// Calculate the base sprite index for this row
+	// Row 0: blocks 0-3 (sprites 3-10)
+	// Row 1: blocks 4-7 (sprites 11-18)
+	// Row 2: blocks 8-11 (sprites 19-26)
+	baseSprite := 3 + (enemyRow * 8);
+	
+	// Set sprite locations for each of the 4 monsters in this row
+	// Each monster block has 2 animation frames, we alternate based on monster_animation_frame
+	SetSpriteLoc(monsterSprite1, @spriteLoc/64 + baseSprite + monster_animation_frame, useBank);
+	SetSpriteLoc(monsterSprite2, @spriteLoc/64 + baseSprite + 2 + monster_animation_frame, useBank);
+	SetSpriteLoc(monsterSprite3, @spriteLoc/64 + baseSprite + 4 + monster_animation_frame, useBank);
+	SetSpriteLoc(monsterSprite4, @spriteLoc/64 + baseSprite + 6 + monster_animation_frame, useBank);
+end;
+
+procedure UpdateMonsters(rowOffset: byte; updateMonsterRow: byte);
 begin
 	// Update the sprite position on screen for sprite monsterSprite
 	SpritePos(monster1_x, monster1_y+rowOffset+offset, monsterSprite1);
@@ -208,13 +260,13 @@ begin
 	SpritePos(monster1_x+MONSTER_SPACING*2, monster1_y+rowOffset+offset, monsterSprite3);
 	SpritePos(monster1_x+MONSTER_SPACING*3, monster1_y+rowOffset+offset, monsterSprite4);
 	
-	animateMonsters();
+	animateMonsters(updateMonsterRow);
 end;
 
 
 procedure ClearMonster();
 var
-	i : byte;
+	k : byte;
   	X : byte;
   	p : ^byte;
   	
@@ -222,7 +274,7 @@ Begin
 	X := 8; // number of bytes to clear
 	p := ($2040);
 	
-	for i := 0 to X - 1 do
+	for k := 0 to X do
 	begin
 		p^ := 0;
 		p := p + 3;
@@ -254,6 +306,9 @@ begin
 	togglebit(SPRITE_STRETCH_X,monsterSprite2,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite3,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite4,1);	
+	
+	initializeMonsters();
+	ClearMonster();
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -273,13 +328,13 @@ begin
 		Score2 += 1;
 	end;                
 	
-	UpdateMonsters(0); 
+	UpdateMonsters(0, 0); 
 	
 	// Update monster positions for all three rows
 	WaitForRaster(104+offset);	
-	UpdateMonsters(MONSTER_ROW_OFFSET);
+	UpdateMonsters(MONSTER_ROW_OFFSET, 1);
 	WaitForRaster(130+offset);
-	UpdateMonsters(MONSTER_ROW_OFFSET*2);
+	UpdateMonsters(MONSTER_ROW_OFFSET*2, 2);
 	WaitForRaster(157+offset);
                 	
 	// Update joystick here
