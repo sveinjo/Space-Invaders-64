@@ -178,10 +178,22 @@ begin
 	
 	if shouldMoveEnemy <> 0 then
 	begin
-		if (direction <> 0) then
-			inc(monster1_x)
+		// At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed
+		// At slower speeds, move 1 pixel
+		if (INITIAL_INVADER_COUNT - numberOfEnemies) <= 2 then
+		begin
+			if (direction <> 0) then
+				monster1_x := monster1_x + 2
+			else
+				monster1_x := monster1_x - 2;
+		end
 		else
-			dec(monster1_x);
+		begin
+			if (direction <> 0) then
+				inc(monster1_x)
+			else
+				dec(monster1_x);
+		end;
 	end;
 end;
 
