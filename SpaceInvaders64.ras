@@ -7,27 +7,32 @@ program SpaceInvaders64;
 
 var
 	sidfile: incsid("sid/Courier.sid",2);
-	//sidfile: incsid("sid/Courier_Remix.sid",2);	
-	//sidfile: incsid("sid/Exhale36.sid",2);
 	
 	const useKernal:byte=0;
-	//@define useKernal 0
 
 	Score : Integer = 9950;
 	Score2 : Integer = 0;
 	
-	tic : byte = 55; // equals number of invaders
+	// Game constants
+	const INITIAL_INVADER_COUNT : byte = 55;
+	const MONSTER_SPACING : byte = 54;
+	const MONSTER_ROW_OFFSET : byte = 26;
+	const PLAYER_MIN_X : byte = 19;
+	const PLAYER_MAX_X : byte = 238;
+	const SCORE_INCREMENT : byte = 9;
+	
+	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	offset : byte = 8;
 	
-	pos_x : byte = 19;
+	pos_x : byte = PLAYER_MIN_X;
 
 								
   
 	// sprite_x is usually an integer since x values range between 
 	// 0 and 320. But we have a smaller play area.
-	sprite_x : byte = 19;
+	sprite_x : byte = PLAYER_MIN_X;
 	sprite_y : byte = 226;
 	
 	monster1_x : byte;
@@ -40,6 +45,8 @@ var
 	
 	// joystick_dir is used to display either left or right-pointing sprite
 	joystick_dir : byte;
+	// monster_animation_frame controls monster sprite animation independently
+	monster_animation_frame : byte;
 	// sprite location is where we keep the sprite in the memory.
 	// also used for setspriteloc that needs this value divided by 64
 	@define spriteLoc $2000
@@ -56,22 +63,17 @@ var
 	sprites:incbin("sprites/spritesheet.bin", @spriteLoc); 
 
 	// Declarations
-	interrupt MainRasterRow2();
-	interrupt MainRasterRow3();
+	interrupt MainRasterRow1();
 	interrupt MainRasterJoystick();
 	interrupt MainRasterStarfield();
-	//interrupt MainRaster2();
 	
 
 
 	
 procedure MakeSprites();
 begin	
-	// Set all sprites to be multicolor
-	//sprite_multicolor:=$ff;	
-	// Set common sprite multicolor #1 
+	// Set common sprite multicolor registers
 	sprite_multicolor_reg1:=green;
-	// Set  common sprite multicolor #2 
 	sprite_multicolor_reg2:=white;
 	// Set sprite "0" individual color value 
 	sprite_color[useSprite]:=light_blue;
@@ -94,54 +96,8 @@ begin
 	
 	DisplayScore();
 	
-	// Player sprites	
-//	//pos_x+= joystickright - joystickleft;
-//	pos_x+= (joystickright*2 - joystickleft*2);	
-	
-//	if pos_x < 19 then
-//		pos_x := 19
-//	else if pos_x > 238 then
-//		pos_x := 238;
-	
-//	pos_x := pos_x + (joystickright*2 - joystickleft*2);
-//	if pos_x < 19 then
-//		pos_x := 19
-//	else if pos_x > 238 then
-//		pos_x := 238;
-		
-	pos_x := Helpers::Clamp(pos_x + (joystickright*2 - joystickleft*2), 19, 238);
-		
-//	asm("
-//	lda joystickright
-//	sec
-//	sbc joystickleft
-//	beq US_done
-//	bpl US_move_right
-//	; move left
-//	lda pos_x
-//	cmp #21
-//	bcs US_dec2
-//	lda #19
-//	sta pos_x
-//	jmp US_done
-//US_dec2:
-//	sec
-//	sbc #2
-//	sta pos_x
-//	jmp US_done
-//US_move_right:
-//	lda pos_x
-//	cmp #236
-//	bcc US_inc2
-//	lda #238
-//	sta pos_x
-//	jmp US_done
-//US_inc2:
-//	clc
-//	adc #2
-//	sta pos_x
-//US_done:
-//");
+	// Update player position based on joystick input
+	pos_x := Helpers::Clamp(pos_x + (joystickright*2 - joystickleft*2), PLAYER_MIN_X, PLAYER_MAX_X);
 	sprite_x := pos_x;
 	
 	
@@ -156,10 +112,10 @@ begin
 	
 	// Set the sprite pointer to point to the sprite data + direction offset
 	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
-	SetSpriteLoc(1, @spriteLoc/64 + 1 + joystick_dir, useBank);
-	SetSpriteLoc(2, @spriteLoc/64 + 1 + joystick_dir, useBank);
-	SetSpriteLoc(3, @spriteLoc/64 + 1 + joystick_dir, useBank);
-	SetSpriteLoc(4, @spriteLoc/64 + 1 + joystick_dir, useBank);
+	SetSpriteLoc(1, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
+	SetSpriteLoc(2, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
+	SetSpriteLoc(3, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
+	SetSpriteLoc(4, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
 	
 end;
 
@@ -191,130 +147,51 @@ begin
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
 end;
 
-//Procedure DisplayText();
-//var
-//	TextCount : byte = 15;
-//	TextLines : array[15] of string = (
-//		" ",
-//		"  SCORE(1)",
-//		"  HI-SCORE",
-//		"      1740",
-//		"  SCORE(2)",
-//		"      1740",
-//		"lmn",
-//		"opq",
-//		"rst",
-//		"uvw",
-//		"xyz",
-//		"!#¤",
-//		"¤%&",
-//		"/+*",
-//		"ooooooooooooooooooooooooooooo"
-//	);
-//	TextX : array[15] of byte = (29,29,29,29,29,29,4,4,10,10,16,16,22,22,0);
-//	TextY : array[15] of byte = (0,1,11,13,21,23,19,20,19,20,19,20,19,20,24);
-
-//	i : byte;
-//begin	
-//moveto(29,1,hi(screen_char_loc));
-//	for i := 0 to TextCount - 1 do
-//		Screen::PrintString(TextLines[i], TextX[i], TextY[i], #Screen::screen0);
-//end;
-
 procedure UpdateTick();
 var
-	moveNow : byte;
+	shouldMoveEnemy : byte;
 begin
-	moveNow := 0;
+	shouldMoveEnemy := 0;
 	
-	if tic <> 0 then
+	if enemyMoveCounter <> 0 then
 	begin
-		dec(tic);
-		//move := 0;
-		//break;
+		dec(enemyMoveCounter);
+		
 		if monster1_x >= 46 then
-		begin
-			direction := 0;
-			//offset := offset + 8;
-		end
+			direction := 0
 		else if monster1_x <= 24 then
-		begin
 			direction := 1;
-			//offset := offset + 8;
-		end;
-		if tic = 2 then
-			moveNow := 1;
+			
+		if enemyMoveCounter = 2 then
+			shouldMoveEnemy := 1;
 	end
 	else begin
+		enemyMoveCounter := INITIAL_INVADER_COUNT - numberOfEnemies;
 		
-		tic := 55-numberOfEnemies;
-		// Speed up as enemies decreses
-		if (numberOfEnemies < 54) then
-		begin			
+		// Speed up as enemies decrease
+		if (numberOfEnemies < INITIAL_INVADER_COUNT - 1) then
 			inc(numberOfEnemies);	
-		end;
 		
-		//move := 2;
-		joystick_dir := joystick_dir xor 1;
-		moveNow := 1;
+		monster_animation_frame := monster_animation_frame xor 1;
+		shouldMoveEnemy := 1;
 	end;
 	
-	if moveNow <> 0 then
+	if shouldMoveEnemy <> 0 then
 	begin
 		if (direction <> 0) then
-		begin
-			inc(monster1_x); // := monster1_x + 2;
-			//inc(monster1_x);
-			//offset := offset + 8;
-		end
+			inc(monster1_x)
 		else
-		begin
-			dec(monster1_x); // := monster1_x + 2;
-			//dec(monster1_x);	
-			//offset := offset + 8;
-		end;
+			dec(monster1_x);
 	end;
 end;
 
-procedure UpdateMonsters();
+procedure UpdateMonsters(rowOffset: byte);
 begin
 	// Update the sprite position on screen for sprite monsterSprite
-	SpritePos(monster1_x, monster1_y+offset, monsterSprite1);
-	SpritePos(monster1_x+54, monster1_y+offset, monsterSprite2);
-	SpritePos(monster1_x+108, monster1_y+offset, monsterSprite3);
-	SpritePos(monster1_x+162, monster1_y+offset, monsterSprite4);
-		
-//	// Set the sprite pointer to point to the sprite data + direction offset
-//	SetSpriteLoc(useSprite, @spriteLoc/64 + joystick_dir, useBank);
-
-//	// If any movement is detected, play a random sound
-//	if ((joystickright+joystickleft) or (joystickup+joystickdown)) then
-//		PlaySound(sid_channel1, 
-//		13,  // Volume
-//		20+Random()/16,  // Hi byte frequency
-//		0*16+0,  // Attack voice 1
-//		3*16 + 3,   // Sustain = 16*15 + release=6
-//		1 +sid_saw,  // Waveform
-//		sid_saw);  // waveform
-
-end;
-
-procedure UpdateMonsters2();
-begin	
-	SpritePos(monster1_x, monster1_y+26+offset, monsterSprite1);
-	SpritePos(monster1_x+54, monster1_y+26+offset, monsterSprite2);
-	SpritePos(monster1_x+108, monster1_y+26+offset, monsterSprite3);
-	SpritePos(monster1_x+162, monster1_y+26+offset, monsterSprite4);
-
-end;
-
-procedure UpdateMonsters3();
-begin	
-	SpritePos(monster1_x, monster1_y+52+offset, monsterSprite1);
-	SpritePos(monster1_x+54, monster1_y+52+offset, monsterSprite2);
-	SpritePos(monster1_x+108, monster1_y+52+offset, monsterSprite3);
-	SpritePos(monster1_x+162, monster1_y+52+offset, monsterSprite4);
-
+	SpritePos(monster1_x, monster1_y+rowOffset+offset, monsterSprite1);
+	SpritePos(monster1_x+MONSTER_SPACING, monster1_y+rowOffset+offset, monsterSprite2);
+	SpritePos(monster1_x+MONSTER_SPACING*2, monster1_y+rowOffset+offset, monsterSprite3);
+	SpritePos(monster1_x+MONSTER_SPACING*3, monster1_y+rowOffset+offset, monsterSprite4);
 end;
 
 
@@ -325,15 +202,12 @@ var
   	p : ^byte;
   	
 Begin
-	X := 8;          //{ number of bytes to clear }
-	//p := ($2000);
+	X := 8; // number of bytes to clear
 	p := ($2040);
 	
-	
-	for i := 0 to X - 0 do
+	for i := 0 to X - 1 do
 	begin
 		p^ := 0;
-		//inc(p);
 		p := p + 3;
 	end;
 end;
@@ -341,38 +215,24 @@ end;
 procedure MakeMonsters();
 var 
 	monsterColour : byte = cyan;
-	//const P : address = $2000;
-	
-	
 	
 begin
 	monster1_y := 82;
 	monster1_x := 32;
 	
-	// Set all sprites to be multicolor
-	//sprite_multicolor:=$ff;
-	// Set common sprite multicolor #1 
-	//sprite_multicolor_reg1:=green;
-	// Set  common sprite multicolor #2 
-	//sprite_multicolor_reg2:=white;
-	// Set sprite "0" individual color value 
+	// Set sprite colors
 	sprite_color[monsterSprite1]:= monsterColour;
 	sprite_color[monsterSprite2]:= monsterColour;
 	sprite_color[monsterSprite3]:= monsterColour;
 	sprite_color[monsterSprite4]:= monsterColour;
 	  
-	// Mask sprite
-	//ClearMonster();	
-	
-	/*sprite_color[monsterSprite2]:=light_red;
-	sprite_color[monsterSprite3]:=light_red;
-	sprite_color[monsterSprite4]:=light_red;*/
-	// Turn on sprite 0 (or @useSprite)
+	// Enable all monster sprites
 	togglebit(sprite_bitmask,monsterSprite1,1);
 	togglebit(sprite_bitmask,monsterSprite2,1);
 	togglebit(sprite_bitmask,monsterSprite3,1);
 	togglebit(sprite_bitmask,monsterSprite4,1);
 	
+	// Enable sprite stretching for wider monsters
 	togglebit(SPRITE_STRETCH_X,monsterSprite1,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite2,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite3,1);
@@ -388,30 +248,22 @@ interrupt MainRasterRow1();
 begin		
 	StartIRQ(@useKernal);    
 	
-	// Score counter
-	Score += 9;
+	// Increment score
+	Score += SCORE_INCREMENT;
 
 	if (Score >= 10000) then begin
 		Score := Score - 10000;
 		Score2 += 1;
 	end;                
 	
-	//SCREEN_BG_COL:=RED;
-	UpdateMonsters(); 
+	UpdateMonsters(0); 
 	
-	//Async version. Faster but less reliable.      
-	//RasterIRQ(MainRasterRow2(),105+offset,@useKernal);
-	
-	// WaitForRaster version. First working copy.	
-	//SCREEN_BG_COL:=RED;	
+	// Update monster positions for all three rows
 	WaitForRaster(104+offset);	
-	//SCREEN_BG_COL:=GREEN;
-	UpdateMonsters2();
+	UpdateMonsters(MONSTER_ROW_OFFSET);
 	WaitForRaster(130+offset);
-	//SCREEN_BG_COL:=BLUE;
-	UpdateMonsters3();
+	UpdateMonsters(MONSTER_ROW_OFFSET*2);
 	WaitForRaster(157+offset);
-	//SCREEN_BG_COL:=BLACK;
                 	
 	// Update joystick here
 	Memory::Fill(#joystickup,0,5);
@@ -423,30 +275,11 @@ begin
 	
 	UpdateTick();
 	RasterIRQ(MainRasterStarfield(),0,@useKernal);
-	//RasterIRQ(MainRasterRow1(),0,@useKernal);
-	//RasterIRQ(MainRasterRow2(),105,@useKernal);
 	CloseIRQ();
 end;
 
-interrupt MainRasterRow2();
-begin	
-	//SCREEN_BG_COL:=GREEN;	
-	UpdateMonsters2();
-	RasterIRQ(MainRasterRow3(),129+offset,@useKernal);	
-end;
-
-
-interrupt MainRasterRow3();
-begin	
-	//SCREEN_BG_COL:=BLUE;                	
-	UpdateMonsters3();
-	RasterIRQ(MainRasterJoystick(),0,@useKernal);
-end;
-
-
 interrupt MainRasterStarfield();
 begin	
-	//UpdateTick();
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();    
 	preventirq();    
@@ -456,11 +289,9 @@ end;
 
 interrupt MainRasterJoystick();
 begin	
-	//SCREEN_BG_COL:=BLACK;                	
-	// Update joystick here
+	// Update joystick input
 	Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
-	// Update sprites
 	UpdateSprite();	
 	
 	RasterIRQ(MainRasterStarfield(),0,@useKernal);	
@@ -477,25 +308,13 @@ begin
 	InitSid(sidfile_1_init);
 	disableciainterrupts();
 	setmemoryconfig(1,0,useKernal);
-	//StartRasterChain(Raster1(),$500,useKernal);
-	//call(sidfile_1_play);
-
 	
-	//StartRasterChain(MainRasterSprite(),0,1);	
-	
-	DisableCIAInterrupts();				// Stop handling timer, joystick, keyboard ...
+	DisableCIAInterrupts();
     SCREEN_BG_COL:=BLACK;
     SCREEN_FG_COL:=BLACK;
-    
-    //DefineScreen();
-    //SetCharsetLocation(STARFIELD_CHARSETLOC);
- 	//CopyCharsetFromRom(STARFIELD_CHARSETLOC);
 	
 	StarField::CreateStarScreen();
 	
-	// -- Comment this line out to see the effect of the character set being overwritten.
-	//ClearCharacterSet();
-	  
 	StarField::StarfieldPtr := #STARFIELD_STAR1INIT;
 	StarField::StarfieldPtr2 := #STARFIELD_STAR2INIT;
 	StarField::StarfieldPtr3 := #STARFIELD_STAR3INIT;
@@ -505,14 +324,10 @@ begin
 	// This is the typical memory configuration for demo/game development. 
 	SetMemoryConfig(1, 0, 0);	
 	
-	//PreventIRQ();
-	//DisableCIAInterrupts();
 	EnableRasterIrq();	
-	//StartIRQ(useKernal);
 	DisplayText();	
 	RasterIRQ(MainRasterRow1(),0,@useKernal);
 	enableirq();
 
-	Loop(); 
-	//  Note: VICE monitor io d000	
+	Loop();
 end.
