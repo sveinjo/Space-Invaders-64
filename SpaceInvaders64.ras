@@ -218,8 +218,8 @@ begin
 		randomCounter := (randomCounter + 7) & 127; // Generate pseudo-random 0-127
 		if randomCounter < 72 then // Only use 0-71 for valid enemy indices (12 blocks × 6 enemies)
 		begin
-			tempBlockIndex := randomCounter / 6; // Integer division
-			tempEnemyIndex := randomCounter - (tempBlockIndex * 6); // Manual modulo
+			tempBlockIndex := Helpers::Div(randomCounter, 6); // Integer division
+			tempEnemyIndex := Helpers::Mod(randomCounter, 6); // Manual modulo
 			ClearMonster(tempBlockIndex, 1, tempEnemyIndex);
 		end;
 		
@@ -300,15 +300,13 @@ Begin
 	// Each enemy is 5 pixels wide × 8 pixels tall
 	
 	// Calculate horizontal offset (0-2 for the 3 columns)
-	// Manual modulo 3: enemyIndex mod 3
-	tempDiv := enemyIndex / 3;
-	horizontalOffset := enemyIndex - (tempDiv * 3);
+	horizontalOffset := Helpers::Mod(enemyIndex, 3);
 	
 	// Calculate vertical offset
 	// Top row (enemies 0-2): no extra offset
 	// Bottom row (enemies 3-5): 5 empty rows + 8 enemy rows = 13 rows down
 	// Each sprite row is 3 bytes, so 13 rows = 39 bytes
-	// Manual division by 3 then multiply
+	tempDiv := Helpers::Div(enemyIndex, 3);
 	verticalOffset := tempDiv * 13 * 3;
 	
 	offsetStart := 64 + horizontalOffset + verticalOffset;

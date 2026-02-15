@@ -66,4 +66,17 @@ begin
 //    ");
 
 end;
+
+function Div(dividendInput, divisorInput: byte): byte;
+begin
+	// Integer division (dividend div divisor)
+	Div := dividendInput / divisorInput;
+end;
+
+function Mod(modDividend, modDivisor: byte): byte;
+begin
+	// Modulo operation (dividend mod divisor)
+	Mod := modDividend - ((modDividend / modDivisor) * modDivisor);
+end;
+
 end.
