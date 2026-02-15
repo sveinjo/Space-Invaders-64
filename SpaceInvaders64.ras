@@ -188,23 +188,47 @@ begin
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
 end;
 
+procedure ClearEnemyAtCounter();
+var
+	clear_index : byte;
+	clear_col : byte;
+	clear_local_index : byte;
+	clear_row : byte;
+	enemy_type : byte;
+	pair_index : byte;
+	sub_local : byte;
+	enemy_sub : byte;
+begin
+	clear_index := 71 - sequential_clear_counter;
+	clear_col := 3 - Helpers::Div(clear_index, 18);
+	clear_local_index := Helpers::Mod(clear_index, 18);
+	pair_index := Helpers::Div(clear_local_index, 6);
+	sub_local := Helpers::Mod(clear_local_index, 6);
+	clear_row := 2 - Helpers::Div(sub_local, 2);
+	enemy_sub := Helpers::Mod(sub_local, 2);
+	if pair_index = 0 then
+	begin
+		if enemy_sub = 0 then enemy_type := 5 else enemy_type := 2;
+	end
+	else if pair_index = 1 then
+	begin
+		if enemy_sub = 0 then enemy_type := 4 else enemy_type := 1;
+	end
+	else
+	begin
+		if enemy_sub = 0 then enemy_type := 3 else enemy_type := 0;
+	end;
+	temp_enemy_index := enemy_type;
+	temp_block_index := clear_col + clear_row * 4;
+	ClearMonster(temp_block_index, 1, temp_enemy_index);
+end;
+
 procedure UpdateTick();
 var
 	should_move_enemy : byte;
-	var rightmost_block : byte;
-	var active_columns : byte;
-	var max_x : byte;
-	var clear_index : byte;
-	var clear_col : byte;
-	var clear_local_index : byte;
-	var clear_row : byte;
-	var enemy_type : byte;
-	var pair_index : byte;
-	var sub_local : byte;
-	var enemy_index : byte;
-	//var pair_index : byte;
-	//var sub_local : byte;
-	var enemy_sub : byte;
+	rightmost_block : byte;
+	active_columns : byte;
+	max_x : byte;
 begin
 	should_move_enemy := 0;
 	
@@ -243,6 +267,7 @@ begin
 		begin
 			inc(numberOfEnemies);	
 			inc(numberOfEnemies);	
+			inc(numberOfEnemies);	
 		end;
 		
 		monster_animation_frame := monster_animation_frame xor 1;
@@ -254,55 +279,7 @@ begin
 		// Clear enemies sequentially from 71 to 3 (70 enemies), leaving 2 enemies
 		if sequential_clear_counter > 2 then
 		begin
-			clear_index := 71 - sequential_clear_counter;
-			clear_col := 3 - Helpers::Div(clear_index, 18);
-			clear_local_index := Helpers::Mod(clear_index, 18);
-			pair_index := Helpers::Div(clear_local_index, 6);
-			sub_local := Helpers::Mod(clear_local_index, 6);
-			clear_row := 2 - Helpers::Div(sub_local, 2);
-			enemy_sub := Helpers::Mod(sub_local, 2);
-			if pair_index = 0 then
-			begin
-				if enemy_sub = 0 then enemy_type := 5 else enemy_type := 2;
-			end
-			else if pair_index = 1 then
-			begin
-				if enemy_sub = 0 then enemy_type := 4 else enemy_type := 1;
-			end
-			else
-			begin
-				if enemy_sub = 0 then enemy_type := 3 else enemy_type := 0;
-			end;
-			temp_enemy_index := enemy_type;
-			temp_block_index := clear_col + clear_row * 4;
-			ClearMonster(temp_block_index, 1, temp_enemy_index);
-			// Clear second enemy if possible
-			if sequential_clear_counter > 0 then
-			begin
-				dec(sequential_clear_counter);
-				clear_index := 71 - sequential_clear_counter;
-				clear_col := 3 - Helpers::Div(clear_index, 18);
-				clear_local_index := Helpers::Mod(clear_index, 18);
-				pair_index := Helpers::Div(clear_local_index, 6);
-				sub_local := Helpers::Mod(clear_local_index, 6);
-				clear_row := 2 - Helpers::Div(sub_local, 2);
-				enemy_sub := Helpers::Mod(sub_local, 2);
-				if pair_index = 0 then
-				begin
-					if enemy_sub = 0 then enemy_type := 5 else enemy_type := 2;
-				end
-				else if pair_index = 1 then
-				begin
-					if enemy_sub = 0 then enemy_type := 4 else enemy_type := 1;
-				end
-				else
-				begin
-					if enemy_sub = 0 then enemy_type := 3 else enemy_type := 0;
-				end;
-				temp_enemy_index := enemy_type;
-				temp_block_index := clear_col + clear_row * 4;
-				ClearMonster(temp_block_index, 1, temp_enemy_index);
-			end;
+			ClearEnemyAtCounter();
 			dec(sequential_clear_counter);
 		end;
 		
