@@ -4,6 +4,7 @@
 - Turbo Rascal syntax in .ras/.tru files; keep unit imports at the top via `@use`. See [SpaceInvaders64.ras](SpaceInvaders64.ras#L2-L5).
 - Asset inclusion uses `incsid`/`incbin` plus `@define` for fixed addresses. See [SpaceInvaders64.ras](SpaceInvaders64.ras#L8-L71).
 - Interrupt handlers are declared explicitly and drive raster timing; follow the same naming style. See [SpaceInvaders64.ras](SpaceInvaders64.ras#L73-L77).
+- Memory access uses `peek(address, bank)` and `poke(address, value, bank)` for reading/writing bytes; bank is 0 for current memory configuration. Avoid `Memory::ReadByte`/`WriteByte` as they may not be available. 
 
 ## Architecture
 - Main program entry is the TRSE project file pointing at the .ras source and output type. See [Space-Invaders-64.trse](Space-Invaders-64.trse#L10-L43).
