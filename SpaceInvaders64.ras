@@ -25,7 +25,7 @@ var
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	monster_vertical_adjustment : byte = 8;
-	random_counter : byte = 0; // Used for pseudo-random monster clearing
+	sequential_clear_counter : byte = 0; // Sequential enemy clearing counter (0-71)
 	temp_block_index : byte = 0;
 	temp_enemy_index : byte = 0;
 	
@@ -214,17 +214,17 @@ begin
 		
 		monster_animation_frame := monster_animation_frame xor 1;
 		
-		// Update sprite pointers for all rows once per animation frame
-		// All three rows share the same 4 sprites, just repositioned
+		// Update sprite pointers for row 0 - rows 1 and 2 are updated in raster interrupt
+		// Each row uses different sprite blocks: row 0 (3-10), row 1 (11-18), row 2 (19-26)
 		animateMonsters(0); // Row 0 uses sprites based on row parameter
 		
-		// Clear a random enemy on each animation
-		random_counter := (random_counter + 7) & 127; // Generate pseudo-random 0-127
-		if random_counter < 72 then // Only use 0-71 for valid enemy indices (12 blocks × 6 enemies)
+		// Clear enemies sequentially from 0 to 71 (12 blocks × 6 enemies each)
+		if sequential_clear_counter < 72 then
 		begin
-			temp_block_index := Helpers::Div(random_counter, 6); // Integer division
-			temp_enemy_index := Helpers::Mod(random_counter, 6); // Manual modulo
+			temp_block_index := Helpers::Div(sequential_clear_counter, 6); // Integer division
+			temp_enemy_index := Helpers::Mod(sequential_clear_counter, 6); // Manual modulo
 			ClearMonster(temp_block_index, 1, temp_enemy_index);
+			inc(sequential_clear_counter);
 		end;
 		
 		should_move_enemy := 1;
@@ -376,8 +376,13 @@ begin
 	UpdateMonsters(0); 
 	
 	// Update monster positions for all three rows
+	// Set sprite pointers for row 1 before displaying it
+	animateMonsters(1); // Row 1 uses sprites 11-18
 	WaitForRaster(104+monster_vertical_adjustment);	
 	UpdateMonsters(MONSTER_ROW_OFFSET);
+	
+	// Set sprite pointers for row 2 before displaying it  
+	animateMonsters(2); // Row 2 uses sprites 19-26
 	WaitForRaster(130+monster_vertical_adjustment);
 	UpdateMonsters(MONSTER_ROW_OFFSET*2);
 	WaitForRaster(157+monster_vertical_adjustment);
