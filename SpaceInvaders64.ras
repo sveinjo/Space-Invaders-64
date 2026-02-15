@@ -302,20 +302,19 @@ end;
 
 procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
 var
-	sprite_loop_counter : byte;
 	sprite_data_ptr : ^byte;
-	start_sprite_index : byte;
-	end_sprite_index : byte;
+	frame1_sprite_index : byte;
+	frame2_sprite_index : byte;
 	sprite_offset_start : byte;
 	enemy_horizontal_offset : byte;
 	enemy_vertical_offset : byte;
 	sprite_base_address : integer;
 Begin
-	// Calculate sprite range to clear using bit shifts instead of multiplication
+	// Calculate sprite indices for both animation frames
 	// Each block has 2 sprites (animation frames)
 	// Block 0 = sprites 3-4, Block 1 = sprites 5-6, etc.
-	start_sprite_index := 3 + (blockIndex << 1);  // blockIndex * 2
-	end_sprite_index := start_sprite_index + (numBlocks << 1) - 1;  // numBlocks * 2
+	frame1_sprite_index := 3 + (blockIndex << 1);  // First animation frame
+	frame2_sprite_index := frame1_sprite_index + 1;  // Second animation frame
 	
 	// Each block contains 6 enemies in a 3x2 grid:
 	// Enemy 0-2: Top row (3 horizontally, each 5 pixels wide)
@@ -339,31 +338,49 @@ Begin
 	// Total offset within the 64-byte sprite
 	sprite_offset_start := enemy_horizontal_offset + enemy_vertical_offset;
 	
-	// Clear 8 rows (one byte per row) for the 8-pixel tall enemy
-	for sprite_loop_counter := start_sprite_index to end_sprite_index do
-	begin
-		// Use bit shift for * 64 and use integer for large offsets
-		sprite_base_address := sprite_loop_counter;
-		sprite_base_address := sprite_base_address << 6;  // * 64
-		sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
-		
-		// Unrolled loop for 8 pixel rows - faster than loop overhead
-		sprite_data_ptr^ := 0;
-		sprite_data_ptr := sprite_data_ptr + 3;
-		sprite_data_ptr^ := 0;
-		sprite_data_ptr := sprite_data_ptr + 3;
-		sprite_data_ptr^ := 0;
-		sprite_data_ptr := sprite_data_ptr + 3;
-		sprite_data_ptr^ := 0;
-		sprite_data_ptr := sprite_data_ptr + 3;
-		sprite_data_ptr^ := 0;
-		sprite_data_ptr := sprite_data_ptr + 3;
-		sprite_data_ptr^ := 0;
-		sprite_data_ptr := sprite_data_ptr + 3;
-		sprite_data_ptr^ := 0;
-		sprite_data_ptr := sprite_data_ptr + 3;
-		sprite_data_ptr^ := 0;
-	end;
+	// Clear first animation frame (8 pixel rows)
+	sprite_base_address := frame1_sprite_index;
+	sprite_base_address := sprite_base_address << 6;  // * 64
+	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
+	
+	// Unrolled loop for 8 pixel rows - faster than loop overhead
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	
+	// Clear second animation frame (8 pixel rows)
+	sprite_base_address := frame2_sprite_index;
+	sprite_base_address := sprite_base_address << 6;  // * 64
+	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
+	
+	// Unrolled loop for 8 pixel rows
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
 end;
 
 procedure MakeMonsters();
