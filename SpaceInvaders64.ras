@@ -71,7 +71,7 @@ var
 	interrupt MainRasterStarfield();
 	procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
 	procedure animateMonsters(enemyRow: byte);
-	procedure UpdateMonsters(rowOffset: byte; updateMonsterRow: byte);
+	procedure UpdateMonsters(rowOffset: byte);
 	
 
 
@@ -214,6 +214,10 @@ begin
 		
 		monster_animation_frame := monster_animation_frame xor 1;
 		
+		// Update sprite pointers for all rows once per animation frame
+		// All three rows share the same 4 sprites, just repositioned
+		animateMonsters(0); // Row 0 uses sprites based on row parameter
+		
 		// Clear a random enemy on each animation
 		randomCounter := (randomCounter + 7) & 127; // Generate pseudo-random 0-127
 		if randomCounter < 72 then // Only use 0-71 for valid enemy indices (12 blocks × 6 enemies)
@@ -265,15 +269,14 @@ begin
 	SetSpriteLoc(monsterSprite4, @spriteLoc/64 + baseSprite + 6 + monster_animation_frame, useBank);
 end;
 
-procedure UpdateMonsters(rowOffset: byte; updateMonsterRow: byte);
+procedure UpdateMonsters(rowOffset: byte);
 begin
 	// Update the sprite position on screen for sprite monsterSprite
+	// Sprite pointers are set once per animation frame in UpdateTick
 	SpritePos(monster1_x, monster1_y+rowOffset+offset, monsterSprite1);
 	SpritePos(monster1_x+MONSTER_SPACING, monster1_y+rowOffset+offset, monsterSprite2);
 	SpritePos(monster1_x+MONSTER_SPACING*2, monster1_y+rowOffset+offset, monsterSprite3);
 	SpritePos(monster1_x+MONSTER_SPACING*3, monster1_y+rowOffset+offset, monsterSprite4);
-	
-	animateMonsters(updateMonsterRow);
 end;
 
 
@@ -370,13 +373,13 @@ begin
 		Score2 += 1;
 	end;                
 	
-	UpdateMonsters(0, 0); 
+	UpdateMonsters(0); 
 	
 	// Update monster positions for all three rows
 	WaitForRaster(104+offset);	
-	UpdateMonsters(MONSTER_ROW_OFFSET, 1);
+	UpdateMonsters(MONSTER_ROW_OFFSET);
 	WaitForRaster(130+offset);
-	UpdateMonsters(MONSTER_ROW_OFFSET*2, 2);
+	UpdateMonsters(MONSTER_ROW_OFFSET*2);
 	WaitForRaster(157+offset);
                 	
 	// Update joystick here
