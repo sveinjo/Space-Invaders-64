@@ -340,7 +340,7 @@ Begin
 	for sprite_loop_counter := start_sprite_index to end_sprite_index do
 	begin
 		sprite_data_ptr := @spriteLoc + (sprite_loop_counter * 64) + sprite_offset_start;
-		for pixel_loop_counter := 0 to 7 do  // 8 iterations (0-7) for 8-pixel tall enemy
+		for pixel_loop_counter := 0 to 8 do  // 8 iterations (0-7) for 8-pixel tall enemy
 		begin
 			sprite_data_ptr^ := 0;
 			sprite_data_ptr := sprite_data_ptr + 3; // Increment by 3 (next sprite row)
