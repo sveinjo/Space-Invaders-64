@@ -191,6 +191,13 @@ end;
 procedure UpdateTick();
 var
 	should_move_enemy : byte;
+	var rightmost_block : byte;
+	var active_columns : byte;
+	var max_x : byte;
+	var clear_index : byte;
+	var clear_col : byte;
+	var clear_local_index : byte;
+	var clear_row : byte;
 begin
 	should_move_enemy := 0;
 	
@@ -198,10 +205,25 @@ begin
 	begin
 		dec(enemyMoveCounter);
 		
-		if monster_base_x >= 46 then
-			enemy_direction := 0
-		else if monster_base_x <= 24 then
-			enemy_direction := 1;
+		if sequential_clear_counter = 0 then
+		begin
+			if monster_base_x >= 244 then
+				enemy_direction := 0
+			else if monster_base_x <= 24 then
+				enemy_direction := 1;
+		end
+		else
+		begin
+			// Calculate dynamic boundaries based on remaining blocks
+			
+			rightmost_block := Helpers::Div(sequential_clear_counter - 1, 6);
+			active_columns := Helpers::Div(rightmost_block, 3) + 1;
+			max_x := 46 + (4 - active_columns) * 38;
+			if monster_base_x >= max_x then
+				enemy_direction := 0
+			else if monster_base_x <= 24 then
+				enemy_direction := 1;
+		end;
 			
 		if enemyMoveCounter = 2 then
 			should_move_enemy := 1;
@@ -219,11 +241,15 @@ begin
 		// Each row uses different sprite blocks: row 0 (3-10), row 1 (11-18), row 2 (19-26)
 		animateMonsters(0); // Row 0 uses sprites based on row parameter
 		
-		// Clear enemies sequentially from 71 to 1 (12 blocks × 6 enemies each)
+		// Clear enemies by column from right to left, bottom to top within column
 		if sequential_clear_counter > 0 then
 		begin
-			temp_block_index := Helpers::Div(sequential_clear_counter, 6); // Integer division
-			temp_enemy_index := Helpers::Mod(sequential_clear_counter, 6); // Manual modulo
+			clear_index := 71 - sequential_clear_counter;
+			clear_col := 3 - Helpers::Div(clear_index, 18);
+			clear_local_index := Helpers::Mod(clear_index, 18);
+			clear_row := Helpers::Div(clear_local_index, 6);
+			temp_enemy_index := Helpers::Mod(clear_local_index, 6);
+			temp_block_index := clear_col + clear_row * 4;
 			ClearMonster(temp_block_index, 1, temp_enemy_index);
 			dec(sequential_clear_counter);
 		end;
