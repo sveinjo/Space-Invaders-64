@@ -42,6 +42,14 @@ var
 	monster_base_x : byte;
 	monster_base_y : byte;
 	
+	// Track which enemies are alive in each block (12 blocks, 6 enemies per block)
+	// Each bit 0-5 represents an enemy: bit set = alive, bit clear = dead
+	block_enemies : array[12] of byte = (
+		$3F, $3F, $3F, $3F,  // Row 0 blocks (bottom): all 6 enemies alive
+		$3F, $3F, $3F, $3F,  // Row 1 blocks
+		$3F, $3F, $3F, $3F   // Row 2 blocks (top)
+	);
+	
 	const monsterSprite1:byte = 1;
 	const monsterSprite2:byte = 2;
 	const monsterSprite3:byte = 3;
@@ -198,6 +206,7 @@ var
 	pair_index : byte;
 	sub_local : byte;
 	enemy_sub : byte;
+	enemy_mask : byte;
 begin
 	clear_index := 71 - sequential_clear_counter;
 	clear_col := 3 - Helpers::Div(clear_index, 18);
@@ -221,14 +230,112 @@ begin
 	temp_enemy_index := enemy_type;
 	temp_block_index := clear_col + clear_row * 4;
 	ClearMonster(temp_block_index, 1, temp_enemy_index);
+	// Update block_enemies array to mark this enemy as cleared
+	enemy_mask := 1 << enemy_type;
+	block_enemies[temp_block_index] := block_enemies[temp_block_index] & (enemy_mask xor $FF);
+end;
+
+// Find the rightmost occupied enemy column offset (0-172)
+// Returns pixel offset from monster_base_x to the rightmost enemy
+function GetRightmostEnemyOffset() : byte;
+var
+	rightmost_block_column : byte;
+	rightmost_row_index : byte;
+	rightmost_block_index : byte;
+	rightmost_enemies_byte : byte;
+	rightmost_found_flag : byte;
+	rightmost_result_offset : byte;
+begin
+	rightmost_found_flag := 0;
+	rightmost_result_offset := 0;
+	// Scan from rightmost block column (3) to left (0)
+	rightmost_block_column := 3;
+	while (rightmost_block_column >= 0 and rightmost_found_flag = 0) do
+	begin
+		// Check all 3 rows for this block column
+		rightmost_row_index := 0;
+		while (rightmost_row_index < 3 and rightmost_found_flag = 0) do
+		begin
+			rightmost_block_index := rightmost_block_column + rightmost_row_index * 4;
+			rightmost_enemies_byte := block_enemies[rightmost_block_index];
+			// Check enemy columns right to left: 2/5, then 1/4, then 0/3
+			if (rightmost_enemies_byte & $24) <> 0 then  // bit 5 or 2 set (right column)
+			begin
+				rightmost_result_offset := rightmost_block_column * 54 + 10;
+				rightmost_found_flag := 1;
+			end
+			else if (rightmost_enemies_byte & $12) <> 0 then  // bit 4 or 1 set (middle column)
+			begin
+				rightmost_result_offset := rightmost_block_column * 54 + 5;
+				rightmost_found_flag := 1;
+			end
+			else if (rightmost_enemies_byte & $09) <> 0 then  // bit 3 or 0 set (left column)
+			begin
+				rightmost_result_offset := rightmost_block_column * 54;
+				rightmost_found_flag := 1;
+			end;
+			inc(rightmost_row_index);
+		end;
+		if rightmost_block_column = 0 then
+			rightmost_block_column := 255  // Will wrap and exit
+		else
+			dec(rightmost_block_column);
+	end;
+	GetRightmostEnemyOffset := rightmost_result_offset;
+end;
+
+// Find the leftmost occupied enemy column offset (0-172)
+function GetLeftmostEnemyOffset() : byte;
+var
+	leftmost_block_column : byte;
+	leftmost_row_index : byte;
+	leftmost_block_index : byte;
+	leftmost_enemies_byte : byte;
+	leftmost_found_flag : byte;
+	leftmost_result_offset : byte;
+begin
+	leftmost_found_flag := 0;
+	leftmost_result_offset := 0;
+	// Scan from leftmost block column (0) to right (3)
+	leftmost_block_column := 0;
+	while (leftmost_block_column <= 3 and leftmost_found_flag = 0) do
+	begin
+		// Check all 3 rows for this block column
+		leftmost_row_index := 0;
+		while (leftmost_row_index < 3 and leftmost_found_flag = 0) do
+		begin
+			leftmost_block_index := leftmost_block_column + leftmost_row_index * 4;
+			leftmost_enemies_byte := block_enemies[leftmost_block_index];
+			// Check enemy columns left to right: 0/3, then 1/4, then 2/5
+			if (leftmost_enemies_byte & $09) <> 0 then  // bit 3 or 0 set (left column)
+			begin
+				leftmost_result_offset := leftmost_block_column * 54;
+				leftmost_found_flag := 1;
+			end
+			else if (leftmost_enemies_byte & $12) <> 0 then  // bit 4 or 1 set (middle column)
+			begin
+				leftmost_result_offset := leftmost_block_column * 54 + 5;
+				leftmost_found_flag := 1;
+			end
+			else if (leftmost_enemies_byte & $24) <> 0 then  // bit 5 or 2 set (right column)
+			begin
+				leftmost_result_offset := leftmost_block_column * 54 + 10;
+				leftmost_found_flag := 1;
+			end;
+			inc(leftmost_row_index);
+		end;
+		inc(leftmost_block_column);
+	end;
+	GetLeftmostEnemyOffset := leftmost_result_offset;
 end;
 
 procedure UpdateTick();
 var
 	should_move_enemy : byte;
-	rightmost_block : byte;
-	active_columns : byte;
-	max_x : byte;
+	rightmost_offset : byte;
+	leftmost_offset : byte;
+	right_edge : byte;
+	left_edge : byte;
 begin
 	should_move_enemy := 0;
 	
@@ -236,25 +343,17 @@ begin
 	begin
 		dec(enemyMoveCounter);
 		
-		if sequential_clear_counter <= 2 then
-		begin
-			if monster_base_x >= 244 then
-				enemy_direction := 0
-			else if monster_base_x <= 24 then
-				enemy_direction := 1;
-		end
-		else
-		begin
-			// Calculate dynamic boundaries based on remaining blocks
-			
-			rightmost_block := Helpers::Div(sequential_clear_counter - 1, 6);
-			active_columns := Helpers::Div(rightmost_block, 3) + 1;
-			max_x := 46 + (4 - active_columns) * 38;
-			if monster_base_x >= max_x then
-				enemy_direction := 0
-			else if monster_base_x <= 24 then
-				enemy_direction := 1;
-		end;
+		// Calculate actual enemy formation edges based on remaining enemies
+		rightmost_offset := GetRightmostEnemyOffset();
+		leftmost_offset := GetLeftmostEnemyOffset();
+		right_edge := monster_base_x + rightmost_offset + 5;  // +5 for enemy width (not sprite width)
+		left_edge := monster_base_x + leftmost_offset;
+		
+		// Check boundaries and switch direction
+		if right_edge >= 244 then
+			enemy_direction := 0
+		else if left_edge <= 24 then
+			enemy_direction := 1;
 			
 		if enemyMoveCounter = 2 then
 			should_move_enemy := 1;
@@ -266,8 +365,8 @@ begin
 		if (numberOfEnemies < INITIAL_INVADER_COUNT - 1) then
 		begin
 			inc(numberOfEnemies);	
-			inc(numberOfEnemies);	
-			inc(numberOfEnemies);	
+			/*inc(numberOfEnemies);	
+			inc(numberOfEnemies);*/
 		end;
 		
 		monster_animation_frame := monster_animation_frame xor 1;
