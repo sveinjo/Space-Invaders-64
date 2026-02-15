@@ -2,6 +2,7 @@
 
 ## Code Style
 - Turbo Rascal syntax in .ras/.tru files; keep unit imports at the top via `@use`. See [SpaceInvaders64.ras](SpaceInvaders64.ras#L2-L5).
+- Declare all variables at the beginning of procedures using `var` statements; TRSE uses global variable names and requires declarations first. Use method-appropriate long names for clarity. See [SpaceInvaders64.ras](SpaceInvaders64.ras#L192-L198).
 - Asset inclusion uses `incsid`/`incbin` plus `@define` for fixed addresses. See [SpaceInvaders64.ras](SpaceInvaders64.ras#L8-L71).
 - Interrupt handlers are declared explicitly and drive raster timing; follow the same naming style. See [SpaceInvaders64.ras](SpaceInvaders64.ras#L73-L77).
 - Memory access uses `peek(address, bank)` and `poke(address, value, bank)` for reading/writing bytes; bank is 0 for current memory configuration. Avoid `Memory::ReadByte`/`WriteByte` as they may not be available. 
