@@ -20,6 +20,7 @@ var
 	const PLAYER_MIN_X : byte = 19;
 	const PLAYER_MAX_X : byte = 238;
 	const SCORE_INCREMENT : byte = 9;
+
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	enemy_direction : byte = 1;
@@ -364,6 +365,7 @@ end;
 interrupt MainRasterRow1();
 begin		
 	StartIRQ(@useKernal);    
+
 	
 	// Increment score
 	Score += SCORE_INCREMENT;
@@ -375,16 +377,25 @@ begin
 	
 	UpdateMonsters(0); 
 	
+	// Calculate the base sprite index for this row
+	// Row 0: blocks 0-3 (sprites 3-10)
+	// Row 1: blocks 4-7 (sprites 11-18)
+	// Row 2: blocks 8-11 (sprites 19-26)
+	
 	// Update monster positions for all three rows
 	// Set sprite pointers for row 1 before displaying it
-	animateMonsters(1); // Row 1 uses sprites 11-18
-	WaitForRaster(104+monster_vertical_adjustment);	
+	animateMonsters(0); // Row 1 uses sprites 11-18
+	SCREEN_BG_COL:=RED;
+	WaitForRaster(94+monster_vertical_adjustment);	
 	UpdateMonsters(MONSTER_ROW_OFFSET);
 	
 	// Set sprite pointers for row 2 before displaying it  
-	animateMonsters(2); // Row 2 uses sprites 19-26
+	animateMonsters(1); // Row 2 uses sprites 19-26
+	SCREEN_BG_COL:=BLUE;
 	WaitForRaster(130+monster_vertical_adjustment);
 	UpdateMonsters(MONSTER_ROW_OFFSET*2);
+	animateMonsters(2); // Row 2 uses sprites 19-26
+	SCREEN_BG_COL:=GREEN;
 	WaitForRaster(157+monster_vertical_adjustment);
                 	
 	// Update joystick here
@@ -396,12 +407,14 @@ begin
 	call(sidfile_1_play);	
 	
 	UpdateTick();
+	SCREEN_BG_COL:=BLACK;
 	RasterIRQ(MainRasterStarfield(),0,@useKernal);
 	CloseIRQ();
 end;
 
 interrupt MainRasterStarfield();
 begin	
+
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();    
 	preventirq();    
@@ -411,6 +424,7 @@ end;
 
 interrupt MainRasterJoystick();
 begin	
+
 	// Update joystick input
 	Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
