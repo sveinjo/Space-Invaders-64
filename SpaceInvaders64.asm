@@ -71,7 +71,7 @@ enemyMoveCounter	dc.b	$37
 enemy_direction	dc.b	$01
 numberOfEnemies	dc.b	$00
 monster_vertical_adjustment	dc.b	$08
-sequential_clear_counter	dc.b	$00
+sequential_clear_counter	dc.b	$47
 temp_block_index	dc.b	$00
 temp_enemy_index	dc.b	$00
 pos_x	dc.b	$13
@@ -2107,15 +2107,15 @@ UpdateTick_edblock487
 	; Calling storevariable on generic assign expression
 	sta enemyRow
 	jsr animateMonsters
-	; Binary clause Simplified: LESS
+	; Binary clause Simplified: GREATEREQUAL
 	lda sequential_clear_counter
 	; Compare with pure num / var optimization
-	cmp #$48;keep
-	bcs UpdateTick_edblock493
+	cmp #$1;keep
+	bcc UpdateTick_edblock493
 UpdateTick_ctb491: ;Main true block ;keep 
 	
 ; // Row 0 uses sprites based on row parameter
-; // Clear enemies sequentially from 0 to 71 (12 blocks × 6 enemies each)
+; // Clear enemies sequentially from 71 to 1 (12 blocks × 6 enemies each)
 	lda sequential_clear_counter
 	; Calling storevariable on generic assign expression
 	sta Helpers_dividendInput
@@ -2149,7 +2149,7 @@ UpdateTick_ctb491: ;Main true block ;keep
 	sta enemyIndex
 	jsr ClearMonster
 	; Test Inc dec D
-	inc sequential_clear_counter
+	dec sequential_clear_counter
 UpdateTick_edblock493
 	lda #$1
 	; Calling storevariable on generic assign expression

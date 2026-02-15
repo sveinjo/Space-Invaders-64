@@ -26,7 +26,7 @@ var
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	monster_vertical_adjustment : byte = 8;
-	sequential_clear_counter : byte = 0; // Sequential enemy clearing counter (0-71)
+	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter (71-0)
 	temp_block_index : byte = 0;
 	temp_enemy_index : byte = 0;
 	
@@ -219,13 +219,13 @@ begin
 		// Each row uses different sprite blocks: row 0 (3-10), row 1 (11-18), row 2 (19-26)
 		animateMonsters(0); // Row 0 uses sprites based on row parameter
 		
-		// Clear enemies sequentially from 0 to 71 (12 blocks × 6 enemies each)
-		if sequential_clear_counter < 72 then
+		// Clear enemies sequentially from 71 to 1 (12 blocks × 6 enemies each)
+		if sequential_clear_counter > 0 then
 		begin
 			temp_block_index := Helpers::Div(sequential_clear_counter, 6); // Integer division
 			temp_enemy_index := Helpers::Mod(sequential_clear_counter, 6); // Manual modulo
 			ClearMonster(temp_block_index, 1, temp_enemy_index);
-			inc(sequential_clear_counter);
+			dec(sequential_clear_counter);
 		end;
 		
 		should_move_enemy := 1;
