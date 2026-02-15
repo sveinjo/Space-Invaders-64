@@ -79,6 +79,8 @@ player_sprite_x	dc.b	$13
 player_sprite_y	dc.b	$e2
 monster_base_x	dc.b	0
 monster_base_y	dc.b	0
+block_enemies	dc.b $3f, $3f, $3f, $3f, $3f, $3f, $3f, $3f
+	dc.b $3f, $3f, $3f, $3f
 player_joystick_direction	dc.b	0
 monster_animation_frame	dc.b	0
 	; NodeProcedureDecl -1
@@ -2021,10 +2023,632 @@ DisplayText
 	rts
 end_procedure_DisplayText
 	; NodeProcedureDecl -1
+	; ***********  Defining procedure : ClearEnemyAtCounter
+	;    Procedure type : User-defined procedure
+clear_index	dc.b	0
+clear_col	dc.b	0
+clear_local_index	dc.b	0
+clear_row	dc.b	0
+enemy_type	dc.b	0
+pair_index	dc.b	0
+sub_local	dc.b	0
+enemy_sub	dc.b	0
+enemy_mask	dc.b	0
+ClearEnemyAtCounter_block410
+ClearEnemyAtCounter
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda #$47
+	sec
+	sbc sequential_clear_counter
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta clear_index
+	; 8 bit binop
+	; Add/sub right value is variable/expression
+	; Calling storevariable on generic assign expression
+	sta Helpers_dividendInput
+	lda #$12
+	; Calling storevariable on generic assign expression
+	sta Helpers_divisorInput
+	jsr Helpers_Div
+ClearEnemyAtCounter_rightvarAddSub_var411 = $54
+	sta ClearEnemyAtCounter_rightvarAddSub_var411
+	lda #$3
+	sec
+	sbc ClearEnemyAtCounter_rightvarAddSub_var411
+	; Calling storevariable on generic assign expression
+	sta clear_col
+	lda clear_index
+	; Calling storevariable on generic assign expression
+	sta Helpers_modDividend
+	lda #$12
+	; Calling storevariable on generic assign expression
+	sta Helpers_modDivisor
+	jsr Helpers_Mod
+	; Calling storevariable on generic assign expression
+	sta clear_local_index
+	; Calling storevariable on generic assign expression
+	sta Helpers_dividendInput
+	lda #$6
+	; Calling storevariable on generic assign expression
+	sta Helpers_divisorInput
+	jsr Helpers_Div
+	; Calling storevariable on generic assign expression
+	sta pair_index
+	lda clear_local_index
+	; Calling storevariable on generic assign expression
+	sta Helpers_modDividend
+	lda #$6
+	; Calling storevariable on generic assign expression
+	sta Helpers_modDivisor
+	jsr Helpers_Mod
+	; Calling storevariable on generic assign expression
+	sta sub_local
+	; 8 bit binop
+	; Add/sub right value is variable/expression
+	; Calling storevariable on generic assign expression
+	sta Helpers_dividendInput
+	lda #$2
+	; Calling storevariable on generic assign expression
+	sta Helpers_divisorInput
+	jsr Helpers_Div
+ClearEnemyAtCounter_rightvarAddSub_var412 = $54
+	sta ClearEnemyAtCounter_rightvarAddSub_var412
+	lda #$2
+	sec
+	sbc ClearEnemyAtCounter_rightvarAddSub_var412
+	; Calling storevariable on generic assign expression
+	sta clear_row
+	lda sub_local
+	; Calling storevariable on generic assign expression
+	sta Helpers_modDividend
+	lda #$2
+	; Calling storevariable on generic assign expression
+	sta Helpers_modDivisor
+	jsr Helpers_Mod
+	; Calling storevariable on generic assign expression
+	sta enemy_sub
+	; Binary clause Simplified: EQUALS
+	clc
+	lda pair_index
+	; cmp #$00 ignored
+	bne ClearEnemyAtCounter_eblock415
+ClearEnemyAtCounter_ctb414: ;Main true block ;keep 
+	; Binary clause Simplified: EQUALS
+	clc
+	lda enemy_sub
+	; cmp #$00 ignored
+	bne ClearEnemyAtCounter_eblock470
+ClearEnemyAtCounter_ctb469: ;Main true block ;keep 
+	lda #$5
+	; Calling storevariable on generic assign expression
+	sta enemy_type
+	jmp ClearEnemyAtCounter_edblock471
+ClearEnemyAtCounter_eblock470
+	lda #$2
+	; Calling storevariable on generic assign expression
+	sta enemy_type
+ClearEnemyAtCounter_edblock471
+	jmp ClearEnemyAtCounter_edblock416
+ClearEnemyAtCounter_eblock415
+	; Binary clause Simplified: EQUALS
+	lda pair_index
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne ClearEnemyAtCounter_eblock479
+ClearEnemyAtCounter_ctb478: ;Main true block ;keep 
+	; Binary clause Simplified: EQUALS
+	clc
+	lda enemy_sub
+	; cmp #$00 ignored
+	bne ClearEnemyAtCounter_eblock502
+ClearEnemyAtCounter_ctb501: ;Main true block ;keep 
+	lda #$4
+	; Calling storevariable on generic assign expression
+	sta enemy_type
+	jmp ClearEnemyAtCounter_edblock503
+ClearEnemyAtCounter_eblock502
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta enemy_type
+ClearEnemyAtCounter_edblock503
+	jmp ClearEnemyAtCounter_edblock480
+ClearEnemyAtCounter_eblock479
+	; Binary clause Simplified: EQUALS
+	clc
+	lda enemy_sub
+	; cmp #$00 ignored
+	bne ClearEnemyAtCounter_eblock511
+ClearEnemyAtCounter_ctb510: ;Main true block ;keep 
+	lda #$3
+	; Calling storevariable on generic assign expression
+	sta enemy_type
+	jmp ClearEnemyAtCounter_edblock512
+ClearEnemyAtCounter_eblock511
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta enemy_type
+ClearEnemyAtCounter_edblock512
+ClearEnemyAtCounter_edblock480
+ClearEnemyAtCounter_edblock416
+	lda enemy_type
+	; Calling storevariable on generic assign expression
+	sta temp_enemy_index
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul of power 2
+	; Load16bitvariable : clear_row
+	lda clear_row
+	asl
+	asl
+	clc
+	adc clear_col
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta temp_block_index
+	; Calling storevariable on generic assign expression
+	sta blockIndex
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta numBlocks
+	lda temp_enemy_index
+	; Calling storevariable on generic assign expression
+	sta enemyIndex
+	jsr ClearMonster
+	
+; // Update block_enemies array to mark this enemy as cleared
+	ldx enemy_type ; optimized, look out for bugs
+	lda #$1
+	cpx #0
+	beq ClearEnemyAtCounter_lblShiftDone518
+ClearEnemyAtCounter_lblShift517
+	asl
+	dex
+	cpx #0
+	bne ClearEnemyAtCounter_lblShift517
+ClearEnemyAtCounter_lblShiftDone518
+	; Calling storevariable on generic assign expression
+	sta enemy_mask
+	; 8 bit binop
+	; Add/sub right value is variable/expression
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	eor #$ff
+	 ; end add / sub var with constant
+ClearEnemyAtCounter_rightvarAddSub_var519 = $54
+	sta ClearEnemyAtCounter_rightvarAddSub_var519
+	; Load Byte array
+	; CAST type NADA
+	ldx temp_block_index
+	lda block_enemies,x 
+	and ClearEnemyAtCounter_rightvarAddSub_var519
+	; Calling storevariable on generic assign expression
+	sta block_enemies,x
+	rts
+end_procedure_ClearEnemyAtCounter
+	
+; // Find the rightmost occupied enemy column offset (0-172)
+; // Returns pixel offset from monster_base_x to the rightmost enemy
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : GetRightmostEnemyOffset
+	;    Procedure type : User-defined procedure
+rightmost_block_column	dc.b	0
+rightmost_row_index	dc.b	0
+rightmost_block_index	dc.b	0
+rightmost_enemies_byte	dc.b	0
+rightmost_found_flag	dc.b	0
+rightmost_result_offset	dc.b	0
+rightmost_column_loop_done	dc.b	0
+GetRightmostEnemyOffset_block520
+GetRightmostEnemyOffset
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta rightmost_found_flag
+	; Calling storevariable on generic assign expression
+	sta rightmost_result_offset
+	; Calling storevariable on generic assign expression
+	sta rightmost_column_loop_done
+	
+; // Scan from rightmost block column (3) to left (0)
+	lda #$3
+	; Calling storevariable on generic assign expression
+	sta rightmost_block_column
+GetRightmostEnemyOffset_while521
+GetRightmostEnemyOffset_loopstart525
+	; Binary clause Simplified: EQUALS
+	clc
+	lda rightmost_column_loop_done
+	; cmp #$00 ignored
+	bne GetRightmostEnemyOffset_localfailed699
+	jmp GetRightmostEnemyOffset_ctb522
+GetRightmostEnemyOffset_localfailed699
+	jmp GetRightmostEnemyOffset_edblock524
+GetRightmostEnemyOffset_ctb522: ;Main true block ;keep 
+	
+; // Check all 3 rows for this block column
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta rightmost_row_index
+GetRightmostEnemyOffset_while701
+GetRightmostEnemyOffset_loopstart705
+	; Binary clause Simplified: LESS
+	lda rightmost_row_index
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bcs GetRightmostEnemyOffset_localfailed784
+GetRightmostEnemyOffset_localsuccess785: ;keep
+	; ; logical AND, second requirement
+	; Binary clause Simplified: EQUALS
+	clc
+	lda rightmost_found_flag
+	; cmp #$00 ignored
+	bne GetRightmostEnemyOffset_localfailed784
+	jmp GetRightmostEnemyOffset_ctb702
+GetRightmostEnemyOffset_localfailed784
+	jmp GetRightmostEnemyOffset_edblock704
+GetRightmostEnemyOffset_ctb702: ;Main true block ;keep 
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul of power 2
+	; Load16bitvariable : rightmost_row_index
+	lda rightmost_row_index
+	asl
+	asl
+	clc
+	adc rightmost_block_column
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta rightmost_block_index
+	; Load Byte array
+	; CAST type NADA
+	tax ; optimized x, look out for bugs L22 ORG 	ldx rightmost_block_index
+	lda block_enemies,x 
+	; Calling storevariable on generic assign expression
+	sta rightmost_enemies_byte
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	and #$24
+	 ; end add / sub var with constant
+	; cmp #$00 ignored
+	beq GetRightmostEnemyOffset_eblock789
+GetRightmostEnemyOffset_ctb788: ;Main true block ;keep 
+	
+; // Check enemy columns right to left: 2/5, then 1/4, then 0/3
+; // bit 5 or 2 set (right column)
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul
+	ldx rightmost_block_column ; optimized, look out for bugs
+	; Load right hand side
+	lda #$36
+	jsr multiply_eightbit
+	txa
+	ldy #0 ; ::EightbitMul
+	clc
+	adc #$24
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta rightmost_result_offset
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta rightmost_found_flag
+	jmp GetRightmostEnemyOffset_edblock790
+GetRightmostEnemyOffset_eblock789
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda rightmost_enemies_byte
+	and #$12
+	 ; end add / sub var with constant
+	; cmp #$00 ignored
+	beq GetRightmostEnemyOffset_eblock833
+GetRightmostEnemyOffset_ctb832: ;Main true block ;keep 
+	
+; // bit 4 or 1 set (middle column)
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul
+	ldx rightmost_block_column ; optimized, look out for bugs
+	; Load right hand side
+	lda #$36
+	jsr multiply_eightbit
+	txa
+	ldy #0 ; ::EightbitMul
+	clc
+	adc #$12
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta rightmost_result_offset
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta rightmost_found_flag
+	jmp GetRightmostEnemyOffset_edblock834
+GetRightmostEnemyOffset_eblock833
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda rightmost_enemies_byte
+	and #$9
+	 ; end add / sub var with constant
+	; cmp #$00 ignored
+	beq GetRightmostEnemyOffset_edblock856
+GetRightmostEnemyOffset_ctb854: ;Main true block ;keep 
+	
+; // bit 3 or 0 set (left column)
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul
+	ldx rightmost_block_column ; optimized, look out for bugs
+	; Load right hand side
+	lda #$36
+	jsr multiply_eightbit
+	txa
+	ldy #0 ; ::EightbitMul
+	; Calling storevariable on generic assign expression
+	sta rightmost_result_offset
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta rightmost_found_flag
+GetRightmostEnemyOffset_edblock856
+GetRightmostEnemyOffset_edblock834
+GetRightmostEnemyOffset_edblock790
+	; Test Inc dec D
+	inc rightmost_row_index
+	jmp GetRightmostEnemyOffset_while701
+GetRightmostEnemyOffset_edblock704
+GetRightmostEnemyOffset_loopend706
+	; Binary clause Simplified: EQUALS
+	lda rightmost_found_flag
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne GetRightmostEnemyOffset_localfailed869
+	jmp GetRightmostEnemyOffset_ctb864
+GetRightmostEnemyOffset_localfailed869: ;keep
+	; ; logical OR, second chance
+	; Binary clause Simplified: EQUALS
+	clc
+	lda rightmost_block_column
+	; cmp #$00 ignored
+	bne GetRightmostEnemyOffset_eblock865
+GetRightmostEnemyOffset_ctb864: ;Main true block ;keep 
+	
+; // Exit if found or if we've checked column 0
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta rightmost_column_loop_done
+	jmp GetRightmostEnemyOffset_edblock866
+GetRightmostEnemyOffset_eblock865
+	; Test Inc dec D
+	dec rightmost_block_column
+GetRightmostEnemyOffset_edblock866
+	jmp GetRightmostEnemyOffset_while521
+GetRightmostEnemyOffset_edblock524
+GetRightmostEnemyOffset_loopend526
+	lda rightmost_result_offset
+	rts
+end_procedure_GetRightmostEnemyOffset
+	
+; // Find the leftmost occupied enemy column offset (0-172)
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : GetLeftmostEnemyOffset
+	;    Procedure type : User-defined procedure
+leftmost_block_column	dc.b	0
+leftmost_row_index	dc.b	0
+leftmost_block_index	dc.b	0
+leftmost_enemies_byte	dc.b	0
+leftmost_found_flag	dc.b	0
+leftmost_result_offset	dc.b	0
+leftmost_column_loop_done	dc.b	0
+GetLeftmostEnemyOffset_block872
+GetLeftmostEnemyOffset
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta leftmost_found_flag
+	; Calling storevariable on generic assign expression
+	sta leftmost_result_offset
+	; Calling storevariable on generic assign expression
+	sta leftmost_column_loop_done
+	
+; // Scan from leftmost block column (0) to right (3)
+	; Calling storevariable on generic assign expression
+	sta leftmost_block_column
+GetLeftmostEnemyOffset_while873
+GetLeftmostEnemyOffset_loopstart877
+	; Binary clause Simplified: EQUALS
+	clc
+	lda leftmost_column_loop_done
+	; cmp #$00 ignored
+	bne GetLeftmostEnemyOffset_localfailed1051
+	jmp GetLeftmostEnemyOffset_ctb874
+GetLeftmostEnemyOffset_localfailed1051
+	jmp GetLeftmostEnemyOffset_edblock876
+GetLeftmostEnemyOffset_ctb874: ;Main true block ;keep 
+	
+; // Check all 3 rows for this block column
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta leftmost_row_index
+GetLeftmostEnemyOffset_while1053
+GetLeftmostEnemyOffset_loopstart1057
+	; Binary clause Simplified: LESS
+	lda leftmost_row_index
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bcs GetLeftmostEnemyOffset_localfailed1136
+GetLeftmostEnemyOffset_localsuccess1137: ;keep
+	; ; logical AND, second requirement
+	; Binary clause Simplified: EQUALS
+	clc
+	lda leftmost_found_flag
+	; cmp #$00 ignored
+	bne GetLeftmostEnemyOffset_localfailed1136
+	jmp GetLeftmostEnemyOffset_ctb1054
+GetLeftmostEnemyOffset_localfailed1136
+	jmp GetLeftmostEnemyOffset_edblock1056
+GetLeftmostEnemyOffset_ctb1054: ;Main true block ;keep 
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul of power 2
+	; Load16bitvariable : leftmost_row_index
+	lda leftmost_row_index
+	asl
+	asl
+	clc
+	adc leftmost_block_column
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta leftmost_block_index
+	; Load Byte array
+	; CAST type NADA
+	tax ; optimized x, look out for bugs L22 ORG 	ldx leftmost_block_index
+	lda block_enemies,x 
+	; Calling storevariable on generic assign expression
+	sta leftmost_enemies_byte
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	and #$9
+	 ; end add / sub var with constant
+	; cmp #$00 ignored
+	beq GetLeftmostEnemyOffset_eblock1141
+GetLeftmostEnemyOffset_ctb1140: ;Main true block ;keep 
+	
+; // Check enemy columns left to right: 0/3, then 1/4, then 2/5
+; // bit 3 or 0 set (left column)
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul
+	ldx leftmost_block_column ; optimized, look out for bugs
+	; Load right hand side
+	lda #$36
+	jsr multiply_eightbit
+	txa
+	ldy #0 ; ::EightbitMul
+	; Calling storevariable on generic assign expression
+	sta leftmost_result_offset
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta leftmost_found_flag
+	jmp GetLeftmostEnemyOffset_edblock1142
+GetLeftmostEnemyOffset_eblock1141
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda leftmost_enemies_byte
+	and #$12
+	 ; end add / sub var with constant
+	; cmp #$00 ignored
+	beq GetLeftmostEnemyOffset_eblock1185
+GetLeftmostEnemyOffset_ctb1184: ;Main true block ;keep 
+	
+; // bit 4 or 1 set (middle column)
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul
+	ldx leftmost_block_column ; optimized, look out for bugs
+	; Load right hand side
+	lda #$36
+	jsr multiply_eightbit
+	txa
+	ldy #0 ; ::EightbitMul
+	clc
+	adc #$12
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta leftmost_result_offset
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta leftmost_found_flag
+	jmp GetLeftmostEnemyOffset_edblock1186
+GetLeftmostEnemyOffset_eblock1185
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda leftmost_enemies_byte
+	and #$24
+	 ; end add / sub var with constant
+	; cmp #$00 ignored
+	beq GetLeftmostEnemyOffset_edblock1208
+GetLeftmostEnemyOffset_ctb1206: ;Main true block ;keep 
+	
+; // bit 5 or 2 set (right column)
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; Right is PURE NUMERIC : Is word =0
+	; 8 bit mul
+	ldx leftmost_block_column ; optimized, look out for bugs
+	; Load right hand side
+	lda #$36
+	jsr multiply_eightbit
+	txa
+	ldy #0 ; ::EightbitMul
+	clc
+	adc #$24
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta leftmost_result_offset
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta leftmost_found_flag
+GetLeftmostEnemyOffset_edblock1208
+GetLeftmostEnemyOffset_edblock1186
+GetLeftmostEnemyOffset_edblock1142
+	; Test Inc dec D
+	inc leftmost_row_index
+	jmp GetLeftmostEnemyOffset_while1053
+GetLeftmostEnemyOffset_edblock1056
+GetLeftmostEnemyOffset_loopend1058
+	; Binary clause Simplified: EQUALS
+	lda leftmost_found_flag
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne GetLeftmostEnemyOffset_localfailed1221
+	jmp GetLeftmostEnemyOffset_ctb1216
+GetLeftmostEnemyOffset_localfailed1221: ;keep
+	; ; logical OR, second chance
+	; Binary clause Simplified: EQUALS
+	lda leftmost_block_column
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bne GetLeftmostEnemyOffset_eblock1217
+GetLeftmostEnemyOffset_ctb1216: ;Main true block ;keep 
+	
+; // Exit if found or if we've checked column 3
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta leftmost_column_loop_done
+	jmp GetLeftmostEnemyOffset_edblock1218
+GetLeftmostEnemyOffset_eblock1217
+	; Test Inc dec D
+	inc leftmost_block_column
+GetLeftmostEnemyOffset_edblock1218
+	jmp GetLeftmostEnemyOffset_while873
+GetLeftmostEnemyOffset_edblock876
+GetLeftmostEnemyOffset_loopend878
+	lda leftmost_result_offset
+	rts
+end_procedure_GetLeftmostEnemyOffset
+	; NodeProcedureDecl -1
 	; ***********  Defining procedure : UpdateTick
 	;    Procedure type : User-defined procedure
 should_move_enemy	dc.b	0
-UpdateTick_block410
+rightmost_offset	dc.b	0
+leftmost_offset	dc.b	0
+right_edge	dc.b	0
+left_edge	dc.b	0
+UpdateTick_block1224
 UpdateTick
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -2033,47 +2657,81 @@ UpdateTick
 	clc
 	lda enemyMoveCounter
 	; cmp #$00 ignored
-	beq UpdateTick_localfailed455
-	jmp UpdateTick_ctb412
-UpdateTick_localfailed455
-	jmp UpdateTick_eblock413
-UpdateTick_ctb412: ;Main true block ;keep 
+	beq UpdateTick_localfailed1269
+	jmp UpdateTick_ctb1226
+UpdateTick_localfailed1269
+	jmp UpdateTick_eblock1227
+UpdateTick_ctb1226: ;Main true block ;keep 
 	; Test Inc dec D
 	dec enemyMoveCounter
-	; Binary clause Simplified: GREATEREQUAL
+	
+; // Calculate actual enemy formation edges based on remaining enemies
+	jsr GetRightmostEnemyOffset
+	; Calling storevariable on generic assign expression
+	sta rightmost_offset
+	jsr GetLeftmostEnemyOffset
+	; Calling storevariable on generic assign expression
+	sta leftmost_offset
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; 8 bit binop
+	; Add/sub where right value is constant number
 	lda monster_base_x
+	clc
+	adc rightmost_offset
+	 ; end add / sub var with constant
+	clc
+	adc #$a
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta right_edge
+	
+; // +10 for double-width enemy (5 sprite pixels × 2)
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda monster_base_x
+	clc
+	adc leftmost_offset
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta left_edge
+	; Binary clause Simplified: GREATEREQUAL
+	lda right_edge
 	; Compare with pure num / var optimization
-	cmp #$2e;keep
-	bcc UpdateTick_eblock459
-UpdateTick_ctb458: ;Main true block ;keep 
+	cmp #$fe;keep
+	bcc UpdateTick_eblock1273
+UpdateTick_ctb1272: ;Main true block ;keep 
+	
+; // Check boundaries and switch direction
+; // Right boundary: ensure rightmost enemy doesn't exceed screen edge (~254)
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta enemy_direction
-	jmp UpdateTick_edblock460
-UpdateTick_eblock459
+	jmp UpdateTick_edblock1274
+UpdateTick_eblock1273
 	; Binary clause Simplified: LESS
-	lda monster_base_x
+	lda left_edge
 	; Compare with pure num / var optimization
 	cmp #$19;keep
-	bcs UpdateTick_edblock474
-UpdateTick_ctb472: ;Main true block ;keep 
+	bcs UpdateTick_edblock1288
+UpdateTick_ctb1286: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta enemy_direction
-UpdateTick_edblock474
-UpdateTick_edblock460
+UpdateTick_edblock1288
+UpdateTick_edblock1274
 	; Binary clause Simplified: EQUALS
 	lda enemyMoveCounter
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne UpdateTick_edblock480
-UpdateTick_ctb478: ;Main true block ;keep 
+	bne UpdateTick_edblock1294
+UpdateTick_ctb1292: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta should_move_enemy
-UpdateTick_edblock480
-	jmp UpdateTick_edblock414
-UpdateTick_eblock413
+UpdateTick_edblock1294
+	jmp UpdateTick_edblock1228
+UpdateTick_eblock1227
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #$37
@@ -2082,17 +2740,19 @@ UpdateTick_eblock413
 	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta enemyMoveCounter
+	;inc(numberOfEnemies);	
+; //			inc(numberOfEnemies);
 	; Binary clause Simplified: LESS
 	lda numberOfEnemies
 	; Compare with pure num / var optimization
 	cmp #$36;keep
-	bcs UpdateTick_edblock487
-UpdateTick_ctb485: ;Main true block ;keep 
+	bcs UpdateTick_edblock1301
+UpdateTick_ctb1299: ;Main true block ;keep 
 	
 ; // Speed up as enemies decrease
 	; Test Inc dec D
 	inc numberOfEnemies
-UpdateTick_edblock487
+UpdateTick_edblock1301
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda monster_animation_frame
@@ -2110,57 +2770,26 @@ UpdateTick_edblock487
 	; Binary clause Simplified: GREATEREQUAL
 	lda sequential_clear_counter
 	; Compare with pure num / var optimization
-	cmp #$1;keep
-	bcc UpdateTick_edblock493
-UpdateTick_ctb491: ;Main true block ;keep 
+	cmp #$30;keep
+	bcc UpdateTick_edblock1307
+UpdateTick_ctb1305: ;Main true block ;keep 
 	
 ; // Row 0 uses sprites based on row parameter
-; // Clear enemies sequentially from 71 to 1 (12 blocks × 6 enemies each)
-	lda sequential_clear_counter
-	; Calling storevariable on generic assign expression
-	sta Helpers_dividendInput
-	lda #$6
-	; Calling storevariable on generic assign expression
-	sta Helpers_divisorInput
-	jsr Helpers_Div
-	; Calling storevariable on generic assign expression
-	sta temp_block_index
-	
-; // Integer division
-	lda sequential_clear_counter
-	; Calling storevariable on generic assign expression
-	sta Helpers_modDividend
-	lda #$6
-	; Calling storevariable on generic assign expression
-	sta Helpers_modDivisor
-	jsr Helpers_Mod
-	; Calling storevariable on generic assign expression
-	sta temp_enemy_index
-	
-; // Manual modulo
-	lda temp_block_index
-	; Calling storevariable on generic assign expression
-	sta blockIndex
-	lda #$1
-	; Calling storevariable on generic assign expression
-	sta numBlocks
-	lda temp_enemy_index
-	; Calling storevariable on generic assign expression
-	sta enemyIndex
-	jsr ClearMonster
+; // Clear enemies based on ENEMIES_TO_CLEAR constant
+	jsr ClearEnemyAtCounter
 	; Test Inc dec D
 	dec sequential_clear_counter
-UpdateTick_edblock493
+UpdateTick_edblock1307
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta should_move_enemy
-UpdateTick_edblock414
+UpdateTick_edblock1228
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda should_move_enemy
 	; cmp #$00 ignored
-	beq UpdateTick_edblock499
-UpdateTick_ctb497: ;Main true block ;keep 
+	beq UpdateTick_edblock1313
+UpdateTick_ctb1311: ;Main true block ;keep 
 	; Binary clause Simplified: LESS
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -2170,14 +2799,14 @@ UpdateTick_ctb497: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs UpdateTick_eblock544
-UpdateTick_ctb543: ;Main true block ;keep 
+	bcs UpdateTick_eblock1358
+UpdateTick_ctb1357: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda enemy_direction
 	; cmp #$00 ignored
-	beq UpdateTick_eblock567
-UpdateTick_ctb566: ;Main true block ;keep 
+	beq UpdateTick_eblock1381
+UpdateTick_ctb1380: ;Main true block ;keep 
 	
 ; // At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed
 ; // At slower speeds, move 1 pixel
@@ -2187,32 +2816,32 @@ UpdateTick_ctb566: ;Main true block ;keep
 	clc
 	adc #$2
 	sta monster_base_x
-	jmp UpdateTick_edblock568
-UpdateTick_eblock567
+	jmp UpdateTick_edblock1382
+UpdateTick_eblock1381
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : monster_base_x
 	lda monster_base_x
 	sec
 	sbc #$2
 	sta monster_base_x
-UpdateTick_edblock568
-	jmp UpdateTick_edblock545
-UpdateTick_eblock544
+UpdateTick_edblock1382
+	jmp UpdateTick_edblock1359
+UpdateTick_eblock1358
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda enemy_direction
 	; cmp #$00 ignored
-	beq UpdateTick_eblock576
-UpdateTick_ctb575: ;Main true block ;keep 
+	beq UpdateTick_eblock1390
+UpdateTick_ctb1389: ;Main true block ;keep 
 	; Test Inc dec D
 	inc monster_base_x
-	jmp UpdateTick_edblock577
-UpdateTick_eblock576
+	jmp UpdateTick_edblock1391
+UpdateTick_eblock1390
 	; Test Inc dec D
 	dec monster_base_x
-UpdateTick_edblock577
-UpdateTick_edblock545
-UpdateTick_edblock499
+UpdateTick_edblock1391
+UpdateTick_edblock1359
+UpdateTick_edblock1313
 	rts
 end_procedure_UpdateTick
 	; NodeProcedureDecl -1
@@ -2221,7 +2850,7 @@ end_procedure_UpdateTick
 sprite_ptr_base	dc.b	0
 current_sprite_ptr	dc.b	0
 enemyRow	dc.b	0
-animateMonsters_block582
+animateMonsters_block1396
 animateMonsters
 	
 ; // Calculate the base sprite pointer once for this row
@@ -2231,39 +2860,39 @@ animateMonsters
 	; Generic 16 bit op
 	ldy #0
 	lda monster_animation_frame
-animateMonsters_rightvarInteger_var585 = $54
-	sta animateMonsters_rightvarInteger_var585
-	sty animateMonsters_rightvarInteger_var585+1
+animateMonsters_rightvarInteger_var1399 = $54
+	sta animateMonsters_rightvarInteger_var1399
+	sty animateMonsters_rightvarInteger_var1399+1
 	; Generic 16 bit op
 	ldy #0
 	lda #131
-animateMonsters_rightvarInteger_var588 = $56
-	sta animateMonsters_rightvarInteger_var588
-	sty animateMonsters_rightvarInteger_var588+1
+animateMonsters_rightvarInteger_var1402 = $56
+	sta animateMonsters_rightvarInteger_var1402
+	sty animateMonsters_rightvarInteger_var1402+1
 	lda enemyRow
 	asl
 	asl
 	asl
 	; Low bit binop:
 	clc
-	adc animateMonsters_rightvarInteger_var588
-animateMonsters_wordAdd586
-	sta animateMonsters_rightvarInteger_var588
+	adc animateMonsters_rightvarInteger_var1402
+animateMonsters_wordAdd1400
+	sta animateMonsters_rightvarInteger_var1402
 	; High-bit binop
 	tya
-	adc animateMonsters_rightvarInteger_var588+1
+	adc animateMonsters_rightvarInteger_var1402+1
 	tay
-	lda animateMonsters_rightvarInteger_var588
+	lda animateMonsters_rightvarInteger_var1402
 	; Low bit binop:
 	clc
-	adc animateMonsters_rightvarInteger_var585
-animateMonsters_wordAdd583
-	sta animateMonsters_rightvarInteger_var585
+	adc animateMonsters_rightvarInteger_var1399
+animateMonsters_wordAdd1397
+	sta animateMonsters_rightvarInteger_var1399
 	; High-bit binop
 	tya
-	adc animateMonsters_rightvarInteger_var585+1
+	adc animateMonsters_rightvarInteger_var1399+1
 	tay
-	lda animateMonsters_rightvarInteger_var585
+	lda animateMonsters_rightvarInteger_var1399
 	; Calling storevariable on generic assign expression
 	sta sprite_ptr_base
 	
@@ -2305,7 +2934,7 @@ end_procedure_animateMonsters
 y_position	dc.b	0
 x_position	dc.b	0
 rowOffset	dc.b	0
-UpdateMonsters_block589
+UpdateMonsters_block1403
 UpdateMonsters
 	
 ; // Pre-calculate Y position to avoid repeated additions
@@ -2331,11 +2960,11 @@ UpdateMonsters
 	; isi-pisi: value is constant
 	ldx #2
 	sta $D000,x
-UpdateMonsters_spritepos590
+UpdateMonsters_spritepos1404
 	lda $D010
 	and #%11111101
 	sta $D010
-UpdateMonsters_spriteposcontinue591
+UpdateMonsters_spriteposcontinue1405
 	inx
 	txa
 	tay
@@ -2351,11 +2980,11 @@ UpdateMonsters_spriteposcontinue591
 	; isi-pisi: value is constant
 	ldx #4
 	sta $D000,x
-UpdateMonsters_spritepos592
+UpdateMonsters_spritepos1406
 	lda $D010
 	and #%11111011
 	sta $D010
-UpdateMonsters_spriteposcontinue593
+UpdateMonsters_spriteposcontinue1407
 	inx
 	txa
 	tay
@@ -2371,11 +3000,11 @@ UpdateMonsters_spriteposcontinue593
 	; isi-pisi: value is constant
 	ldx #6
 	sta $D000,x
-UpdateMonsters_spritepos594
+UpdateMonsters_spritepos1408
 	lda $D010
 	and #%11110111
 	sta $D010
-UpdateMonsters_spriteposcontinue595
+UpdateMonsters_spriteposcontinue1409
 	inx
 	txa
 	tay
@@ -2391,11 +3020,11 @@ UpdateMonsters_spriteposcontinue595
 	; isi-pisi: value is constant
 	ldx #8
 	sta $D000,x
-UpdateMonsters_spritepos596
+UpdateMonsters_spritepos1410
 	lda $D010
 	and #%11101111
 	sta $D010
-UpdateMonsters_spriteposcontinue597
+UpdateMonsters_spriteposcontinue1411
 	inx
 	txa
 	tay
@@ -2416,7 +3045,7 @@ sprite_base_address	dc.w	0
 blockIndex	dc.b	0
 numBlocks	dc.b	0
 enemyIndex	dc.b	0
-ClearMonster_block598
+ClearMonster_block1412
 ClearMonster
 	
 ; // Calculate sprite indices for both animation frames
@@ -2461,8 +3090,8 @@ ClearMonster
 	lda enemyIndex
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcc ClearMonster_eblock601
-ClearMonster_ctb600: ;Main true block ;keep 
+	bcc ClearMonster_eblock1415
+ClearMonster_ctb1414: ;Main true block ;keep 
 	
 ; // Calculate vertical offset
 ; // Top row (enemies 0-2): row 0
@@ -2473,12 +3102,12 @@ ClearMonster_ctb600: ;Main true block ;keep
 	lda #$27
 	; Calling storevariable on generic assign expression
 	sta enemy_vertical_offset
-	jmp ClearMonster_edblock602
-ClearMonster_eblock601
+	jmp ClearMonster_edblock1416
+ClearMonster_eblock1415
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta enemy_vertical_offset
-ClearMonster_edblock602
+ClearMonster_edblock1416
 	
 ; // Total offset within the 64-byte sprite
 	; 8 bit binop
@@ -2498,30 +3127,30 @@ ClearMonster_edblock602
 	sta sprite_base_address
 	sty sprite_base_address+1
 	ldy sprite_base_address+1 ;keep
-ClearMonster_tempVarShift_var607 = $54
-	sta ClearMonster_tempVarShift_var607
-	sty ClearMonster_tempVarShift_var607+1
+ClearMonster_tempVarShift_var1421 = $54
+	sta ClearMonster_tempVarShift_var1421
+	sty ClearMonster_tempVarShift_var1421+1
 	; COUNT : 6
-		asl ClearMonster_tempVarShift_var607+0 ;keep
-	rol ClearMonster_tempVarShift_var607+1 ;keep
+		asl ClearMonster_tempVarShift_var1421+0 ;keep
+	rol ClearMonster_tempVarShift_var1421+1 ;keep
 
-		asl ClearMonster_tempVarShift_var607+0 ;keep
-	rol ClearMonster_tempVarShift_var607+1 ;keep
+		asl ClearMonster_tempVarShift_var1421+0 ;keep
+	rol ClearMonster_tempVarShift_var1421+1 ;keep
 
-		asl ClearMonster_tempVarShift_var607+0 ;keep
-	rol ClearMonster_tempVarShift_var607+1 ;keep
+		asl ClearMonster_tempVarShift_var1421+0 ;keep
+	rol ClearMonster_tempVarShift_var1421+1 ;keep
 
-		asl ClearMonster_tempVarShift_var607+0 ;keep
-	rol ClearMonster_tempVarShift_var607+1 ;keep
+		asl ClearMonster_tempVarShift_var1421+0 ;keep
+	rol ClearMonster_tempVarShift_var1421+1 ;keep
 
-		asl ClearMonster_tempVarShift_var607+0 ;keep
-	rol ClearMonster_tempVarShift_var607+1 ;keep
+		asl ClearMonster_tempVarShift_var1421+0 ;keep
+	rol ClearMonster_tempVarShift_var1421+1 ;keep
 
-		asl ClearMonster_tempVarShift_var607+0 ;keep
-	rol ClearMonster_tempVarShift_var607+1 ;keep
+		asl ClearMonster_tempVarShift_var1421+0 ;keep
+	rol ClearMonster_tempVarShift_var1421+1 ;keep
 
-	lda ClearMonster_tempVarShift_var607
-	ldy ClearMonster_tempVarShift_var607+1
+	lda ClearMonster_tempVarShift_var1421
+	ldy ClearMonster_tempVarShift_var1421+1
 	; Calling storevariable on generic assign expression
 	sta sprite_base_address
 	sty sprite_base_address+1
@@ -2531,39 +3160,39 @@ ClearMonster_tempVarShift_var607 = $54
 	ldy #0
 	ldx #0 ; Fake 24 bit
 	lda sprite_offset_start
-ClearMonster_rightvarInteger_var610 = $54
-	sta ClearMonster_rightvarInteger_var610
-	sty ClearMonster_rightvarInteger_var610+1
+ClearMonster_rightvarInteger_var1424 = $54
+	sta ClearMonster_rightvarInteger_var1424
+	sty ClearMonster_rightvarInteger_var1424+1
 	; Generic 16 bit op
 	ldy sprite_base_address+1 ;keep
 	lda sprite_base_address
-ClearMonster_rightvarInteger_var613 = $56
-	sta ClearMonster_rightvarInteger_var613
-	sty ClearMonster_rightvarInteger_var613+1
+ClearMonster_rightvarInteger_var1427 = $56
+	sta ClearMonster_rightvarInteger_var1427
+	sty ClearMonster_rightvarInteger_var1427+1
 	; Integer constant assigning
 	; Load16bitvariable : #$2000
 	ldy #$20
 	lda #$00
 	; Low bit binop:
 	clc
-	adc ClearMonster_rightvarInteger_var613
-ClearMonster_wordAdd611
-	sta ClearMonster_rightvarInteger_var613
+	adc ClearMonster_rightvarInteger_var1427
+ClearMonster_wordAdd1425
+	sta ClearMonster_rightvarInteger_var1427
 	; High-bit binop
 	tya
-	adc ClearMonster_rightvarInteger_var613+1
+	adc ClearMonster_rightvarInteger_var1427+1
 	tay
-	lda ClearMonster_rightvarInteger_var613
+	lda ClearMonster_rightvarInteger_var1427
 	; Low bit binop:
 	clc
-	adc ClearMonster_rightvarInteger_var610
-ClearMonster_wordAdd608
-	sta ClearMonster_rightvarInteger_var610
+	adc ClearMonster_rightvarInteger_var1424
+ClearMonster_wordAdd1422
+	sta ClearMonster_rightvarInteger_var1424
 	; High-bit binop
 	tya
-	adc ClearMonster_rightvarInteger_var610+1
+	adc ClearMonster_rightvarInteger_var1424+1
 	tay
-	lda ClearMonster_rightvarInteger_var610
+	lda ClearMonster_rightvarInteger_var1424
 	sta sprite_data_ptr
 	sty sprite_data_ptr+1
 	
@@ -2578,9 +3207,9 @@ ClearMonster_wordAdd608
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd614
+	bcc ClearMonster_WordAdd1428
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd614
+ClearMonster_WordAdd1428
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2591,9 +3220,9 @@ ClearMonster_WordAdd614
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd615
+	bcc ClearMonster_WordAdd1429
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd615
+ClearMonster_WordAdd1429
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2604,9 +3233,9 @@ ClearMonster_WordAdd615
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd616
+	bcc ClearMonster_WordAdd1430
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd616
+ClearMonster_WordAdd1430
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2617,9 +3246,9 @@ ClearMonster_WordAdd616
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd617
+	bcc ClearMonster_WordAdd1431
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd617
+ClearMonster_WordAdd1431
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2630,9 +3259,9 @@ ClearMonster_WordAdd617
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd618
+	bcc ClearMonster_WordAdd1432
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd618
+ClearMonster_WordAdd1432
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2643,9 +3272,9 @@ ClearMonster_WordAdd618
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd619
+	bcc ClearMonster_WordAdd1433
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd619
+ClearMonster_WordAdd1433
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2656,9 +3285,9 @@ ClearMonster_WordAdd619
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd620
+	bcc ClearMonster_WordAdd1434
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd620
+ClearMonster_WordAdd1434
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2673,30 +3302,30 @@ ClearMonster_WordAdd620
 	sta sprite_base_address
 	sty sprite_base_address+1
 	ldy sprite_base_address+1 ;keep
-ClearMonster_tempVarShift_var621 = $54
-	sta ClearMonster_tempVarShift_var621
-	sty ClearMonster_tempVarShift_var621+1
+ClearMonster_tempVarShift_var1435 = $54
+	sta ClearMonster_tempVarShift_var1435
+	sty ClearMonster_tempVarShift_var1435+1
 	; COUNT : 6
-		asl ClearMonster_tempVarShift_var621+0 ;keep
-	rol ClearMonster_tempVarShift_var621+1 ;keep
+		asl ClearMonster_tempVarShift_var1435+0 ;keep
+	rol ClearMonster_tempVarShift_var1435+1 ;keep
 
-		asl ClearMonster_tempVarShift_var621+0 ;keep
-	rol ClearMonster_tempVarShift_var621+1 ;keep
+		asl ClearMonster_tempVarShift_var1435+0 ;keep
+	rol ClearMonster_tempVarShift_var1435+1 ;keep
 
-		asl ClearMonster_tempVarShift_var621+0 ;keep
-	rol ClearMonster_tempVarShift_var621+1 ;keep
+		asl ClearMonster_tempVarShift_var1435+0 ;keep
+	rol ClearMonster_tempVarShift_var1435+1 ;keep
 
-		asl ClearMonster_tempVarShift_var621+0 ;keep
-	rol ClearMonster_tempVarShift_var621+1 ;keep
+		asl ClearMonster_tempVarShift_var1435+0 ;keep
+	rol ClearMonster_tempVarShift_var1435+1 ;keep
 
-		asl ClearMonster_tempVarShift_var621+0 ;keep
-	rol ClearMonster_tempVarShift_var621+1 ;keep
+		asl ClearMonster_tempVarShift_var1435+0 ;keep
+	rol ClearMonster_tempVarShift_var1435+1 ;keep
 
-		asl ClearMonster_tempVarShift_var621+0 ;keep
-	rol ClearMonster_tempVarShift_var621+1 ;keep
+		asl ClearMonster_tempVarShift_var1435+0 ;keep
+	rol ClearMonster_tempVarShift_var1435+1 ;keep
 
-	lda ClearMonster_tempVarShift_var621
-	ldy ClearMonster_tempVarShift_var621+1
+	lda ClearMonster_tempVarShift_var1435
+	ldy ClearMonster_tempVarShift_var1435+1
 	; Calling storevariable on generic assign expression
 	sta sprite_base_address
 	sty sprite_base_address+1
@@ -2706,39 +3335,39 @@ ClearMonster_tempVarShift_var621 = $54
 	ldy #0
 	ldx #0 ; Fake 24 bit
 	lda sprite_offset_start
-ClearMonster_rightvarInteger_var624 = $54
-	sta ClearMonster_rightvarInteger_var624
-	sty ClearMonster_rightvarInteger_var624+1
+ClearMonster_rightvarInteger_var1438 = $54
+	sta ClearMonster_rightvarInteger_var1438
+	sty ClearMonster_rightvarInteger_var1438+1
 	; Generic 16 bit op
 	ldy sprite_base_address+1 ;keep
 	lda sprite_base_address
-ClearMonster_rightvarInteger_var627 = $56
-	sta ClearMonster_rightvarInteger_var627
-	sty ClearMonster_rightvarInteger_var627+1
+ClearMonster_rightvarInteger_var1441 = $56
+	sta ClearMonster_rightvarInteger_var1441
+	sty ClearMonster_rightvarInteger_var1441+1
 	; Integer constant assigning
 	; Load16bitvariable : #$2000
 	ldy #$20
 	lda #$00
 	; Low bit binop:
 	clc
-	adc ClearMonster_rightvarInteger_var627
-ClearMonster_wordAdd625
-	sta ClearMonster_rightvarInteger_var627
+	adc ClearMonster_rightvarInteger_var1441
+ClearMonster_wordAdd1439
+	sta ClearMonster_rightvarInteger_var1441
 	; High-bit binop
 	tya
-	adc ClearMonster_rightvarInteger_var627+1
+	adc ClearMonster_rightvarInteger_var1441+1
 	tay
-	lda ClearMonster_rightvarInteger_var627
+	lda ClearMonster_rightvarInteger_var1441
 	; Low bit binop:
 	clc
-	adc ClearMonster_rightvarInteger_var624
-ClearMonster_wordAdd622
-	sta ClearMonster_rightvarInteger_var624
+	adc ClearMonster_rightvarInteger_var1438
+ClearMonster_wordAdd1436
+	sta ClearMonster_rightvarInteger_var1438
 	; High-bit binop
 	tya
-	adc ClearMonster_rightvarInteger_var624+1
+	adc ClearMonster_rightvarInteger_var1438+1
 	tay
-	lda ClearMonster_rightvarInteger_var624
+	lda ClearMonster_rightvarInteger_var1438
 	sta sprite_data_ptr
 	sty sprite_data_ptr+1
 	
@@ -2753,9 +3382,9 @@ ClearMonster_wordAdd622
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd628
+	bcc ClearMonster_WordAdd1442
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd628
+ClearMonster_WordAdd1442
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2766,9 +3395,9 @@ ClearMonster_WordAdd628
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd629
+	bcc ClearMonster_WordAdd1443
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd629
+ClearMonster_WordAdd1443
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2779,9 +3408,9 @@ ClearMonster_WordAdd629
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd630
+	bcc ClearMonster_WordAdd1444
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd630
+ClearMonster_WordAdd1444
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2792,9 +3421,9 @@ ClearMonster_WordAdd630
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd631
+	bcc ClearMonster_WordAdd1445
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd631
+ClearMonster_WordAdd1445
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2805,9 +3434,9 @@ ClearMonster_WordAdd631
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd632
+	bcc ClearMonster_WordAdd1446
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd632
+ClearMonster_WordAdd1446
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2818,9 +3447,9 @@ ClearMonster_WordAdd632
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd633
+	bcc ClearMonster_WordAdd1447
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd633
+ClearMonster_WordAdd1447
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2831,9 +3460,9 @@ ClearMonster_WordAdd633
 	adc #$03
 	sta sprite_data_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc ClearMonster_WordAdd634
+	bcc ClearMonster_WordAdd1448
 	inc sprite_data_ptr+1
-ClearMonster_WordAdd634
+ClearMonster_WordAdd1448
 	lda #$0
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
@@ -2845,7 +3474,7 @@ end_procedure_ClearMonster
 	; ***********  Defining procedure : MakeMonsters
 	;    Procedure type : User-defined procedure
 monster_sprite_color	dc.b	$03
-MakeMonsters_block635
+MakeMonsters_block1449
 MakeMonsters
 	lda #$52
 	; Calling storevariable on generic assign expression
@@ -2872,68 +3501,68 @@ MakeMonsters
 	sta $d015
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit636
+MakeMonsters_shiftbit1450
 	cpx #0
-	beq MakeMonsters_shiftbitdone637
+	beq MakeMonsters_shiftbitdone1451
 	asl
 	dex
-	jmp MakeMonsters_shiftbit636
-MakeMonsters_shiftbitdone637
-MakeMonsters_bitmask_var638 = $54
-	sta MakeMonsters_bitmask_var638
+	jmp MakeMonsters_shiftbit1450
+MakeMonsters_shiftbitdone1451
+MakeMonsters_bitmask_var1452 = $54
+	sta MakeMonsters_bitmask_var1452
 	lda $d015
-	ora MakeMonsters_bitmask_var638
+	ora MakeMonsters_bitmask_var1452
 	sta $d015
 	; Toggle bit with constant
 	ora #%100
 	sta $d015
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit639
+MakeMonsters_shiftbit1453
 	cpx #0
-	beq MakeMonsters_shiftbitdone640
+	beq MakeMonsters_shiftbitdone1454
 	asl
 	dex
-	jmp MakeMonsters_shiftbit639
-MakeMonsters_shiftbitdone640
-MakeMonsters_bitmask_var641 = $54
-	sta MakeMonsters_bitmask_var641
+	jmp MakeMonsters_shiftbit1453
+MakeMonsters_shiftbitdone1454
+MakeMonsters_bitmask_var1455 = $54
+	sta MakeMonsters_bitmask_var1455
 	lda $d015
-	ora MakeMonsters_bitmask_var641
+	ora MakeMonsters_bitmask_var1455
 	sta $d015
 	; Toggle bit with constant
 	ora #%1000
 	sta $d015
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit642
+MakeMonsters_shiftbit1456
 	cpx #0
-	beq MakeMonsters_shiftbitdone643
+	beq MakeMonsters_shiftbitdone1457
 	asl
 	dex
-	jmp MakeMonsters_shiftbit642
-MakeMonsters_shiftbitdone643
-MakeMonsters_bitmask_var644 = $54
-	sta MakeMonsters_bitmask_var644
+	jmp MakeMonsters_shiftbit1456
+MakeMonsters_shiftbitdone1457
+MakeMonsters_bitmask_var1458 = $54
+	sta MakeMonsters_bitmask_var1458
 	lda $d015
-	ora MakeMonsters_bitmask_var644
+	ora MakeMonsters_bitmask_var1458
 	sta $d015
 	; Toggle bit with constant
 	ora #%10000
 	sta $d015
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit645
+MakeMonsters_shiftbit1459
 	cpx #0
-	beq MakeMonsters_shiftbitdone646
+	beq MakeMonsters_shiftbitdone1460
 	asl
 	dex
-	jmp MakeMonsters_shiftbit645
-MakeMonsters_shiftbitdone646
-MakeMonsters_bitmask_var647 = $54
-	sta MakeMonsters_bitmask_var647
+	jmp MakeMonsters_shiftbit1459
+MakeMonsters_shiftbitdone1460
+MakeMonsters_bitmask_var1461 = $54
+	sta MakeMonsters_bitmask_var1461
 	lda $d015
-	ora MakeMonsters_bitmask_var647
+	ora MakeMonsters_bitmask_var1461
 	sta $d015
 	
 ; // Enable sprite stretching for wider monsters
@@ -2943,68 +3572,68 @@ MakeMonsters_bitmask_var647 = $54
 	sta $d01d
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit648
+MakeMonsters_shiftbit1462
 	cpx #0
-	beq MakeMonsters_shiftbitdone649
+	beq MakeMonsters_shiftbitdone1463
 	asl
 	dex
-	jmp MakeMonsters_shiftbit648
-MakeMonsters_shiftbitdone649
-MakeMonsters_bitmask_var650 = $54
-	sta MakeMonsters_bitmask_var650
+	jmp MakeMonsters_shiftbit1462
+MakeMonsters_shiftbitdone1463
+MakeMonsters_bitmask_var1464 = $54
+	sta MakeMonsters_bitmask_var1464
 	lda $d01d
-	ora MakeMonsters_bitmask_var650
+	ora MakeMonsters_bitmask_var1464
 	sta $d01d
 	; Toggle bit with constant
 	ora #%100
 	sta $d01d
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit651
+MakeMonsters_shiftbit1465
 	cpx #0
-	beq MakeMonsters_shiftbitdone652
+	beq MakeMonsters_shiftbitdone1466
 	asl
 	dex
-	jmp MakeMonsters_shiftbit651
-MakeMonsters_shiftbitdone652
-MakeMonsters_bitmask_var653 = $54
-	sta MakeMonsters_bitmask_var653
+	jmp MakeMonsters_shiftbit1465
+MakeMonsters_shiftbitdone1466
+MakeMonsters_bitmask_var1467 = $54
+	sta MakeMonsters_bitmask_var1467
 	lda $d01d
-	ora MakeMonsters_bitmask_var653
+	ora MakeMonsters_bitmask_var1467
 	sta $d01d
 	; Toggle bit with constant
 	ora #%1000
 	sta $d01d
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit654
+MakeMonsters_shiftbit1468
 	cpx #0
-	beq MakeMonsters_shiftbitdone655
+	beq MakeMonsters_shiftbitdone1469
 	asl
 	dex
-	jmp MakeMonsters_shiftbit654
-MakeMonsters_shiftbitdone655
-MakeMonsters_bitmask_var656 = $54
-	sta MakeMonsters_bitmask_var656
+	jmp MakeMonsters_shiftbit1468
+MakeMonsters_shiftbitdone1469
+MakeMonsters_bitmask_var1470 = $54
+	sta MakeMonsters_bitmask_var1470
 	lda $d01d
-	ora MakeMonsters_bitmask_var656
+	ora MakeMonsters_bitmask_var1470
 	sta $d01d
 	; Toggle bit with constant
 	ora #%10000
 	sta $d01d
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit657
+MakeMonsters_shiftbit1471
 	cpx #0
-	beq MakeMonsters_shiftbitdone658
+	beq MakeMonsters_shiftbitdone1472
 	asl
 	dex
-	jmp MakeMonsters_shiftbit657
-MakeMonsters_shiftbitdone658
-MakeMonsters_bitmask_var659 = $54
-	sta MakeMonsters_bitmask_var659
+	jmp MakeMonsters_shiftbit1471
+MakeMonsters_shiftbitdone1472
+MakeMonsters_bitmask_var1473 = $54
+	sta MakeMonsters_bitmask_var1473
 	lda $d01d
-	ora MakeMonsters_bitmask_var659
+	ora MakeMonsters_bitmask_var1473
 	sta $d01d
 	rts
 end_procedure_MakeMonsters
@@ -3031,18 +3660,18 @@ MainRasterRow1
 	adc #$09
 	sta Score+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc MainRasterRow1_WordAdd661
+	bcc MainRasterRow1_WordAdd1475
 	inc Score+1
-MainRasterRow1_WordAdd661
+MainRasterRow1_WordAdd1475
 	; Binary clause INTEGER: GREATEREQUAL
 	lda Score+1   ; compare high bytes
 	cmp #$27 ;keep
-	bcc MainRasterRow1_edblock665
-	bne MainRasterRow1_ctb663
+	bcc MainRasterRow1_edblock1479
+	bne MainRasterRow1_ctb1477
 	lda Score
 	cmp #$10 ;keep
-	bcc MainRasterRow1_edblock665
-MainRasterRow1_ctb663: ;Main true block ;keep 
+	bcc MainRasterRow1_edblock1479
+MainRasterRow1_ctb1477: ;Main true block ;keep 
 	lda Score
 	sec
 	sbc #$10
@@ -3055,10 +3684,10 @@ MainRasterRow1_ctb663: ;Main true block ;keep
 	adc #$01
 	sta Score2+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc MainRasterRow1_WordAdd671
+	bcc MainRasterRow1_WordAdd1485
 	inc Score2+1
-MainRasterRow1_WordAdd671
-MainRasterRow1_edblock665
+MainRasterRow1_WordAdd1485
+MainRasterRow1_edblock1479
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta rowOffset
@@ -3274,7 +3903,7 @@ DisplayText_stringassignstr381		dc.b	" "
 	dc.b	0
 DisplayText_stringassignstr383		dc.b	"  SCORE(1)"
 	dc.b	0
-DisplayText_stringassignstr385		dc.b	"  HI-SCORE"
+DisplayText_stringassignstr385		dc.b	"L HI-SCORE"
 	dc.b	0
 DisplayText_stringassignstr387		dc.b	"      1740"
 	dc.b	0

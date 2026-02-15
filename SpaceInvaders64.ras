@@ -20,7 +20,7 @@ var
 	const PLAYER_MIN_X : byte = 19;
 	const PLAYER_MAX_X : byte = 238;
 	const SCORE_INCREMENT : byte = 9;
-	const ENEMIES_TO_CLEAR : byte = 6;  // How many enemies to clear (out of 72 total)
+	const ENEMIES_TO_CLEAR : byte = 24;  // How many enemies to clear (out of 72 total)
 
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
@@ -176,7 +176,7 @@ begin
 	
 	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
 	
-	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
+	Screen::PrintString("L HI-SCORE",29,11,#Screen::screen0);
 	Screen::PrintString("      1740",29,13,#Screen::screen0);
 	
 	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
@@ -264,12 +264,12 @@ begin
 			// Check enemy columns right to left: 2/5, then 1/4, then 0/3
 			if (rightmost_enemies_byte & $24) <> 0 then  // bit 5 or 2 set (right column)
 			begin
-				rightmost_result_offset := rightmost_block_column * 54 + 10;
+				rightmost_result_offset := rightmost_block_column * 54 + 36;
 				rightmost_found_flag := 1;
 			end
 			else if (rightmost_enemies_byte & $12) <> 0 then  // bit 4 or 1 set (middle column)
 			begin
-				rightmost_result_offset := rightmost_block_column * 54 + 5;
+				rightmost_result_offset := rightmost_block_column * 54 + 18;
 				rightmost_found_flag := 1;
 			end
 			else if (rightmost_enemies_byte & $09) <> 0 then  // bit 3 or 0 set (left column)
@@ -320,12 +320,12 @@ begin
 			end
 			else if (leftmost_enemies_byte & $12) <> 0 then  // bit 4 or 1 set (middle column)
 			begin
-				leftmost_result_offset := leftmost_block_column * 54 + 5;
+				leftmost_result_offset := leftmost_block_column * 54 + 18;
 				leftmost_found_flag := 1;
 			end
 			else if (leftmost_enemies_byte & $24) <> 0 then  // bit 5 or 2 set (right column)
 			begin
-				leftmost_result_offset := leftmost_block_column * 54 + 10;
+				leftmost_result_offset := leftmost_block_column * 54 + 36;
 				leftmost_found_flag := 1;
 			end;
 			inc(leftmost_row_index);
@@ -356,7 +356,7 @@ begin
 		// Calculate actual enemy formation edges based on remaining enemies
 		rightmost_offset := GetRightmostEnemyOffset();
 		leftmost_offset := GetLeftmostEnemyOffset();
-		right_edge := monster_base_x + rightmost_offset + 5;  // +5 for enemy width (not sprite width)
+		right_edge := monster_base_x + rightmost_offset + 10;  // +10 for double-width enemy (5 sprite pixels × 2)
 		left_edge := monster_base_x + leftmost_offset;
 		
 		// Check boundaries and switch direction
