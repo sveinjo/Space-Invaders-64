@@ -22,12 +22,12 @@ var
 	const SCORE_INCREMENT : byte = 9;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
-	direction : byte = 1;
+	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
-	offset : byte = 8;
-	randomCounter : byte = 0; // Used for pseudo-random monster clearing
-	tempBlockIndex : byte = 0;
-	tempEnemyIndex : byte = 0;
+	monster_vertical_adjustment : byte = 8;
+	random_counter : byte = 0; // Used for pseudo-random monster clearing
+	temp_block_index : byte = 0;
+	temp_enemy_index : byte = 0;
 	
 	pos_x : byte = PLAYER_MIN_X;
 
@@ -35,11 +35,11 @@ var
   
 	// sprite_x is usually an integer since x values range between 
 	// 0 and 320. But we have a smaller play area.
-	sprite_x : byte = PLAYER_MIN_X;
-	sprite_y : byte = 226;
+	player_sprite_x : byte = PLAYER_MIN_X;
+	player_sprite_y : byte = 226;
 	
-	monster1_x : byte;
-	monster1_y : byte;
+	monster_base_x : byte;
+	monster_base_y : byte;
 	
 	const monsterSprite1:byte = 1;
 	const monsterSprite2:byte = 2;
@@ -47,7 +47,7 @@ var
 	const monsterSprite4:byte = 4;
 	
 	// joystick_dir is used to display either left or right-pointing sprite
-	joystick_dir : byte;
+	player_joystick_direction : byte;
 	// monster_animation_frame controls monster sprite animation independently
 	monster_animation_frame : byte;
 	// sprite location is where we keep the sprite in the memory.
@@ -97,31 +97,31 @@ end;
 
 procedure initializeMonsters();
 var
-	i, j : byte;
-	srcPtr, destPtr : ^byte;
+	block_loop_counter, copy_loop_counter : byte;
+	source_sprite_ptr, destination_sprite_ptr : ^byte;
 begin
 	// Copy monster sprite data (frames 1 and 2) into 24 consecutive sprite locations
 	// Each of the 12 monster blocks gets 2 animation frames
-	for i := 0 to 12 do
+	for block_loop_counter := 0 to 12 do
 	begin
 		// Copy frame 1 (sprite index 1 from spritesheet)
-		srcPtr := @spriteLoc + 64;  // Source: sprite 1
-		destPtr := @spriteLoc + (3 + i * 2) * 64;  // Destination: sprite 3, 5, 7, 9...
-		for j := 0 to 63 do
+		source_sprite_ptr := @spriteLoc + 64;  // Source: sprite 1
+		destination_sprite_ptr := @spriteLoc + (3 + block_loop_counter * 2) * 64;  // Destination: sprite 3, 5, 7, 9...
+		for copy_loop_counter := 0 to 63 do
 		begin
-			destPtr^ := srcPtr^;
-			srcPtr := srcPtr + 1;
-			destPtr := destPtr + 1;
+			destination_sprite_ptr^ := source_sprite_ptr^;
+			source_sprite_ptr := source_sprite_ptr + 1;
+			destination_sprite_ptr := destination_sprite_ptr + 1;
 		end;
 		
 		// Copy frame 2 (sprite index 2 from spritesheet)
-		srcPtr := @spriteLoc + 128;  // Source: sprite 2
-		destPtr := @spriteLoc + (4 + i * 2) * 64;  // Destination: sprite 4, 6, 8, 10...
-		for j := 0 to 63 do
+		source_sprite_ptr := @spriteLoc + 128;  // Source: sprite 2
+		destination_sprite_ptr := @spriteLoc + (4 + block_loop_counter * 2) * 64;  // Destination: sprite 4, 6, 8, 10...
+		for copy_loop_counter := 0 to 63 do
 		begin
-			destPtr^ := srcPtr^;
-			srcPtr := srcPtr + 1;
-			destPtr := destPtr + 1;
+			destination_sprite_ptr^ := source_sprite_ptr^;
+			source_sprite_ptr := source_sprite_ptr + 1;
+			destination_sprite_ptr := destination_sprite_ptr + 1;
 		end;
 	end;
 end;
@@ -142,17 +142,17 @@ begin
 	
 	// Update player position based on joystick input
 	pos_x := Helpers::Clamp(pos_x + (joystickright*2 - joystickleft*2), PLAYER_MIN_X, PLAYER_MAX_X);
-	sprite_x := pos_x;
+	player_sprite_x := pos_x;
 	
 	
 	// Update the sprite position on screen for sprite number @useSprite	
-	SpritePos(sprite_x, sprite_y, useSprite);
+	SpritePos(player_sprite_x, player_sprite_y, useSprite);
 	
 	// Set left/right offset pointer for sprite
 	if (joystickright) then
-		joystick_dir := 1;
+		player_joystick_direction := 1;
 	if (joystickleft) then
-		joystick_dir := 0;
+		player_joystick_direction := 0;
 		
 	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
 	//animateMonsters();
@@ -189,21 +189,21 @@ end;
 
 procedure UpdateTick();
 var
-	shouldMoveEnemy : byte;
+	should_move_enemy : byte;
 begin
-	shouldMoveEnemy := 0;
+	should_move_enemy := 0;
 	
 	if enemyMoveCounter <> 0 then
 	begin
 		dec(enemyMoveCounter);
 		
-		if monster1_x >= 46 then
-			direction := 0
-		else if monster1_x <= 24 then
-			direction := 1;
+		if monster_base_x >= 46 then
+			enemy_direction := 0
+		else if monster_base_x <= 24 then
+			enemy_direction := 1;
 			
 		if enemyMoveCounter = 2 then
-			shouldMoveEnemy := 1;
+			should_move_enemy := 1;
 	end
 	else begin
 		enemyMoveCounter := INITIAL_INVADER_COUNT - numberOfEnemies;
@@ -219,83 +219,83 @@ begin
 		animateMonsters(0); // Row 0 uses sprites based on row parameter
 		
 		// Clear a random enemy on each animation
-		randomCounter := (randomCounter + 7) & 127; // Generate pseudo-random 0-127
-		if randomCounter < 72 then // Only use 0-71 for valid enemy indices (12 blocks × 6 enemies)
+		random_counter := (random_counter + 7) & 127; // Generate pseudo-random 0-127
+		if random_counter < 72 then // Only use 0-71 for valid enemy indices (12 blocks × 6 enemies)
 		begin
-			tempBlockIndex := Helpers::Div(randomCounter, 6); // Integer division
-			tempEnemyIndex := Helpers::Mod(randomCounter, 6); // Manual modulo
-			ClearMonster(tempBlockIndex, 1, tempEnemyIndex);
+			temp_block_index := Helpers::Div(random_counter, 6); // Integer division
+			temp_enemy_index := Helpers::Mod(random_counter, 6); // Manual modulo
+			ClearMonster(temp_block_index, 1, temp_enemy_index);
 		end;
 		
-		shouldMoveEnemy := 1;
+		should_move_enemy := 1;
 	end;
 	
-	if shouldMoveEnemy <> 0 then
+	if should_move_enemy <> 0 then
 	begin
 		// At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed
 		// At slower speeds, move 1 pixel
 		if (INITIAL_INVADER_COUNT - numberOfEnemies) <= 2 then
 		begin
-			if (direction <> 0) then
-				monster1_x := monster1_x + 2
+			if (enemy_direction <> 0) then
+				monster_base_x := monster_base_x + 2
 			else
-				monster1_x := monster1_x - 2;
+				monster_base_x := monster_base_x - 2;
 		end
 		else
 		begin
-			if (direction <> 0) then
-				inc(monster1_x)
+			if (enemy_direction <> 0) then
+				inc(monster_base_x)
 			else
-				dec(monster1_x);
+				dec(monster_base_x);
 		end;
 	end;
 end;
 
 procedure animateMonsters(enemyRow: byte);
 var
-	baseSprite: byte;
+	base_sprite_index: byte;
 begin
 	// Calculate the base sprite index for this row
 	// Row 0: blocks 0-3 (sprites 3-10)
 	// Row 1: blocks 4-7 (sprites 11-18)
 	// Row 2: blocks 8-11 (sprites 19-26)
-	baseSprite := 3 + (enemyRow * 8);
+	base_sprite_index := 3 + (enemyRow * 8);
 	
 	// Set sprite locations for each of the 4 monsters in this row
 	// Each monster block has 2 animation frames, we alternate based on monster_animation_frame
-	SetSpriteLoc(monsterSprite1, @spriteLoc/64 + baseSprite + monster_animation_frame, useBank);
-	SetSpriteLoc(monsterSprite2, @spriteLoc/64 + baseSprite + 2 + monster_animation_frame, useBank);
-	SetSpriteLoc(monsterSprite3, @spriteLoc/64 + baseSprite + 4 + monster_animation_frame, useBank);
-	SetSpriteLoc(monsterSprite4, @spriteLoc/64 + baseSprite + 6 + monster_animation_frame, useBank);
+	SetSpriteLoc(monsterSprite1, @spriteLoc/64 + base_sprite_index + monster_animation_frame, useBank);
+	SetSpriteLoc(monsterSprite2, @spriteLoc/64 + base_sprite_index + 2 + monster_animation_frame, useBank);
+	SetSpriteLoc(monsterSprite3, @spriteLoc/64 + base_sprite_index + 4 + monster_animation_frame, useBank);
+	SetSpriteLoc(monsterSprite4, @spriteLoc/64 + base_sprite_index + 6 + monster_animation_frame, useBank);
 end;
 
 procedure UpdateMonsters(rowOffset: byte);
 begin
 	// Update the sprite position on screen for sprite monsterSprite
 	// Sprite pointers are set once per animation frame in UpdateTick
-	SpritePos(monster1_x, monster1_y+rowOffset+offset, monsterSprite1);
-	SpritePos(monster1_x+MONSTER_SPACING, monster1_y+rowOffset+offset, monsterSprite2);
-	SpritePos(monster1_x+MONSTER_SPACING*2, monster1_y+rowOffset+offset, monsterSprite3);
-	SpritePos(monster1_x+MONSTER_SPACING*3, monster1_y+rowOffset+offset, monsterSprite4);
+	SpritePos(monster_base_x, monster_base_y+rowOffset+monster_vertical_adjustment, monsterSprite1);
+	SpritePos(monster_base_x+MONSTER_SPACING, monster_base_y+rowOffset+monster_vertical_adjustment, monsterSprite2);
+	SpritePos(monster_base_x+MONSTER_SPACING*2, monster_base_y+rowOffset+monster_vertical_adjustment, monsterSprite3);
+	SpritePos(monster_base_x+MONSTER_SPACING*3, monster_base_y+rowOffset+monster_vertical_adjustment, monsterSprite4);
 end;
 
 
 procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
 var
-	l, m : byte;
-	spritePtr : ^byte;
-	startSprite : byte;
-	endSprite : byte;
-	offsetStart : byte;
-	horizontalOffset : byte;
-	verticalOffset : byte;
-	tempDiv : byte;
+	sprite_loop_counter, pixel_loop_counter : byte;
+	sprite_data_ptr : ^byte;
+	start_sprite_index : byte;
+	end_sprite_index : byte;
+	sprite_offset_start : byte;
+	enemy_horizontal_offset : byte;
+	enemy_vertical_offset : byte;
+	enemy_row_division : byte;
 Begin
 	// Calculate sprite range to clear
 	// Each block has 2 sprites (animation frames)
 	// Block 0 = sprites 3-4, Block 1 = sprites 5-6, etc.
-	startSprite := 3 + (blockIndex * 2);
-	endSprite := startSprite + (numBlocks * 2) - 1;
+	start_sprite_index := 3 + (blockIndex * 2);
+	end_sprite_index := start_sprite_index + (numBlocks * 2) - 1;
 	
 	// Each block contains 6 enemies in a 3x2 grid:
 	// Enemy 0-2: Top row (3 horizontally, each 5 pixels wide)
@@ -304,43 +304,43 @@ Begin
 	
 	// Calculate horizontal offset - which byte in each row to clear (0, 1, or 2)
 	// Sprite rows are 3 bytes wide, 3 enemies fit in 3 columns
-	horizontalOffset := Helpers::Mod(enemyIndex, 3);
+	enemy_horizontal_offset := Helpers::Mod(enemyIndex, 3);
 	
 	// Calculate vertical offset
 	// Top row (enemies 0-2): row 0
 	// Bottom row (enemies 3-5): row 13 (8 enemy rows + 5 empty rows)
 	// Each sprite row is 3 bytes, so 13 rows = 39 bytes
-	tempDiv := Helpers::Div(enemyIndex, 3);
-	verticalOffset := tempDiv * 13 * 3;
+	enemy_row_division := Helpers::Div(enemyIndex, 3);
+	enemy_vertical_offset := enemy_row_division * 13 * 3;
 	
 	// Total offset within the 64-byte sprite
-	offsetStart := horizontalOffset + verticalOffset;
+	sprite_offset_start := enemy_horizontal_offset + enemy_vertical_offset;
 	
 	// Clear 8 rows (one byte per row) for the 8-pixel tall enemy
-	for l := startSprite to endSprite do
+	for sprite_loop_counter := start_sprite_index to end_sprite_index do
 	begin
-		spritePtr := @spriteLoc + (l * 64) + offsetStart;
-		for m := 0 to 7 do  // 8 iterations (0-7) for 8-pixel tall enemy
+		sprite_data_ptr := @spriteLoc + (sprite_loop_counter * 64) + sprite_offset_start;
+		for pixel_loop_counter := 0 to 7 do  // 8 iterations (0-7) for 8-pixel tall enemy
 		begin
-			spritePtr^ := 0;
-			spritePtr := spritePtr + 3; // Increment by 3 (next sprite row)
+			sprite_data_ptr^ := 0;
+			sprite_data_ptr := sprite_data_ptr + 3; // Increment by 3 (next sprite row)
 		end;
 	end;
 end;
 
 procedure MakeMonsters();
 var 
-	monsterColour : byte = cyan;
+	monster_sprite_color : byte = cyan;
 	
 begin
-	monster1_y := 82;
-	monster1_x := 32;
+	monster_base_y := 82;
+	monster_base_x := 32;
 	
 	// Set sprite colors
-	sprite_color[monsterSprite1]:= monsterColour;
-	sprite_color[monsterSprite2]:= monsterColour;
-	sprite_color[monsterSprite3]:= monsterColour;
-	sprite_color[monsterSprite4]:= monsterColour;
+	sprite_color[monsterSprite1]:= monster_sprite_color;
+	sprite_color[monsterSprite2]:= monster_sprite_color;
+	sprite_color[monsterSprite3]:= monster_sprite_color;
+	sprite_color[monsterSprite4]:= monster_sprite_color;
 	  
 	// Enable all monster sprites
 	togglebit(sprite_bitmask,monsterSprite1,1);
@@ -376,11 +376,11 @@ begin
 	UpdateMonsters(0); 
 	
 	// Update monster positions for all three rows
-	WaitForRaster(104+offset);	
+	WaitForRaster(104+monster_vertical_adjustment);	
 	UpdateMonsters(MONSTER_ROW_OFFSET);
-	WaitForRaster(130+offset);
+	WaitForRaster(130+monster_vertical_adjustment);
 	UpdateMonsters(MONSTER_ROW_OFFSET*2);
-	WaitForRaster(157+offset);
+	WaitForRaster(157+monster_vertical_adjustment);
                 	
 	// Update joystick here
 	Memory::Fill(#joystickup,0,5);
