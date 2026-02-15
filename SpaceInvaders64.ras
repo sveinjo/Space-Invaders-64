@@ -26,6 +26,8 @@ var
 	numberOfEnemies : byte = 0;
 	offset : byte = 8;
 	randomCounter : byte = 0; // Used for pseudo-random monster clearing
+	tempBlockIndex : byte = 0;
+	tempEnemyIndex : byte = 0;
 	
 	pos_x : byte = PLAYER_MIN_X;
 
@@ -67,7 +69,7 @@ var
 	interrupt MainRasterRow1();
 	interrupt MainRasterJoystick();
 	interrupt MainRasterStarfield();
-	procedure ClearMonster(blockIndex: byte; numBlocks: byte);
+	procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
 	procedure animateMonsters(enemyRow: byte);
 	procedure UpdateMonsters(rowOffset: byte; updateMonsterRow: byte);
 	
@@ -100,7 +102,7 @@ var
 begin
 	// Copy monster sprite data (frames 1 and 2) into 24 consecutive sprite locations
 	// Each of the 12 monster blocks gets 2 animation frames
-	for i := 0 to 6 do
+	for i := 0 to 12 do
 	begin
 		// Copy frame 1 (sprite index 1 from spritesheet)
 		srcPtr := @spriteLoc + 64;  // Source: sprite 1
@@ -212,10 +214,14 @@ begin
 		
 		monster_animation_frame := monster_animation_frame xor 1;
 		
-		// Clear a random monster block on each animation
-		randomCounter := (randomCounter + 7) & 15; // Generate pseudo-random 0-15
-		if randomCounter < 12 then // Only use 0-11 for valid block indices
-			ClearMonster(randomCounter, 1);
+		// Clear a random enemy on each animation
+		randomCounter := (randomCounter + 7) & 127; // Generate pseudo-random 0-127
+		if randomCounter < 72 then // Only use 0-71 for valid enemy indices (12 blocks × 6 enemies)
+		begin
+			tempBlockIndex := randomCounter / 6; // Integer division
+			tempEnemyIndex := randomCounter - (tempBlockIndex * 6); // Manual modulo
+			ClearMonster(tempBlockIndex, 1, tempEnemyIndex);
+		end;
 		
 		shouldMoveEnemy := 1;
 	end;
@@ -271,12 +277,16 @@ begin
 end;
 
 
-procedure ClearMonster(blockIndex: byte; numBlocks: byte);
+procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
 var
 	l, m : byte;
 	spritePtr : ^byte;
 	startSprite : byte;
 	endSprite : byte;
+	offsetStart : byte;
+	horizontalOffset : byte;
+	verticalOffset : byte;
+	tempDiv : byte;
 Begin
 	// Calculate sprite range to clear
 	// Each block has 2 sprites (animation frames)
@@ -284,14 +294,32 @@ Begin
 	startSprite := 3 + (blockIndex * 2);
 	endSprite := startSprite + (numBlocks * 2) - 1;
 	
-	// Clear same pattern as original: 8 bytes spaced 3 apart, starting at offset $40 (64)
+	// Each block contains 6 enemies in a 3x2 grid:
+	// Enemy 0-2: Top row (3 horizontally, each 5 pixels wide)
+	// Enemy 3-5: Bottom row (3 horizontally, separated by 5 empty pixel rows)
+	// Each enemy is 5 pixels wide × 8 pixels tall
+	
+	// Calculate horizontal offset (0-2 for the 3 columns)
+	// Manual modulo 3: enemyIndex mod 3
+	tempDiv := enemyIndex / 3;
+	horizontalOffset := enemyIndex - (tempDiv * 3);
+	
+	// Calculate vertical offset
+	// Top row (enemies 0-2): no extra offset
+	// Bottom row (enemies 3-5): 5 empty rows + 8 enemy rows = 13 rows down
+	// Each sprite row is 3 bytes, so 13 rows = 39 bytes
+	// Manual division by 3 then multiply
+	verticalOffset := tempDiv * 13 * 3;
+	
+	offsetStart := 64 + horizontalOffset + verticalOffset;
+	
 	for l := startSprite to endSprite do
 	begin
-		spritePtr := @spriteLoc + (l * 64) + 64; // Start at offset $40 within sprite
+		spritePtr := @spriteLoc + (l * 64) + offsetStart;
 		for m := 0 to 8 do
 		begin
 			spritePtr^ := 0;
-			spritePtr := spritePtr + 3; // Increment by 3, same as original
+			spritePtr := spritePtr + 3; // Increment by 3 (next pixel row)
 		end;
 	end;
 end;
