@@ -299,25 +299,28 @@ Begin
 	// Enemy 3-5: Bottom row (3 horizontally, separated by 5 empty pixel rows)
 	// Each enemy is 5 pixels wide × 8 pixels tall
 	
-	// Calculate horizontal offset (0-2 for the 3 columns)
+	// Calculate horizontal offset - which byte in each row to clear (0, 1, or 2)
+	// Sprite rows are 3 bytes wide, 3 enemies fit in 3 columns
 	horizontalOffset := Helpers::Mod(enemyIndex, 3);
 	
 	// Calculate vertical offset
-	// Top row (enemies 0-2): no extra offset
-	// Bottom row (enemies 3-5): 5 empty rows + 8 enemy rows = 13 rows down
+	// Top row (enemies 0-2): row 0
+	// Bottom row (enemies 3-5): row 13 (8 enemy rows + 5 empty rows)
 	// Each sprite row is 3 bytes, so 13 rows = 39 bytes
 	tempDiv := Helpers::Div(enemyIndex, 3);
 	verticalOffset := tempDiv * 13 * 3;
 	
-	offsetStart := 64 + horizontalOffset + verticalOffset;
+	// Total offset within the 64-byte sprite
+	offsetStart := horizontalOffset + verticalOffset;
 	
+	// Clear 8 rows (one byte per row) for the 8-pixel tall enemy
 	for l := startSprite to endSprite do
 	begin
 		spritePtr := @spriteLoc + (l * 64) + offsetStart;
-		for m := 0 to 8 do
+		for m := 0 to 7 do  // 8 iterations (0-7) for 8-pixel tall enemy
 		begin
 			spritePtr^ := 0;
-			spritePtr := spritePtr + 3; // Increment by 3 (next pixel row)
+			spritePtr := spritePtr + 3; // Increment by 3 (next sprite row)
 		end;
 	end;
 end;
