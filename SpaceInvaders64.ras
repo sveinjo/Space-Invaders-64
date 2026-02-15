@@ -254,30 +254,49 @@ end;
 
 procedure animateMonsters(enemyRow: byte);
 var
-	base_sprite_index: byte;
+	sprite_ptr_base: byte;
+	current_sprite_ptr: byte;
 begin
-	// Calculate the base sprite index for this row
+	// Calculate the base sprite pointer once for this row
 	// Row 0: blocks 0-3 (sprites 3-10)
 	// Row 1: blocks 4-7 (sprites 11-18)
 	// Row 2: blocks 8-11 (sprites 19-26)
-	base_sprite_index := 3 + (enemyRow * 8);
+	sprite_ptr_base := @spriteLoc/64 + 3 + (enemyRow << 3) + monster_animation_frame;
 	
-	// Set sprite locations for each of the 4 monsters in this row
-	// Each monster block has 2 animation frames, we alternate based on monster_animation_frame
-	SetSpriteLoc(monsterSprite1, @spriteLoc/64 + base_sprite_index + monster_animation_frame, useBank);
-	SetSpriteLoc(monsterSprite2, @spriteLoc/64 + base_sprite_index + 2 + monster_animation_frame, useBank);
-	SetSpriteLoc(monsterSprite3, @spriteLoc/64 + base_sprite_index + 4 + monster_animation_frame, useBank);
-	SetSpriteLoc(monsterSprite4, @spriteLoc/64 + base_sprite_index + 6 + monster_animation_frame, useBank);
+	// Set sprite locations using pre-calculated base + incremental additions
+	current_sprite_ptr := sprite_ptr_base;
+	SetSpriteLoc(monsterSprite1, current_sprite_ptr, useBank);
+	
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite2, current_sprite_ptr, useBank);
+	
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite3, current_sprite_ptr, useBank);
+	
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite4, current_sprite_ptr, useBank);
 end;
 
 procedure UpdateMonsters(rowOffset: byte);
+var
+	y_position: byte;
+	x_position: byte;
 begin
-	// Update the sprite position on screen for sprite monsterSprite
-	// Sprite pointers are set once per animation frame in UpdateTick
-	SpritePos(monster_base_x, monster_base_y+rowOffset+monster_vertical_adjustment, monsterSprite1);
-	SpritePos(monster_base_x+MONSTER_SPACING, monster_base_y+rowOffset+monster_vertical_adjustment, monsterSprite2);
-	SpritePos(monster_base_x+MONSTER_SPACING*2, monster_base_y+rowOffset+monster_vertical_adjustment, monsterSprite3);
-	SpritePos(monster_base_x+MONSTER_SPACING*3, monster_base_y+rowOffset+monster_vertical_adjustment, monsterSprite4);
+	// Pre-calculate Y position to avoid repeated additions
+	y_position := monster_base_y + rowOffset + monster_vertical_adjustment;
+	
+	// Update sprites using incremental X positions instead of multiplications
+	x_position := monster_base_x;
+	SpritePos(x_position, y_position, monsterSprite1);
+	
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite2);
+	
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite3);
+	
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite4);
 end;
 
 
