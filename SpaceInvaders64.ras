@@ -20,13 +20,14 @@ var
 	const PLAYER_MIN_X : byte = 19;
 	const PLAYER_MAX_X : byte = 238;
 	const SCORE_INCREMENT : byte = 9;
+	const ENEMIES_TO_CLEAR : byte = 6;  // How many enemies to clear (out of 72 total)
 
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	monster_vertical_adjustment : byte = 8;
-	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter (71-3), leaving 2 enemies
+	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	temp_block_index : byte = 0;
 	temp_enemy_index : byte = 0;
 	
@@ -245,12 +246,14 @@ var
 	rightmost_enemies_byte : byte;
 	rightmost_found_flag : byte;
 	rightmost_result_offset : byte;
+	rightmost_column_loop_done : byte;
 begin
 	rightmost_found_flag := 0;
 	rightmost_result_offset := 0;
+	rightmost_column_loop_done := 0;
 	// Scan from rightmost block column (3) to left (0)
 	rightmost_block_column := 3;
-	while (rightmost_block_column >= 0 and rightmost_found_flag = 0) do
+	while (rightmost_column_loop_done = 0) do
 	begin
 		// Check all 3 rows for this block column
 		rightmost_row_index := 0;
@@ -276,8 +279,9 @@ begin
 			end;
 			inc(rightmost_row_index);
 		end;
-		if rightmost_block_column = 0 then
-			rightmost_block_column := 255  // Will wrap and exit
+		// Exit if found or if we've checked column 0
+		if (rightmost_found_flag = 1 or rightmost_block_column = 0) then
+			rightmost_column_loop_done := 1
 		else
 			dec(rightmost_block_column);
 	end;
@@ -293,12 +297,14 @@ var
 	leftmost_enemies_byte : byte;
 	leftmost_found_flag : byte;
 	leftmost_result_offset : byte;
+	leftmost_column_loop_done : byte;
 begin
 	leftmost_found_flag := 0;
 	leftmost_result_offset := 0;
+	leftmost_column_loop_done := 0;
 	// Scan from leftmost block column (0) to right (3)
 	leftmost_block_column := 0;
-	while (leftmost_block_column <= 3 and leftmost_found_flag = 0) do
+	while (leftmost_column_loop_done = 0) do
 	begin
 		// Check all 3 rows for this block column
 		leftmost_row_index := 0;
@@ -324,7 +330,11 @@ begin
 			end;
 			inc(leftmost_row_index);
 		end;
-		inc(leftmost_block_column);
+		// Exit if found or if we've checked column 3
+		if (leftmost_found_flag = 1 or leftmost_block_column = 3) then
+			leftmost_column_loop_done := 1
+		else
+			inc(leftmost_block_column);
 	end;
 	GetLeftmostEnemyOffset := leftmost_result_offset;
 end;
@@ -350,7 +360,8 @@ begin
 		left_edge := monster_base_x + leftmost_offset;
 		
 		// Check boundaries and switch direction
-		if right_edge >= 244 then
+		// Right boundary: ensure rightmost enemy doesn't exceed screen edge (~254)
+		if right_edge >= 254 then
 			enemy_direction := 0
 		else if left_edge <= 24 then
 			enemy_direction := 1;
@@ -375,8 +386,8 @@ begin
 		// Each row uses different sprite blocks: row 0 (3-10), row 1 (11-18), row 2 (19-26)
 		animateMonsters(0); // Row 0 uses sprites based on row parameter
 		
-		// Clear enemies sequentially from 71 to 3 (70 enemies), leaving 2 enemies
-		if sequential_clear_counter > 2 then
+		// Clear enemies based on ENEMIES_TO_CLEAR constant
+		if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
 		begin
 			ClearEnemyAtCounter();
 			dec(sequential_clear_counter);
