@@ -269,9 +269,10 @@ begin
 	found_hit := 0;
 	
 	// Early exit if bullet outside enemy formation area
+	// Formation spans from monster_base_y to monster_base_y + adjustment + (3 rows × 26) + 21 sprite height
 	if player_bullet_y < monster_base_y then
 		should_check := 0;
-	if player_bullet_y > monster_base_y + monster_vertical_adjustment + 60 then
+	if player_bullet_y > monster_base_y + monster_vertical_adjustment + 80 then
 		should_check := 0;
 	
 	if should_check <> 0 then
@@ -301,36 +302,46 @@ begin
 					if player_bullet_x < block_x + 48 then
 					begin
 						// Inside this block horizontally - check which enemy
-						rel_x := player_bullet_x - block_x;
+						// Note: Each enemy is 5 sprite pixels × 2 (stretch) = 10 screen pixels wide
+						// Enemies are left-aligned in their byte columns (0, 16, 32)
+						// Adjust rel_x for bullet center (bullet is ~3 pixels wide, offset by half)
+						rel_x := player_bullet_x - block_x + 2;
 						block_y := monster_base_y + monster_vertical_adjustment + block_row * MONSTER_ROW_OFFSET;
 						rel_y := player_bullet_y - block_y;
 						
 						// Determine enemy column (0-2) by X position
-						if rel_x < 16 then
+						// Enemy 0: pixels 0-11, Enemy 1: pixels 12-27, Enemy 2: pixels 28-43
+						if rel_x < 12 then
 							enemy_col := 0
-						else if rel_x < 32 then
+						else if rel_x < 28 then
 							enemy_col := 1
 						else
 							enemy_col := 2;
 						
-						// Determine enemy row (0-1) by Y position  
-						if rel_y < 10 then
+						// Determine enemy row (0-1) by Y position
+						// Each enemy is 8 pixels tall with a 5-pixel gap between rows
+						// Row 0 (top): Y 0-7, Gap: Y 8-12, Row 1 (bottom): Y 13-20
+						enemy_row := $FF;  // Invalid by default
+						if rel_y <= 7 then
 							enemy_row := 0
-						else
+						else if (rel_y >= 13 and rel_y <= 20) then
 							enemy_row := 1;
 						
-						hit_enemy_index := enemy_col * 2 + enemy_row;
-						cbc_enemy_mask := 1 << hit_enemy_index;
-						
-						// Check if this enemy is alive
-						if (enemy_alive & cbc_enemy_mask) <> 0 then
+						if enemy_row <> $FF then
 						begin
-							// Hit! Clear enemy and trigger explosion
-							ClearMonster(block_index, 1, hit_enemy_index);
-							block_enemies[block_index] := enemy_alive & (cbc_enemy_mask xor $FF);
-							player_bullet_active := 2;
-							explosion_frame_counter := 0;
-							found_hit := 1;
+							hit_enemy_index := enemy_col * 2 + enemy_row;
+							cbc_enemy_mask := 1 << hit_enemy_index;
+							
+							// Check if this enemy is alive
+							if (enemy_alive & cbc_enemy_mask) <> 0 then
+							begin
+								// Hit! Clear enemy and trigger explosion
+								ClearMonster(block_index, 1, hit_enemy_index);
+								block_enemies[block_index] := enemy_alive & (cbc_enemy_mask xor $FF);
+								player_bullet_active := 2;
+								explosion_frame_counter := 0;
+								found_hit := 1;
+							end;
 						end;
 					end;
 			end;
