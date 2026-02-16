@@ -162,20 +162,10 @@ begin
 	end;
 end;
 
-/*procedure animateMonsters();
-begin
-	// Set the sprite pointer to point to the sprite data + direction offset	
-	SetSpriteLoc(1, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
-	SetSpriteLoc(2, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
-	SetSpriteLoc(3, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
-	SetSpriteLoc(4, @spriteLoc/64 + 1 + monster_animation_frame, useBank);
-end;*/
 
 procedure UpdateSprite();
 begin
-	
-	
-	
+		
 	// Update player position based on joystick input
 	pos_x := Helpers::Clamp(pos_x + (joystickright - joystickleft), PLAYER_MIN_X, PLAYER_MAX_X);
 	player_sprite_x := pos_x;
@@ -191,7 +181,7 @@ begin
 		player_joystick_direction := 0;
 		
 	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
-	showBullet();
+	//showBullet();
 	//animateMonsters();
 	
 end;
@@ -200,8 +190,8 @@ procedure FirePlayerBullet();
 begin
 	player_bullet_active := 1;
 	player_bullet_x := player_sprite_x;  // Same X as player
-	//player_bullet_y := player_sprite_y - BULLET_SPRITE_HEIGHT;  // One sprite height above player
-	player_bullet_y := player_sprite_y - 30;  // One sprite height above player
+	player_bullet_y := player_sprite_y - BULLET_SPRITE_HEIGHT;  // One sprite height above player
+	//player_bullet_y := player_sprite_y - 30;  // One sprite height above player
 end;
 
 procedure showBullet();
@@ -269,7 +259,9 @@ begin
 	if player_bullet_active = 1 then
 	begin
 		// Read sprite-sprite collision register ($D01F) - this clears it!
-		collision_register := peek($D01F, 0);
+		//collision_register := peek($D01F, 0);
+		collision_register := peek(^$D01E, 0);
+		
 	
 		// Check if bullet (sprite 0) collided with any ENEMY sprites (1-4)
 		// Bit 0 = sprite 0 had a collision
