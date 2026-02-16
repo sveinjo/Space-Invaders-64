@@ -303,15 +303,16 @@ begin
 					begin
 						// Inside this block horizontally - check which enemy
 						// Note: Each enemy is 5 sprite pixels × 2 (stretch) = 10 screen pixels wide
-						// Enemies are left-aligned in their byte columns (0, 16, 32)
-						// Adjust rel_x for bullet center (bullet is ~3 pixels wide, offset by half)
-						rel_x := player_bullet_x - block_x + 2;
+						// Shift bullet position left by 4 pixels to center hitbox on visual sprite
+						rel_x := player_bullet_x - block_x - 4;
+						if rel_x > 200 then rel_x := 0;  // Handle underflow (byte wraparound)
+						
 						block_y := monster_base_y + monster_vertical_adjustment + block_row * MONSTER_ROW_OFFSET;
 						rel_y := player_bullet_y - block_y;
 						
 						// Determine enemy column (0-2) by X position
-						// Enemy 0: pixels 0-11, Enemy 1: pixels 12-27, Enemy 2: pixels 28-43
-						if rel_x < 12 then
+						// Enemy 0: pixels 0-9, Enemy 1: pixels 10-27, Enemy 2: pixels 28-47
+						if rel_x < 10 then
 							enemy_col := 0
 						else if rel_x < 28 then
 							enemy_col := 1
@@ -629,7 +630,7 @@ end;
 procedure UpdateMonsters(rowOffset: byte);
 var
 	y_position: byte;
-	x_position: integer;
+	x_position: byte;
 begin
 	// Pre-calculate Y position to avoid repeated additions
 	y_position := monster_base_y + rowOffset + monster_vertical_adjustment;
