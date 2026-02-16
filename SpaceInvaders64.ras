@@ -17,8 +17,9 @@ var
 	const INITIAL_INVADER_COUNT : byte = 55;
 	const MONSTER_SPACING : byte = 54;
 	const MONSTER_ROW_OFFSET : byte = 26;
-	const PLAYER_MIN_X : byte = 19;
-	const PLAYER_MAX_X : byte = 238;
+	const PLAYER_MIN_X : byte = 39;
+	const PLAYER_MAX_X : byte = 218;
+	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
 	const SCORE_INCREMENT : byte = 9;
 	const ENEMIES_TO_CLEAR : byte = 54;  // How many enemies to clear (out of 72 total)
 
@@ -38,7 +39,7 @@ var
 	// sprite_x is usually an integer since x values range between 
 	// 0 and 320. But we have a smaller play area.
 	player_sprite_x : byte = PLAYER_MIN_X;
-	player_sprite_y : byte = 226;
+	player_sprite_y : byte = PLAYER_POS_Y;
 	
 	monster_base_x : byte;
 	monster_base_y : byte;
@@ -176,7 +177,7 @@ begin
 	
 	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
 	
-	Screen::PrintString("L HI-SCORE",29,11,#Screen::screen0);
+	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
 	Screen::PrintString("      1740",29,13,#Screen::screen0);
 	
 	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
