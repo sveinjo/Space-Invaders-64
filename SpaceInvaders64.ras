@@ -13,6 +13,8 @@ var
 	Score : Integer = 9950;
 	Score2 : Integer = 0;
 	
+	border_debug_color : byte = 2;
+	
 	// Game constants
 	const INITIAL_INVADER_COUNT : byte = 72; // Arcade has 55
 	const MONSTER_SPACING : byte = 54;
@@ -38,6 +40,7 @@ var
 	player_bullet_active : byte = 0;  // 0 = inactive, 1 = active
 	player_bullet_x : byte;
 	player_bullet_y : byte;
+	previous_fire_state : byte = 0;  // Track previous fire button state for debounce
 	const BULLET_SPEED : byte = 4;  // Pixels per frame
 	const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
 
@@ -95,6 +98,7 @@ var
 	procedure UpdateMonsters(rowOffset: byte);
 	procedure FirePlayerBullet();
 	procedure UpdatePlayerBullet();
+	procedure showBullet();
 	
 
 
@@ -178,11 +182,8 @@ begin
 		player_joystick_direction := 0;
 		
 	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
+	showBullet();
 	//animateMonsters();
-	
-	// Check fire button
-	if (JOY_FIRE <> 0 and player_bullet_active = 0) then
-		//FirePlayerBullet();
 	
 end;
 
@@ -192,6 +193,27 @@ begin
 	player_bullet_x := player_sprite_x;  // Same X as player
 	player_bullet_y := player_sprite_y - BULLET_SPRITE_HEIGHT;  // One sprite height above player
 end;
+
+procedure showBullet();
+begin
+	SetSpriteLoc(useSprite, @spriteLoc/64 + 1, useBank);  // Use bullet sprite data from slot 1
+	SpritePos(player_bullet_x, player_bullet_y, useSprite);
+	
+	// Set up bullet sprite EARLY (before raster beam reaches it)
+	/*if player_bullet_active <> 0 then
+	begin
+		SetSpriteLoc(useSprite, @spriteLoc/64 + 1, useBank);  // Use bullet sprite data from slot 1
+		//SpritePos(player_bullet_x, player_bullet_y, useSprite);  // Position sprite 0 as bullet
+	end
+	else
+	begin
+		// No bullet - turn off sprite 0 until player region
+		togglebit(sprite_bitmask, useSprite, 0);
+	end;*/
+
+end;
+
+
 
 procedure UpdatePlayerBullet();
 begin
@@ -597,6 +619,8 @@ begin
 	monster_base_y := 82;
 	monster_base_x := 32;
 	
+	sprite_color[useSprite]:= monster_sprite_color;
+	
 	// Set sprite colors
 	sprite_color[monsterSprite1]:= monster_sprite_color;
 	sprite_color[monsterSprite2]:= monster_sprite_color;
@@ -624,6 +648,9 @@ end;
 // This interrupt is triggered one time pr raster cycle
 interrupt MainRasterRow1();
 begin		
+	// Update bullet position
+	UpdatePlayerBullet();
+	showBullet();
 	StartIRQ(@useKernal);  
 	SCREEN_BG_COL:=BLACK;  
 	
@@ -651,56 +678,69 @@ end;
 
 interrupt MainRasterRow2();
 begin
+	showBullet();
 	StartIRQ(@useKernal);
 	
 	UpdateMonsters(MONSTER_ROW_OFFSET);
 	animateMonsters(1); // Prepare sprites for row 2
 	
-	RasterIRQ(MainRasterRow3(), 128+monster_vertical_adjustment, @useKernal);
+	RasterIRQ(MainRasterRow3(), 127+monster_vertical_adjustment, @useKernal);
 	CloseIRQ();
 end;
 
 interrupt MainRasterRow3();
 begin
+	showBullet();
 	StartIRQ(@useKernal);
 	
 	UpdateMonsters(MONSTER_ROW_OFFSET*2);
 	animateMonsters(2); // Prepare sprites for row 3
 	
 	
-	
+	showBullet();
 	RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
 	CloseIRQ();
 end;
 
 interrupt MainRasterJoystick();
-begin
+begin	
+	showBullet();
 	StartIRQ(@useKernal);
 	
 	// Lightweight joystick and sprite update only
-	Memory::Fill(#joystickup,0,5);
+	//Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
 	UpdateSprite();
 	
-	// Update bullet position
-	UpdatePlayerBullet();
+	// Check fire button with debounce (only fire on button press, not hold)	
+	if (joystickbutton=1) then
+	begin
+		
+		if (previous_fire_state = 0 and player_bullet_active = 0) then		
+		begin
+			FirePlayerBullet();
+			//inc(border_debug_color);
+		end;
+		previous_fire_state := 1;
+	end
+	else
+		previous_fire_state := 0;
 
-	RasterIRQ(MainRasterPlayer(), 226, @useKernal);
+	RasterIRQ(MainRasterPlayer(), 225, @useKernal);
 	CloseIRQ();
 end;
 
 interrupt MainRasterPlayer();
 begin
+		
+	//SCREEN_BG_COL := border_debug_color;
+	
+	// Switch sprite 0 from bullet back to player
+	SetSpriteLoc(useSprite, @spriteLoc/64, useBank);  // Player sprite data
+	SpritePos(player_sprite_x, player_sprite_y, useSprite);  // Player position
+
+	//togglebit(sprite_bitmask, useSprite, 1);  // Ensure sprite is enabled for player
 	StartIRQ(@useKernal);
-	SCREEN_BG_COL:=GREEN;
-	
-	// Draw bullet using sprite 0 with bullet sprite data (sprite slot 1)
-	if player_bullet_active <> 0 then
-	begin
-		SetSpriteLoc(useSprite, @spriteLoc/64 + 1, useBank);  // Use bullet sprite data from slot 1
-		SpritePos(player_bullet_x, player_bullet_y, useSprite);  // Reuse sprite 0 at bullet position
-	end;
-	
 	RasterIRQ(MainRasterStarfield(),0,@useKernal);
 	CloseIRQ();
 end;
