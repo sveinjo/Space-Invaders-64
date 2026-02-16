@@ -14,14 +14,14 @@ var
 	Score2 : Integer = 0;
 	
 	// Game constants
-	const INITIAL_INVADER_COUNT : byte = 55;
+	const INITIAL_INVADER_COUNT : byte = 72; // Arcade has 55
 	const MONSTER_SPACING : byte = 54;
 	const MONSTER_ROW_OFFSET : byte = 26;
 	const PLAYER_MIN_X : byte = 39;
 	const PLAYER_MAX_X : byte = 218;
 	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
 	const SCORE_INCREMENT : byte = 9;
-	const ENEMIES_TO_CLEAR : byte = 54;  // How many enemies to clear (out of 72 total)
+	const ENEMIES_TO_CLEAR : byte = 71;  // How many enemies to clear (out of 72 total)
 
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
