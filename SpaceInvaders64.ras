@@ -96,13 +96,14 @@ var
 	interrupt MainRasterPlayer();
 	interrupt MainRasterStarfield();
 	procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
-	procedure animateMonsters(enemyRow: byte);
+	procedure AnimateMonsters(enemyRow: byte);
 	procedure UpdateMonsters(rowOffset: byte);
 	procedure FirePlayerBullet();
 	procedure UpdatePlayerBullet();
 	procedure CheckBulletCollision();
-	procedure showBullet();
+	procedure ShowBullet();
 	Procedure DisplayScore();
+	Procedure DebugBorder();
 	
 
 
@@ -194,7 +195,7 @@ begin
 	//player_bullet_y := player_sprite_y - 30;  // One sprite height above player
 end;
 
-procedure showBullet();
+procedure ShowBullet();
 var
 	bullet_sprite_index : byte;
 begin
@@ -205,7 +206,7 @@ begin
 	if player_bullet_active = 2 then
 		bullet_sprite_index := 2  // Explosion sprite
 	else
-		bullet_sprite_index := 1;  // Normal bullet sprite*/
+		bullet_sprite_index := 1;  // Normal bullet sprite
 	
 	SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
 	SpritePos(player_bullet_x, player_bullet_y, useSprite);
@@ -259,15 +260,12 @@ begin
 	if player_bullet_active = 1 then
 	begin
 		// Read sprite-sprite collision register ($D01F) - this clears it!
-		//collision_register := peek($D01F, 0);
-		collision_register := peek(^$D01E, 0);
+		collision_register := peek(^$D01F, 0);
 		
 	
-		// Check if bullet (sprite 0) collided with any ENEMY sprites (1-4)
-		// Bit 0 = sprite 0 had a collision
-		// Bits 1-4 = enemy sprites
-		// We need BOTH: sprite 0 collided AND it was with an enemy (not itself)
-		if (((collision_register & 1) <> 0) and ((collision_register & 30) <> 0)) then
+		// Check if bullet (sprite 0) collided with anything
+		// Bit 0 of $D01F indicates sprite 0 had a collision
+		if (collision_register & 1) <> 0 then
 		begin
 			// Collision detected! Use coordinate-based detection to find what was hit
 			// This is more reliable than sprite bits with multiplexing
@@ -328,16 +326,19 @@ begin
 				// Column 2: enemies 4(top),5(bottom)
 				hit_enemy_index := enemy_col * 2 + enemy_row;
 				
-				// Destroy the enemy
-				ClearMonster(hit_block_index, 1, hit_enemy_index);
-				
-				// Update block_enemies array to mark this enemy as cleared
-				block_enemies[hit_block_index] := block_enemies[hit_block_index] & ((1 << hit_enemy_index) xor $FF);
-				
-				// Start explosion animation
-				//player_bullet_active := 2;
-				explosion_frame_counter := 0;
-				// Keep bullet position for explosion
+				// Verify the enemy actually exists before destroying it
+				if (block_enemies[hit_block_index] & (1 << hit_enemy_index)) <> 0 then
+				begin
+					// Destroy the enemy
+					ClearMonster(hit_block_index, 1, hit_enemy_index);
+					
+					// Update block_enemies array to mark this enemy as cleared
+					block_enemies[hit_block_index] := block_enemies[hit_block_index] & ((1 << hit_enemy_index) xor $FF);
+					
+					// Start explosion animation
+					//player_bullet_active := 2;
+					explosion_frame_counter := 0;
+				end;
 			end;
 			SCREEN_BG_COL := BLACK;
 		end;
@@ -553,7 +554,7 @@ begin
 		
 		// Update sprite pointers for row 0 - rows 1 and 2 are updated in raster interrupt
 		// Each row uses different sprite blocks: row 0 (3-10), row 1 (11-18), row 2 (19-26)
-		animateMonsters(0); // Row 0 uses sprites based on row parameter
+		AnimateMonsters(0); // Row 0 uses sprites based on row parameter
 		
 		// Clear enemies based on ENEMIES_TO_CLEAR constant
 		if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
@@ -594,7 +595,7 @@ begin
 	end;
 end;
 
-procedure animateMonsters(enemyRow: byte);
+procedure AnimateMonsters(enemyRow: byte);
 var
 	sprite_ptr_base: byte;
 	current_sprite_ptr: byte;
@@ -762,10 +763,11 @@ end;
 // This interrupt is triggered one time pr raster cycle
 interrupt MainRasterRow1();
 begin
+	ShowBullet();	
 	StartIRQ(@useKernal);  
 	
-	border_debug_color := peek(^$D01E, 0);
-	SCREEN_BG_COL := border_debug_color;
+	//border_debug_color := peek(^$D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
 	// Clear sprite collision registers to remove garbage data
 	//asm(" lda $D01E");
@@ -775,14 +777,14 @@ begin
 	
 	// Show bullet sprite in this region
 	//if player_bullet_active <> 0 then
-	//	showBullet();
+	
 	
 
-	if player_bullet_active <> 0 then
+	/*if player_bullet_active <> 0 then
 	begin
-		showBullet();
+		ShowBullet();
 		//SCREEN_BG_COL := border_debug_color;
-	end;
+	end;*/
 	
 	//SCREEN_BG_COL:=BLACK;  
 	
@@ -799,7 +801,7 @@ begin
 	
 	// Update first row of monsters
 	UpdateMonsters(0); 
-	animateMonsters(0); // Prepare sprites for row 1
+	AnimateMonsters(0); // Prepare sprites for row 1
 	
 	RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal);
 	
@@ -810,44 +812,50 @@ end;
 
 interrupt MainRasterRow2();
 begin	
+	ShowBullet();
 	StartIRQ(@useKernal);
-	border_debug_color := peek(^$D01E, 0);
-	SCREEN_BG_COL := border_debug_color;
+	//border_debug_color := peek(^$D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
 	
 
-	if player_bullet_active <> 0 then
+	/*if player_bullet_active <> 0 then
 	begin
-		showBullet();
+		ShowBullet();
 		//SCREEN_BG_COL := border_debug_color;
-	end;
+	end;*/
 	
 	
 	UpdateMonsters(MONSTER_ROW_OFFSET);
-	animateMonsters(1); // Prepare sprites for row 2
+	AnimateMonsters(1); // Prepare sprites for row 2
 	
 	RasterIRQ(MainRasterRow3(), 127+monster_vertical_adjustment, @useKernal);
 	CloseIRQ();
 end;
 
-interrupt MainRasterRow3();
+procedure BorderDebug();
 begin
-	StartIRQ(@useKernal);	
 	border_debug_color := peek(^$D01E, 0);
 	SCREEN_BG_COL := border_debug_color;
+end;
 
+interrupt MainRasterRow3();
+begin		
+	//BorderDebug();
+	ShowBullet();
+	StartIRQ(@useKernal);
 
 	//DisplayScore();
 	
-	if player_bullet_active <> 0 then
+	/*if player_bullet_active <> 0 then
 	begin
 		showBullet();
 		//SCREEN_BG_COL := border_debug_color;
-	end;
+	end;*/
 	
 	
 	UpdateMonsters(MONSTER_ROW_OFFSET*2);
-	animateMonsters(2); // Prepare sprites for row 3
+	AnimateMonsters(2); // Prepare sprites for row 3
 	
 	RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
 	CloseIRQ();
@@ -855,21 +863,20 @@ end;
 
 interrupt MainRasterJoystick();
 begin	
-	border_debug_color := peek(^$D01E, 0);
-	SCREEN_BG_COL := border_debug_color;
-	
+	//BorderDebug();
+	ShowBullet();
 	//DisplayScore();
-	if player_bullet_active <> 0 then
+	/*if player_bullet_active <> 0 then
 	begin
-		showBullet();
+		ShowBullet();
 		//SCREEN_BG_COL := border_debug_color;
-	end;
+	end;*/
 	
 	StartIRQ(@useKernal);
 	
 	// Check collisions AFTER all sprite rows have been displayed
 	// The collision register accumulates hits throughout the frame
-	CheckBulletCollision();
+	//CheckBulletCollision();
 	
 	// Lightweight joystick and sprite update only
 	//Memory::Fill(#joystickup,0,5);
@@ -890,7 +897,7 @@ begin
 	else
 		previous_fire_state := 0;
 
-	
+	//poke(^$D019, 0, 0);
 	RasterIRQ(MainRasterPlayer(), 225, @useKernal);
 	CloseIRQ();
 end;
@@ -924,12 +931,13 @@ end;
 interrupt MainRasterStarfield();
 begin	
 		
-	border_debug_color := peek($D01E, 0);
+	//border_debug_color := peek($D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();    
-	preventirq();    
+	preventirq();  
+	poke(^$D019, 0, 0);  
 	RasterIRQ(MainRasterRow1(), 0, @useKernal);
 end;
 
