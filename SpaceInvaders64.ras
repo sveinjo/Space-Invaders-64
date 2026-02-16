@@ -122,11 +122,13 @@ Procedure DisplayScore();
 Begin	
 	//moveto(30,3,hi(screen_char_loc));
 	//PrintDecimal(Score2,4);
-	moveto(34,3,hi(screen_char_loc));
+	//moveto(34,3,hi(screen_char_loc));
 	//PrintDecimal(Score,3);
 	//PrintNumber(border_debug_color);
+	
+	/*moveto(34,3,hi(screen_char_loc));
 	poke(^$D019, 0, 0);
-	PrintNumber(peek(^$d01e, 0));
+	PrintNumber(peek(^$d01e, 0));*/
 end;
 
 procedure initializeMonsters();
@@ -210,12 +212,12 @@ begin
 	//border_debug_color := peek($D01E, 0);
 	// This is only called in regions where bullet should display
 	// Select sprite based on bullet state: 1=normal bullet, 2=explosion
-	/*if player_bullet_active = 2 then
+	if player_bullet_active = 2 then
 		bullet_sprite_index := 2  // Explosion sprite
 	else
 		bullet_sprite_index := 1;  // Normal bullet sprite*/
 	
-	//SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
+	SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
 	SpritePos(player_bullet_x, player_bullet_y, useSprite);
 end;
 
@@ -764,40 +766,6 @@ end;
 // Main raster interrupt routines.
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-interrupt MainRasterPlayer();
-begin
-	SCREEN_BG_COL := BLACK;
-
-	StartIRQ(@useKernal);
-	asm(" lda $D01E");
-	//asm(" lda $D01F");
-	//border_debug_color := peek($D01E, 0);
-	//SCREEN_BG_COL := border_debug_color;
-	
-		
-	//SCREEN_BG_COL := border_debug_color;
-	
-	// Switch sprite 0 from bullet back to player
-	SetSpriteLoc(useSprite, @spriteLoc/64, useBank);  // Player sprite data
-	SpritePos(player_sprite_x, player_sprite_y, useSprite);  // Player position
-
-	//togglebit(sprite_bitmask, useSprite, 1);  // Ensure sprite is enabled for player
-
-	RasterIRQ(MainRasterStarfield(),0,@useKernal);
-	CloseIRQ();
-end;
-
-interrupt MainRasterStarfield();
-begin	
-		
-	border_debug_color := peek($D01E, 0);
-	SCREEN_BG_COL := border_debug_color;
-	DisplayScore();
-	inc(StarField_RasterCount);
-	StarField::DoStarfield();    
-	preventirq();    
-	RasterIRQ(MainRasterRow1(), 0, @useKernal);
-end;
 
 // This interrupt is triggered one time pr raster cycle
 interrupt MainRasterRow1();
@@ -806,7 +774,7 @@ begin
 	
 	border_debug_color := peek(^$D01E, 0);
 	SCREEN_BG_COL := border_debug_color;
-	DisplayScore();
+	//DisplayScore();
 	// Clear sprite collision registers to remove garbage data
 	//asm(" lda $D01E");
 	//asm(" lda $D01F");
@@ -853,7 +821,7 @@ begin
 	StartIRQ(@useKernal);
 	border_debug_color := peek(^$D01E, 0);
 	SCREEN_BG_COL := border_debug_color;
-	DisplayScore();
+	//DisplayScore();
 	
 
 	if player_bullet_active <> 0 then
@@ -873,9 +841,11 @@ end;
 interrupt MainRasterRow3();
 begin
 	StartIRQ(@useKernal);	
-border_debug_color := peek(^$D01E, 0);
+	border_debug_color := peek(^$D01E, 0);
 	SCREEN_BG_COL := border_debug_color;
-	DisplayScore();
+
+
+	//DisplayScore();
 	
 	if player_bullet_active <> 0 then
 	begin
@@ -895,7 +865,8 @@ interrupt MainRasterJoystick();
 begin	
 	border_debug_color := peek(^$D01E, 0);
 	SCREEN_BG_COL := border_debug_color;
-	DisplayScore();
+	
+	//DisplayScore();
 	if player_bullet_active <> 0 then
 	begin
 		showBullet();
@@ -906,7 +877,7 @@ begin
 	
 	// Check collisions AFTER all sprite rows have been displayed
 	// The collision register accumulates hits throughout the frame
-	//CheckBulletCollision();
+	CheckBulletCollision();
 	
 	// Lightweight joystick and sprite update only
 	//Memory::Fill(#joystickup,0,5);
@@ -927,12 +898,48 @@ begin
 	else
 		previous_fire_state := 0;
 
-	SCREEN_BG_COL := BLACK;
+	
 	RasterIRQ(MainRasterPlayer(), 225, @useKernal);
 	CloseIRQ();
 end;
 
+interrupt MainRasterPlayer();
+begin
+	SCREEN_BG_COL := BLACK;
+	StartIRQ(@useKernal);	
+	//border_debug_color := peek($D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
 
+	
+	//asm(" lda $D01E");
+	//asm(" lda $D01F");
+	//border_debug_color := peek($D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
+	
+		
+	//SCREEN_BG_COL := border_debug_color;
+	
+	// Switch sprite 0 from bullet back to player
+	SetSpriteLoc(useSprite, @spriteLoc/64, useBank);  // Player sprite data
+	SpritePos(player_sprite_x, player_sprite_y, useSprite);  // Player position
+
+	//togglebit(sprite_bitmask, useSprite, 1);  // Ensure sprite is enabled for player
+
+	RasterIRQ(MainRasterStarfield(),263,@useKernal);
+	CloseIRQ();
+end;
+
+interrupt MainRasterStarfield();
+begin	
+		
+	border_debug_color := peek($D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
+	//DisplayScore();
+	inc(StarField_RasterCount);
+	StarField::DoStarfield();    
+	preventirq();    
+	RasterIRQ(MainRasterRow1(), 0, @useKernal);
+end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Main program loop. Turn CIA interrupts off, copy the character set from ROM into RAM and tell the machine to look at CharSetLoc
@@ -954,8 +961,8 @@ begin
     SCREEN_FG_COL:=BLACK;
 	
 	// Clear sprite collision registers to remove garbage data
-	//asm(" lda $D01E");
-	//asm(" lda $D01F");
+	asm(" lda $D01E");
+	asm(" lda $D01F");
 	
 	StarField::CreateStarScreen();
 	
