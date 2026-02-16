@@ -23,7 +23,7 @@ var
 	const PLAYER_MAX_X : byte = 218;
 	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
 	const SCORE_INCREMENT : byte = 9;
-	const ENEMIES_TO_CLEAR : byte = 71;  // How many enemies to clear (out of 72 total)
+	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
 
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
@@ -203,15 +203,13 @@ var
 begin
 	// This is only called in regions where bullet should display
 	// Select sprite based on bullet state: 1=normal bullet, 2=explosion
-	/*if player_bullet_active = 2 then
+	if player_bullet_active = 2 then
 		bullet_sprite_index := 2  // Explosion sprite
 	else
 		bullet_sprite_index := 1;  // Normal bullet sprite
 	
-	SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);*/
+	SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
 	SpritePos(player_bullet_x, player_bullet_y, useSprite);
-	
-	SetSpriteLoc(useSprite, @spriteLoc/64 + 1, useBank);
 end;
 
 
@@ -251,79 +249,98 @@ var
 	hit_block_index : byte;
 	hit_block_row : byte;
 	hit_enemy_index : byte;
-	relative_x : byte;
+	relative_x : integer;
 	relative_y : byte;
 	enemy_col : byte;
 	enemy_row : byte;
 	monster_sprite_y : byte;
+	block_x_pos : integer;
 begin
 	// Only check if bullet is active and flying
 	if player_bullet_active = 1 then
 	begin
-		// Read sprite collision register ($D01E)
-		collision_register := peek($D01E, 0);
+		// Read sprite-sprite collision register ($D01F) - this clears it!
+		collision_register := peek($D01F, 0);
 	
-	// Check if bullet (sprite 0) collided with any enemy sprite (1-4)
-	if collision_register <> 0 then
-	begin
-		// Determine which enemy sprite was hit
-		hit_sprite := 0;
-		if (collision_register & 2) <> 0 then hit_sprite := 1
-		else if (collision_register & 4) <> 0 then hit_sprite := 2
-		else if (collision_register & 8) <> 0 then hit_sprite := 3
-		else if (collision_register & 16) <> 0 then hit_sprite := 4;
-		
-		if hit_sprite <> 0 then
+		// Check if bullet (sprite 0) collided with any ENEMY sprites (1-4)
+		// Bit 0 = sprite 0 had a collision
+		// Bits 1-4 = enemy sprites
+		// We need BOTH: sprite 0 collided AND it was with an enemy (not itself)
+		if (((collision_register & 1) <> 0) and ((collision_register & 30) <> 0)) then
 		begin
-			// Collision register is automatically cleared by reading it
+			// Collision detected! Use coordinate-based detection to find what was hit
+			// This is more reliable than sprite bits with multiplexing
 			
-			// Determine which row this sprite belongs to (0, 1, or 2)
+			// Determine which row based on bullet Y position
 			hit_block_row := 0;
 			monster_sprite_y := monster_base_y + monster_vertical_adjustment;
 			if player_bullet_y >= (monster_sprite_y + MONSTER_ROW_OFFSET) then
-			hit_block_row := 1;
+				hit_block_row := 1;
 			if player_bullet_y >= (monster_sprite_y + MONSTER_ROW_OFFSET * 2) then
-			hit_block_row := 2;
+				hit_block_row := 2;
 			
-			// Calculate block index: row * 4 + sprite column (0-3)
-			hit_block_index := hit_block_row * 4 + (hit_sprite - 1);
+			// Determine which of the 4 sprite blocks (columns) based on bullet X position
+			// Each sprite block spans MONSTER_SPACING pixels (54)
+			// With sprite stretching, each sprite is ~48 pixels wide
+			hit_sprite := 0;
+			if (player_bullet_x >= monster_base_x and player_bullet_x < monster_base_x + 48) then
+				hit_sprite := 1
+			else if (player_bullet_x >= monster_base_x + MONSTER_SPACING and player_bullet_x < monster_base_x + MONSTER_SPACING + 48) then
+				hit_sprite := 2
+			else if (player_bullet_x >= monster_base_x + MONSTER_SPACING * 2 and player_bullet_x < monster_base_x + MONSTER_SPACING * 2 + 48) then
+				hit_sprite := 3
+			else if (player_bullet_x >= monster_base_x + MONSTER_SPACING * 3 and player_bullet_x < monster_base_x + MONSTER_SPACING * 3 + 48) then
+				hit_sprite := 4;
 			
-			// Determine which enemy within the block was hit
-			// Each block is 54 pixels wide (3 enemies × 18 pixels)
-			// Get relative X position within the sprite block
-			relative_x := player_bullet_x - (monster_base_x + (hit_sprite - 1) * MONSTER_SPACING);
-			
-			// Enemies are in 3 columns within each block sprite
-			if relative_x < 18 then
-				enemy_col := 0
-			else if relative_x < 36 then
-				enemy_col := 1
-			else
-				enemy_col := 2;
-			
-			// Enemies are in 2 rows (top and bottom) within block sprite
-			relative_y := player_bullet_y - (monster_sprite_y + hit_block_row * MONSTER_ROW_OFFSET);
-			if relative_y < 11 then  // Approximate middle of 21-pixel sprite
-				enemy_row := 0  // Top row of enemies (0-2)
-			else
-				enemy_row := 1;  // Bottom row of enemies (3-5)
-			
-			// Calculate enemy index within block (0-5)
-			hit_enemy_index := enemy_row * 3 + enemy_col;
-			
-			// Destroy the enemy
-			ClearMonster(hit_block_index, 1, hit_enemy_index);
-			
-			// Update block_enemies array to mark this enemy as cleared
-			block_enemies[hit_block_index] := block_enemies[hit_block_index] & ((1 << hit_enemy_index) xor $FF);
-			
-			// Start explosion animation
-			//player_bullet_active := 2;
-			explosion_frame_counter := 0;
-			// Keep bullet position for explosion
+			// Debug: Show which block column was hit (1=WHITE, 2=RED, 3=CYAN, 4=PURPLE)
+			if hit_sprite > 0 then
+			begin
+				SCREEN_BG_COL := hit_sprite;
+				
+				// Calculate block index: row * 4 + sprite column (0-3)
+				hit_block_index := hit_block_row * 4 + (hit_sprite - 1);
+				
+				// Determine which enemy within the block was hit
+				// Sprites are stretched (double-wide), so each enemy is ~10 pixels wide
+				// Get relative X position within the sprite block
+				block_x_pos := monster_base_x + (hit_sprite - 1) * MONSTER_SPACING;
+				relative_x := player_bullet_x - block_x_pos;
+				
+				// Enemies are in 3 columns, each ~16 pixels wide (8 sprite pixels × 2 stretch)
+				if relative_x < 16 then
+					enemy_col := 0
+				else if relative_x < 32 then
+					enemy_col := 1
+				else
+					enemy_col := 2;
+				
+				// Enemies are in 2 rows (top and bottom) within block sprite
+				relative_y := player_bullet_y - (monster_sprite_y + hit_block_row * MONSTER_ROW_OFFSET);
+				if relative_y < 11 then  // Approximate middle of 21-pixel sprite
+					enemy_row := 0  // Top row
+				else
+					enemy_row := 1;  // Bottom row
+				
+				// Calculate enemy index using column-based indexing:
+				// Column 0: enemies 0(top),1(bottom)
+				// Column 1: enemies 2(top),3(bottom)
+				// Column 2: enemies 4(top),5(bottom)
+				hit_enemy_index := enemy_col * 2 + enemy_row;
+				
+				// Destroy the enemy
+				ClearMonster(hit_block_index, 1, hit_enemy_index);
+				
+				// Update block_enemies array to mark this enemy as cleared
+				block_enemies[hit_block_index] := block_enemies[hit_block_index] & ((1 << hit_enemy_index) xor $FF);
+				
+				// Start explosion animation
+				//player_bullet_active := 2;
+				explosion_frame_counter := 0;
+				// Keep bullet position for explosion
+			end;
+			SCREEN_BG_COL := BLACK;
 		end;
 	end;
-	end;  // Close outer if player_bullet_active = 1
 end;
 
 Procedure DisplayText();
@@ -373,17 +390,19 @@ begin
 	sub_local := Helpers::Mod(clear_local_index, 6);
 	clear_row := 2 - Helpers::Div(sub_local, 2);
 	enemy_sub := Helpers::Mod(sub_local, 2);
+	// Column-based enemy indexing: Col0(0,1), Col1(2,3), Col2(4,5)
+	// Clear from right to left, bottom then top within each column
 	if pair_index = 0 then
 	begin
-		if enemy_sub = 0 then enemy_type := 5 else enemy_type := 2;
+		if enemy_sub = 0 then enemy_type := 5 else enemy_type := 4;  // Right column
 	end
 	else if pair_index = 1 then
 	begin
-		if enemy_sub = 0 then enemy_type := 4 else enemy_type := 1;
+		if enemy_sub = 0 then enemy_type := 3 else enemy_type := 2;  // Middle column
 	end
 	else
 	begin
-		if enemy_sub = 0 then enemy_type := 3 else enemy_type := 0;
+		if enemy_sub = 0 then enemy_type := 1 else enemy_type := 0;  // Left column
 	end;
 	temp_enemy_index := enemy_type;
 	temp_block_index := clear_col + clear_row * 4;
@@ -418,18 +437,18 @@ begin
 		begin
 			rightmost_block_index := rightmost_block_column + rightmost_row_index * 4;
 			rightmost_enemies_byte := block_enemies[rightmost_block_index];
-			// Check enemy columns right to left: 2/5, then 1/4, then 0/3
-			if (rightmost_enemies_byte & $24) <> 0 then  // bit 5 or 2 set (right column)
+			// Column-based indexing: check right to left
+			if (rightmost_enemies_byte & $30) <> 0 then  // bits 4,5 set (right column: enemies 4,5)
 			begin
 				rightmost_result_offset := rightmost_block_column * 54 + 36;
 				rightmost_found_flag := 1;
 			end
-			else if (rightmost_enemies_byte & $12) <> 0 then  // bit 4 or 1 set (middle column)
+			else if (rightmost_enemies_byte & $0C) <> 0 then  // bits 2,3 set (middle column: enemies 2,3)
 			begin
 				rightmost_result_offset := rightmost_block_column * 54 + 18;
 				rightmost_found_flag := 1;
 			end
-			else if (rightmost_enemies_byte & $09) <> 0 then  // bit 3 or 0 set (left column)
+			else if (rightmost_enemies_byte & $03) <> 0 then  // bits 0,1 set (left column: enemies 0,1)
 			begin
 				rightmost_result_offset := rightmost_block_column * 54;
 				rightmost_found_flag := 1;
@@ -469,18 +488,18 @@ begin
 		begin
 			leftmost_block_index := leftmost_block_column + leftmost_row_index * 4;
 			leftmost_enemies_byte := block_enemies[leftmost_block_index];
-			// Check enemy columns left to right: 0/3, then 1/4, then 2/5
-			if (leftmost_enemies_byte & $09) <> 0 then  // bit 3 or 0 set (left column)
+			// Column-based indexing: check left to right
+			if (leftmost_enemies_byte & $03) <> 0 then  // bits 0,1 set (left column: enemies 0,1)
 			begin
 				leftmost_result_offset := leftmost_block_column * 54;
 				leftmost_found_flag := 1;
 			end
-			else if (leftmost_enemies_byte & $12) <> 0 then  // bit 4 or 1 set (middle column)
+			else if (leftmost_enemies_byte & $0C) <> 0 then  // bits 2,3 set (middle column: enemies 2,3)
 			begin
 				leftmost_result_offset := leftmost_block_column * 54 + 18;
 				leftmost_found_flag := 1;
 			end
-			else if (leftmost_enemies_byte & $24) <> 0 then  // bit 5 or 2 set (right column)
+			else if (leftmost_enemies_byte & $30) <> 0 then  // bits 4,5 set (right column: enemies 4,5)
 			begin
 				leftmost_result_offset := leftmost_block_column * 54 + 36;
 				leftmost_found_flag := 1;
@@ -602,7 +621,7 @@ end;
 procedure UpdateMonsters(rowOffset: byte);
 var
 	y_position: byte;
-	x_position: byte;
+	x_position: integer;
 begin
 	// Pre-calculate Y position to avoid repeated additions
 	y_position := monster_base_y + rowOffset + monster_vertical_adjustment;
@@ -638,21 +657,20 @@ Begin
 	frame1_sprite_index := 26 + (blockIndex << 1);  // First animation frame
 	frame2_sprite_index := frame1_sprite_index + 1;  // Second animation frame
 	
-	// Each block contains 6 enemies in a 3x2 grid:
-	// Enemy 0-2: Top row (3 horizontally, each 5 pixels wide)
-	// Enemy 3-5: Bottom row (3 horizontally, separated by 5 empty pixel rows)
+	// Each block contains 6 enemies in a 3x2 grid (column-based indexing):
+	// Column 0: Enemy 0(top), 1(bottom)
+	// Column 1: Enemy 2(top), 3(bottom)
+	// Column 2: Enemy 4(top), 5(bottom)
 	// Each enemy is 5 pixels wide × 8 pixels tall
 	
-	// Calculate horizontal offset - which byte in each row to clear (0, 1, or 2)
-	// Sprite rows are 3 bytes wide, 3 enemies fit in 3 columns
-	enemy_horizontal_offset := Helpers::Mod(enemyIndex, 3);
+	// Calculate horizontal offset - which byte column (0, 1, or 2)
+	// Enemy index: 0,1=col0, 2,3=col1, 4,5=col2
+	enemy_horizontal_offset := enemyIndex >> 1;  // Divide by 2 to get column
 	
 	// Calculate vertical offset
-	// Top row (enemies 0-2): row 0
-	// Bottom row (enemies 3-5): row 13 (8 enemy rows + 5 empty rows)
-	// Each sprite row is 3 bytes, so 13 rows = 39 bytes
-	// enemyIndex / 3 gives 0 for top row, 1 for bottom row
-	if enemyIndex >= 3 then
+	// Even indices (0,2,4): top row at offset 0
+	// Odd indices (1,3,5): bottom row at offset 13 rows
+	if (enemyIndex & 1) <> 0 then
 		enemy_vertical_offset := 39  // 13 rows * 3 bytes = 39
 	else
 		enemy_vertical_offset := 0;
@@ -767,9 +785,6 @@ begin
 	UpdateMonsters(0); 
 	animateMonsters(0); // Prepare sprites for row 1
 	
-	// Check for collisions with row 0 enemies
-	CheckBulletCollision();
-	
 	RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal);
 	
 	// Play music here - plenty of time after monsters
@@ -787,9 +802,6 @@ begin
 	UpdateMonsters(MONSTER_ROW_OFFSET);
 	animateMonsters(1); // Prepare sprites for row 2
 	
-	// Check for collisions with row 1 enemies
-	//CheckBulletCollision();
-	
 	RasterIRQ(MainRasterRow3(), 127+monster_vertical_adjustment, @useKernal);
 	CloseIRQ();
 end;
@@ -804,9 +816,6 @@ begin
 	UpdateMonsters(MONSTER_ROW_OFFSET*2);
 	animateMonsters(2); // Prepare sprites for row 3
 	
-	// Check for collisions with row 2 enemies
-	//CheckBulletCollision();
-	
 	RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
 	CloseIRQ();
 end;
@@ -817,6 +826,10 @@ begin
 		showBullet();
 	
 	StartIRQ(@useKernal);
+	
+	// Check collisions AFTER all sprite rows have been displayed
+	// The collision register accumulates hits throughout the frame
+	CheckBulletCollision();
 	
 	// Lightweight joystick and sprite update only
 	//Memory::Fill(#joystickup,0,5);
@@ -844,7 +857,7 @@ end;
 interrupt MainRasterPlayer();
 begin
 		
-	//SCREEN_BG_COL := border_debug_color;
+	SCREEN_BG_COL := border_debug_color;
 	
 	// Switch sprite 0 from bullet back to player
 	SetSpriteLoc(useSprite, @spriteLoc/64, useBank);  // Player sprite data
@@ -882,6 +895,10 @@ begin
 	DisableCIAInterrupts();
     SCREEN_BG_COL:=BLACK;
     SCREEN_FG_COL:=BLACK;
+	
+	// Clear sprite collision registers to remove garbage data
+	asm(" lda $D01E");
+	asm(" lda $D01F");
 	
 	StarField::CreateStarScreen();
 	
