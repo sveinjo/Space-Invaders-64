@@ -20,7 +20,7 @@ var
 	const PLAYER_MIN_X : byte = 19;
 	const PLAYER_MAX_X : byte = 238;
 	const SCORE_INCREMENT : byte = 9;
-	const ENEMIES_TO_CLEAR : byte = 24;  // How many enemies to clear (out of 72 total)
+	const ENEMIES_TO_CLEAR : byte = 54;  // How many enemies to clear (out of 72 total)
 
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
@@ -151,7 +151,7 @@ begin
 	DisplayScore();
 	
 	// Update player position based on joystick input
-	pos_x := Helpers::Clamp(pos_x + (joystickright*2 - joystickleft*2), PLAYER_MIN_X, PLAYER_MAX_X);
+	pos_x := Helpers::Clamp(pos_x + (joystickright - joystickleft), PLAYER_MIN_X, PLAYER_MAX_X);
 	player_sprite_x := pos_x;
 	
 	
@@ -371,15 +371,7 @@ begin
 	end
 	else begin
 		enemyMoveCounter := (INITIAL_INVADER_COUNT - numberOfEnemies);
-		
-		// Speed up as enemies decrease
-		if (numberOfEnemies < INITIAL_INVADER_COUNT - 1) then
-		begin
-			inc(numberOfEnemies);	
-			/*inc(numberOfEnemies);	
-			inc(numberOfEnemies);*/
-		end;
-		
+				
 		monster_animation_frame := monster_animation_frame xor 1;
 		
 		// Update sprite pointers for row 0 - rows 1 and 2 are updated in raster interrupt
@@ -391,6 +383,14 @@ begin
 		begin
 			ClearEnemyAtCounter();
 			dec(sequential_clear_counter);
+			
+			// Speed up as enemies decrease
+			if (numberOfEnemies < INITIAL_INVADER_COUNT - 1) then
+			begin
+				inc(numberOfEnemies);	
+				/*inc(numberOfEnemies);	
+				inc(numberOfEnemies);*/
+			end;
 		end;
 		
 		should_move_enemy := 1;
