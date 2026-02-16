@@ -23,7 +23,7 @@ var
 	const PLAYER_MAX_X : byte = 218;
 	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
 	const SCORE_INCREMENT : byte = 9;
-	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
+	const ENEMIES_TO_CLEAR : byte = 71;  // How many enemies to clear (out of 72 total)
 	const MONSTER_SPRITE_HEIGHT : byte = 21;
 	const ENEMY_COLUMN_WIDTH : byte = 16;
 	const ENEMY_HITBOX_HALF_WIDTH : byte = 8;
