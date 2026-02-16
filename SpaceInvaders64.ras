@@ -24,6 +24,11 @@ var
 	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
 	const SCORE_INCREMENT : byte = 9;
 	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
+	const MONSTER_SPRITE_HEIGHT : byte = 21;
+	const ENEMY_COLUMN_WIDTH : byte = 16;
+	const ENEMY_HITBOX_HALF_WIDTH : byte = 8;
+	const ENEMY_HITBOX_HALF_HEIGHT : byte = 10;
+	const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
@@ -245,115 +250,92 @@ end;
 
 procedure CheckBulletCollision();
 var
-	collision_register : byte;
-	hit_sprite : byte;
-	hit_block_index : byte;
-	hit_block_row : byte;
-	hit_enemy_index : byte;
-	relative_x : integer;
-	relative_y : byte;
+	block_row : byte;
+	block_col : byte;
+	block_index : byte;
+	enemy_alive : byte;
+	block_x : byte;
+	block_y : byte;
+	rel_x : byte;
+	rel_y : byte;
 	enemy_col : byte;
 	enemy_row : byte;
-	monster_sprite_y : byte;
-	block_x_pos : integer;
-	sprite_center_x : byte;
-	sprite_center_y : byte;
-	bullet_x_byte : byte;
-	test_column : byte;
+	hit_enemy_index : byte;
+	cbc_enemy_mask : byte;
+	should_check : byte;
+	found_hit : byte;
 begin
-	// Only check if bullet is active and flying
-	if player_bullet_active = 1 then
-	begin
-		// Read sprite-sprite collision register ($D01F) - this clears it!
-		collision_register := peek(^$D01F, 0);
-		
+	should_check := 1;
+	found_hit := 0;
 	
-		// Check if bullet (sprite 0) collided with anything
-		// Bit 0 of $D01F indicates sprite 0 had a collision
-		if (collision_register & 1) <> 0 then
+	// Early exit if bullet outside enemy formation area
+	if player_bullet_y < monster_base_y then
+		should_check := 0;
+	if player_bullet_y > monster_base_y + monster_vertical_adjustment + 60 then
+		should_check := 0;
+	
+	if should_check <> 0 then
+	begin
+		// Calculate which block row (0-2) the bullet is in
+		rel_y := player_bullet_y - monster_base_y - monster_vertical_adjustment;
+		if rel_y < MONSTER_ROW_OFFSET then
+			block_row := 0
+		else if rel_y < MONSTER_ROW_OFFSET * 2 then
+			block_row := 1
+		else
+			block_row := 2;
+		
+		// Check all 4 blocks in the bullet's row
+		block_col := 0;
+		while (block_col <= 3 and found_hit = 0) do
 		begin
-			// Collision detected! Use IsOverlapping to find which sprite column was hit
+			block_index := block_row * 4 + block_col;
+			enemy_alive := block_enemies[block_index];
 			
-			// Determine which row based on bullet Y position
-			hit_block_row := 0;
-			monster_sprite_y := monster_base_y + monster_vertical_adjustment;
-			if player_bullet_y >= (monster_sprite_y + MONSTER_ROW_OFFSET) then
-				hit_block_row := 1;
-			if player_bullet_y >= (monster_sprite_y + MONSTER_ROW_OFFSET * 2) then
-				hit_block_row := 2;
-			
-			// Calculate sprite center Y for this row
-			sprite_center_y := monster_sprite_y + hit_block_row * MONSTER_ROW_OFFSET + 10;  // +10 = sprite center
-			
-			// Scale bullet X down to byte range (divide by 2 to fit 0-255)
-			bullet_x_byte := player_bullet_x >> 1;
-			
-			// Test each of the 4 sprite columns using IsOverlapping
-			hit_sprite := 0;
-			test_column := 0;
-			while (test_column < 4 and hit_sprite = 0) do
+			if enemy_alive <> 0 then
 			begin
-				// Calculate center X of this sprite column (scaled down by 2)
-				sprite_center_x := (monster_base_x + test_column * MONSTER_SPACING + 24) >> 1;  // +24 = sprite center (48/2)
+				block_x := monster_base_x + block_col * MONSTER_SPACING;
 				
-				// Test if bullet overlaps this sprite (distance 48 = generous hitbox)
-				if IsOverlapping(bullet_x_byte, player_bullet_y, sprite_center_x, sprite_center_y, 48) = 1 then
-				begin
-					hit_sprite := test_column + 1;
-				end;
-				inc(test_column);
+				// Quick horizontal range check
+				if player_bullet_x >= block_x then
+					if player_bullet_x < block_x + 48 then
+					begin
+						// Inside this block horizontally - check which enemy
+						rel_x := player_bullet_x - block_x;
+						block_y := monster_base_y + monster_vertical_adjustment + block_row * MONSTER_ROW_OFFSET;
+						rel_y := player_bullet_y - block_y;
+						
+						// Determine enemy column (0-2) by X position
+						if rel_x < 16 then
+							enemy_col := 0
+						else if rel_x < 32 then
+							enemy_col := 1
+						else
+							enemy_col := 2;
+						
+						// Determine enemy row (0-1) by Y position  
+						if rel_y < 10 then
+							enemy_row := 0
+						else
+							enemy_row := 1;
+						
+						hit_enemy_index := enemy_col * 2 + enemy_row;
+						cbc_enemy_mask := 1 << hit_enemy_index;
+						
+						// Check if this enemy is alive
+						if (enemy_alive & cbc_enemy_mask) <> 0 then
+						begin
+							// Hit! Clear enemy and trigger explosion
+							ClearMonster(block_index, 1, hit_enemy_index);
+							block_enemies[block_index] := enemy_alive & (cbc_enemy_mask xor $FF);
+							player_bullet_active := 2;
+							explosion_frame_counter := 0;
+							found_hit := 1;
+						end;
+					end;
 			end;
 			
-			// Debug: Show which block column was hit (1=WHITE, 2=RED, 3=CYAN, 4=PURPLE)
-			if hit_sprite > 0 then
-			begin
-				//SCREEN_BG_COL := hit_sprite;
-				
-				// Calculate block index: row * 4 + sprite column (0-3)
-				hit_block_index := hit_block_row * 4 + (hit_sprite - 1);
-				
-				// Determine which enemy within the block was hit
-				// Sprites are stretched (double-wide), so each enemy is ~10 pixels wide
-				// Get relative X position within the sprite block
-				block_x_pos := monster_base_x + (hit_sprite - 1) * MONSTER_SPACING;
-				relative_x := player_bullet_x - block_x_pos;
-				
-				// Enemies are in 3 columns, each ~16 pixels wide (8 sprite pixels × 2 stretch)
-				if relative_x < 16 then
-					enemy_col := 0
-				else if relative_x < 32 then
-					enemy_col := 1
-				else
-					enemy_col := 2;
-				
-				// Enemies are in 2 rows (top and bottom) within block sprite
-				relative_y := player_bullet_y - (monster_sprite_y + hit_block_row * MONSTER_ROW_OFFSET);
-				if relative_y < 11 then  // Approximate middle of 21-pixel sprite
-					enemy_row := 0  // Top row
-				else
-					enemy_row := 1;  // Bottom row
-				
-				// Calculate enemy index using column-based indexing:
-				// Column 0: enemies 0(top),1(bottom)
-				// Column 1: enemies 2(top),3(bottom)
-				// Column 2: enemies 4(top),5(bottom)
-				hit_enemy_index := enemy_col * 2 + enemy_row;
-				
-				// Verify the enemy actually exists before destroying it
-				if (block_enemies[hit_block_index] & (1 << hit_enemy_index)) <> 0 then
-				begin
-					// Destroy the enemy
-					ClearMonster(hit_block_index, 1, hit_enemy_index);
-					
-					// Update block_enemies array to mark this enemy as cleared
-					block_enemies[hit_block_index] := block_enemies[hit_block_index] & ((1 << hit_enemy_index) xor $FF);
-					
-					// Start explosion animation
-					player_bullet_active := 2;
-					explosion_frame_counter := 0;
-				end;
-			end;
-			SCREEN_BG_COL := BLACK;
+			inc(block_col);
 		end;
 	end;
 end;
@@ -396,7 +378,7 @@ var
 	pair_index : byte;
 	sub_local : byte;
 	enemy_sub : byte;
-	enemy_mask : byte;
+	cec_enemy_mask : byte;
 begin
 	clear_index := 71 - sequential_clear_counter;
 	clear_col := 3 - Helpers::Div(clear_index, 18);
@@ -423,8 +405,8 @@ begin
 	temp_block_index := clear_col + clear_row * 4;
 	ClearMonster(temp_block_index, 1, temp_enemy_index);
 	// Update block_enemies array to mark this enemy as cleared
-	enemy_mask := 1 << enemy_type;
-	block_enemies[temp_block_index] := block_enemies[temp_block_index] & (enemy_mask xor $FF);
+	cec_enemy_mask := 1 << enemy_type;
+	block_enemies[temp_block_index] := block_enemies[temp_block_index] & (cec_enemy_mask xor $FF);
 end;
 
 // Find the rightmost occupied enemy column offset (0-172)
@@ -777,7 +759,7 @@ end;
 interrupt MainRasterRow1();
 begin
 	ShowBullet();	
-	CheckBulletCollision();
+	//CheckBulletCollision();
 	StartIRQ(@useKernal);  
 	
 	//border_debug_color := peek(^$D01E, 0);
@@ -899,8 +881,9 @@ begin
 	StartIRQ(@useKernal);
 	
 	// Check collisions AFTER all sprite rows have been displayed
-	// The collision register accumulates hits throughout the frame
-	
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
+		CheckBulletCollision();
 	
 	// Lightweight joystick and sprite update only
 	//Memory::Fill(#joystickup,0,5);
