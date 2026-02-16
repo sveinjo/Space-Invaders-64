@@ -199,17 +199,18 @@ procedure ShowBullet();
 var
 	bullet_sprite_index : byte;
 begin
-	//asm(" lda $D01E");
-	//border_debug_color := peek($D01E, 0);
-	// This is only called in regions where bullet should display
-	// Select sprite based on bullet state: 1=normal bullet, 2=explosion
-	if player_bullet_active = 2 then
-		bullet_sprite_index := 2  // Explosion sprite
-	else
-		bullet_sprite_index := 1;  // Normal bullet sprite
-	
-	SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
-	SpritePos(player_bullet_x, player_bullet_y, useSprite);
+	// Only display if bullet is active
+	if player_bullet_active <> 0 then
+	begin
+		// Select sprite based on bullet state: 1=normal bullet, 2=explosion
+		if player_bullet_active = 2 then
+			bullet_sprite_index := 2  // Explosion sprite
+		else
+			bullet_sprite_index := 1;  // Normal bullet sprite
+		
+		SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
+		SpritePos(player_bullet_x, player_bullet_y, useSprite);
+	end;
 end;
 
 
@@ -255,6 +256,10 @@ var
 	enemy_row : byte;
 	monster_sprite_y : byte;
 	block_x_pos : integer;
+	sprite_center_x : byte;
+	sprite_center_y : byte;
+	bullet_x_byte : byte;
+	test_column : byte;
 begin
 	// Only check if bullet is active and flying
 	if player_bullet_active = 1 then
@@ -267,8 +272,7 @@ begin
 		// Bit 0 of $D01F indicates sprite 0 had a collision
 		if (collision_register & 1) <> 0 then
 		begin
-			// Collision detected! Use coordinate-based detection to find what was hit
-			// This is more reliable than sprite bits with multiplexing
+			// Collision detected! Use IsOverlapping to find which sprite column was hit
 			
 			// Determine which row based on bullet Y position
 			hit_block_row := 0;
@@ -278,23 +282,32 @@ begin
 			if player_bullet_y >= (monster_sprite_y + MONSTER_ROW_OFFSET * 2) then
 				hit_block_row := 2;
 			
-			// Determine which of the 4 sprite blocks (columns) based on bullet X position
-			// Each sprite block spans MONSTER_SPACING pixels (54)
-			// With sprite stretching, each sprite is ~48 pixels wide
+			// Calculate sprite center Y for this row
+			sprite_center_y := monster_sprite_y + hit_block_row * MONSTER_ROW_OFFSET + 10;  // +10 = sprite center
+			
+			// Scale bullet X down to byte range (divide by 2 to fit 0-255)
+			bullet_x_byte := player_bullet_x >> 1;
+			
+			// Test each of the 4 sprite columns using IsOverlapping
 			hit_sprite := 0;
-			if (player_bullet_x >= monster_base_x and player_bullet_x < monster_base_x + 48) then
-				hit_sprite := 1
-			else if (player_bullet_x >= monster_base_x + MONSTER_SPACING and player_bullet_x < monster_base_x + MONSTER_SPACING + 48) then
-				hit_sprite := 2
-			else if (player_bullet_x >= monster_base_x + MONSTER_SPACING * 2 and player_bullet_x < monster_base_x + MONSTER_SPACING * 2 + 48) then
-				hit_sprite := 3
-			else if (player_bullet_x >= monster_base_x + MONSTER_SPACING * 3 and player_bullet_x < monster_base_x + MONSTER_SPACING * 3 + 48) then
-				hit_sprite := 4;
+			test_column := 0;
+			while (test_column < 4 and hit_sprite = 0) do
+			begin
+				// Calculate center X of this sprite column (scaled down by 2)
+				sprite_center_x := (monster_base_x + test_column * MONSTER_SPACING + 24) >> 1;  // +24 = sprite center (48/2)
+				
+				// Test if bullet overlaps this sprite (distance 48 = generous hitbox)
+				if IsOverlapping(bullet_x_byte, player_bullet_y, sprite_center_x, sprite_center_y, 48) = 1 then
+				begin
+					hit_sprite := test_column + 1;
+				end;
+				inc(test_column);
+			end;
 			
 			// Debug: Show which block column was hit (1=WHITE, 2=RED, 3=CYAN, 4=PURPLE)
 			if hit_sprite > 0 then
 			begin
-				SCREEN_BG_COL := hit_sprite;
+				//SCREEN_BG_COL := hit_sprite;
 				
 				// Calculate block index: row * 4 + sprite column (0-3)
 				hit_block_index := hit_block_row * 4 + (hit_sprite - 1);
@@ -336,7 +349,7 @@ begin
 					block_enemies[hit_block_index] := block_enemies[hit_block_index] & ((1 << hit_enemy_index) xor $FF);
 					
 					// Start explosion animation
-					//player_bullet_active := 2;
+					player_bullet_active := 2;
 					explosion_frame_counter := 0;
 				end;
 			end;
@@ -764,6 +777,7 @@ end;
 interrupt MainRasterRow1();
 begin
 	ShowBullet();	
+	CheckBulletCollision();
 	StartIRQ(@useKernal);  
 	
 	//border_debug_color := peek(^$D01E, 0);
@@ -812,8 +826,10 @@ end;
 
 interrupt MainRasterRow2();
 begin	
-	ShowBullet();
-	StartIRQ(@useKernal);
+	StartIRQ(@useKernal);	
+	SCREEN_BG_COL := BLUE;
+	//ShowBullet();
+	
 	//border_debug_color := peek(^$D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
@@ -829,7 +845,7 @@ begin
 	UpdateMonsters(MONSTER_ROW_OFFSET);
 	AnimateMonsters(1); // Prepare sprites for row 2
 	
-	RasterIRQ(MainRasterRow3(), 127+monster_vertical_adjustment, @useKernal);
+	RasterIRQ(MainRasterRow3(), 126+monster_vertical_adjustment, @useKernal);
 	CloseIRQ();
 end;
 
@@ -842,7 +858,9 @@ end;
 interrupt MainRasterRow3();
 begin		
 	//BorderDebug();
-	ShowBullet();
+	SCREEN_BG_COL := GREEN;
+	//ShowBullet();
+
 	StartIRQ(@useKernal);
 
 	//DisplayScore();
@@ -863,8 +881,14 @@ end;
 
 interrupt MainRasterJoystick();
 begin	
+	SCREEN_BG_COL := RED;
 	//BorderDebug();
-	ShowBullet();
+	/*if player_bullet_active <> 0 then
+	begin
+		ShowBullet();
+		//SCREEN_BG_COL := border_debug_color;
+	end;*/
+	//ShowBullet();
 	//DisplayScore();
 	/*if player_bullet_active <> 0 then
 	begin
@@ -876,12 +900,12 @@ begin
 	
 	// Check collisions AFTER all sprite rows have been displayed
 	// The collision register accumulates hits throughout the frame
-	//CheckBulletCollision();
+	
 	
 	// Lightweight joystick and sprite update only
 	//Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
-	UpdateSprite();
+	//UpdateSprite();
 	
 	// Check fire button with debounce (only fire on button press, not hold)	
 	if (joystickbutton=1) then
@@ -898,12 +922,13 @@ begin
 		previous_fire_state := 0;
 
 	//poke(^$D019, 0, 0);
-	RasterIRQ(MainRasterPlayer(), 225, @useKernal);
+	RasterIRQ(MainRasterPlayer(), 224, @useKernal);
 	CloseIRQ();
 end;
 
 interrupt MainRasterPlayer();
 begin
+	UpdateSprite();
 	SCREEN_BG_COL := BLACK;
 	StartIRQ(@useKernal);	
 	//border_debug_color := peek($D01E, 0);
