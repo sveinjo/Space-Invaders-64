@@ -34,6 +34,13 @@ var
 	
 	pos_x : byte = PLAYER_MIN_X;
 
+	// Player bullet variables
+	player_bullet_active : byte = 0;  // 0 = inactive, 1 = active
+	player_bullet_x : byte;
+	player_bullet_y : byte;
+	const BULLET_SPEED : byte = 4;  // Pixels per frame
+	const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
+
 								
   
 	// sprite_x is usually an integer since x values range between 
@@ -78,11 +85,16 @@ var
 
 	// Declarations
 	interrupt MainRasterRow1();
+	interrupt MainRasterRow2();
+	interrupt MainRasterRow3();
 	interrupt MainRasterJoystick();
+	interrupt MainRasterPlayer();
 	interrupt MainRasterStarfield();
 	procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
 	procedure animateMonsters(enemyRow: byte);
 	procedure UpdateMonsters(rowOffset: byte);
+	procedure FirePlayerBullet();
+	procedure UpdatePlayerBullet();
 	
 
 
@@ -149,7 +161,7 @@ end;*/
 procedure UpdateSprite();
 begin
 	
-	DisplayScore();
+	//DisplayScore();
 	
 	// Update player position based on joystick input
 	pos_x := Helpers::Clamp(pos_x + (joystickright - joystickleft), PLAYER_MIN_X, PLAYER_MAX_X);
@@ -168,6 +180,34 @@ begin
 	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
 	//animateMonsters();
 	
+	// Check fire button
+	if (JOY_FIRE <> 0 and player_bullet_active = 0) then
+		//FirePlayerBullet();
+	
+end;
+
+procedure FirePlayerBullet();
+begin
+	player_bullet_active := 1;
+	player_bullet_x := player_sprite_x;  // Same X as player
+	player_bullet_y := player_sprite_y - BULLET_SPRITE_HEIGHT;  // One sprite height above player
+end;
+
+procedure UpdatePlayerBullet();
+begin
+	if player_bullet_active <> 0 then
+	begin
+		// Move bullet up
+		if player_bullet_y > BULLET_SPEED then
+		begin
+			player_bullet_y := player_bullet_y - BULLET_SPEED;
+		end
+		else
+		begin
+			// Bullet reached top of screen, deactivate
+			player_bullet_active := 0;
+		end;
+	end;
 end;
 
 Procedure DisplayText();
@@ -584,74 +624,93 @@ end;
 // This interrupt is triggered one time pr raster cycle
 interrupt MainRasterRow1();
 begin		
-	StartIRQ(@useKernal);    
-
+	StartIRQ(@useKernal);  
+	SCREEN_BG_COL:=BLACK;  
 	
+	// Do heavy work at start of frame where we have most time
 	// Increment score
 	Score += SCORE_INCREMENT;
-
 	if (Score >= 10000) then begin
 		Score := Score - 10000;
 		Score2 += 1;
-	end;                
+	end;
 	
+	// Heavy game logic - done here at top of frame
+	UpdateTick();
+	
+	// Update first row of monsters
 	UpdateMonsters(0); 
+	animateMonsters(0); // Prepare sprites for row 1
 	
-	// Calculate the base sprite index for this row
-	// Row 0: blocks 0-3 (sprites 3-10)
-	// Row 1: blocks 4-7 (sprites 11-18)
-	// Row 2: blocks 8-11 (sprites 19-26)
+	RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal);
 	
-	// Update monster positions for all three rows
-	// Set sprite pointers for row 1 before displaying it
-	animateMonsters(0); // Row 1 uses sprites 34-41
-	//SCREEN_BG_COL:=RED;
-	WaitForRaster(97+monster_vertical_adjustment);	
+	// Play music here - plenty of time after monsters
+	call(sidfile_1_play);
+	CloseIRQ();
+end;
+
+interrupt MainRasterRow2();
+begin
+	StartIRQ(@useKernal);
+	
 	UpdateMonsters(MONSTER_ROW_OFFSET);
+	animateMonsters(1); // Prepare sprites for row 2
 	
-	// Set sprite pointers for row 2 before displaying it  
-	animateMonsters(1); // Row 2 uses sprites 42-49
-	//SCREEN_BG_COL:=BLUE;
-	WaitForRaster(128+monster_vertical_adjustment);
+	RasterIRQ(MainRasterRow3(), 128+monster_vertical_adjustment, @useKernal);
+	CloseIRQ();
+end;
+
+interrupt MainRasterRow3();
+begin
+	StartIRQ(@useKernal);
 	
 	UpdateMonsters(MONSTER_ROW_OFFSET*2);
-	animateMonsters(2); // Row 2 uses sprites 42-49
-	// SCREEN_BG_COL:=GREEN;
-	WaitForRaster(155+monster_vertical_adjustment);
-                	
-	// Update joystick here
+	animateMonsters(2); // Prepare sprites for row 3
+	
+	
+	
+	RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
+	CloseIRQ();
+end;
+
+interrupt MainRasterJoystick();
+begin
+	StartIRQ(@useKernal);
+	
+	// Lightweight joystick and sprite update only
 	Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
-	// Update sprites
 	UpdateSprite();
-
-	call(sidfile_1_play);	
 	
-	UpdateTick();
-	SCREEN_BG_COL:=BLACK;
+	// Update bullet position
+	UpdatePlayerBullet();
+
+	RasterIRQ(MainRasterPlayer(), 226, @useKernal);
+	CloseIRQ();
+end;
+
+interrupt MainRasterPlayer();
+begin
+	StartIRQ(@useKernal);
+	SCREEN_BG_COL:=GREEN;
+	
+	// Draw bullet using sprite 0 with bullet sprite data (sprite slot 1)
+	if player_bullet_active <> 0 then
+	begin
+		SetSpriteLoc(useSprite, @spriteLoc/64 + 1, useBank);  // Use bullet sprite data from slot 1
+		SpritePos(player_bullet_x, player_bullet_y, useSprite);  // Reuse sprite 0 at bullet position
+	end;
+	
 	RasterIRQ(MainRasterStarfield(),0,@useKernal);
 	CloseIRQ();
 end;
 
 interrupt MainRasterStarfield();
 begin	
-
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();    
 	preventirq();    
-	RasterIRQ(MainRasterRow1(),0,@useKernal);
-end;
-
-
-interrupt MainRasterJoystick();
-begin	
-
-	// Update joystick input
-	Memory::Fill(#joystickup,0,5);
-	Joystick(joystickPort);
-	UpdateSprite();	
-	
-	RasterIRQ(MainRasterStarfield(),0,@useKernal);	
+	RasterIRQ(MainRasterRow1(), 0, @useKernal);
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
