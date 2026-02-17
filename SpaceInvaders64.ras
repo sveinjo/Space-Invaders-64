@@ -19,7 +19,7 @@ var
 	
 	// Game constants
 	const INITIAL_INVADER_COUNT : byte = 72; // Arcade has 55
-	const ENEMIES_TO_CLEAR : byte = 54;  // How many enemies to clear (out of 72 total)
+	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
 	const MONSTER_SPACING : byte = 54;
 	const MONSTER_ROW_OFFSET : byte = 26;
 	const PLAYER_MIN_X : byte = 39;
@@ -32,9 +32,13 @@ var
 	//const ENEMY_HITBOX_HALF_HEIGHT : byte = 10;
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
-	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 1;
+	// Debug flag: set to 1 to enable debug features, 0 to disable
+	const DEBUG_ENABLE : byte = 1;
+	// Number of enemies to keep alive when auto-clearing in debug mode
+	const DEBUG_KEEP_ALIVE : byte = 3;
 	border_debug_color : byte = 2;
+    // Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
+    debug_last_cleared : byte = 0;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	enemy_direction : byte = 1;
@@ -106,6 +110,7 @@ var
 	interrupt MainRasterJoystick();
 	interrupt MainRasterPlayer();
 	interrupt MainRasterStarfield();
+	procedure DebugClearNextMonster();
 	procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 	procedure AnimateMonsters(enemyRow: byte);
 	procedure UpdateMonsters(rowOffset: byte);
@@ -602,14 +607,16 @@ begin
 		// Each row uses different sprite blocks: row 0 (3-10), row 1 (11-18), row 2 (19-26)
 		AnimateMonsters(0); // Row 0 uses sprites based on row parameter
 		
-		// Clear enemies based on ENEMIES_TO_CLEAR constant
-		if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
-		begin
-			ClearEnemyAtCounter();
-			dec(sequential_clear_counter);
-			
-			
-		end;
+		// Debug: when enabled, clear the next monster once per enemy tick
+		//if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
+		//begin
+			if DEBUG_ENABLE = 1 then
+			begin
+				DebugClearNextMonster();
+				//if debug_last_cleared = 1 then
+				//	dec(sequential_clear_counter);
+			end;
+		//end;
 		
 		should_move_enemy := 1;
 	end;
@@ -812,6 +819,42 @@ end;
 // Main raster interrupt routines.
 // ---------------------------------------------------------------------------------------------------------------------------------
 
+procedure DebugClearNextMonster();
+var
+	block_idx: byte;
+	enemy_idx: byte;
+	found_flag: byte;
+	emask: byte;
+begin
+	debug_last_cleared := 0;
+	// Do not auto-clear when remaining enemies are at or below DEBUG_KEEP_ALIVE
+	if (INITIAL_INVADER_COUNT - numberOfEnemies) <= DEBUG_KEEP_ALIVE then
+	begin
+		// nothing to do
+	end
+	else
+	begin
+		found_flag := 0;
+		block_idx := 0;
+	while (block_idx <= 11 and found_flag = 0) do
+	begin
+		enemy_idx := 0;
+		while (enemy_idx <= 5 and found_flag = 0) do
+		begin
+			emask := 1 << enemy_idx;
+			if (block_enemies[block_idx] & emask) <> 0 then
+			begin
+				ClearMonster(block_idx, enemy_idx);
+				debug_last_cleared := 1;
+				found_flag := 1;
+			end;
+			inc(enemy_idx);
+		end;
+		inc(block_idx);
+	end;
+	end;
+end;
+
 
 // This interrupt is triggered one time pr raster cycle
 interrupt MainRasterRow1();
@@ -856,6 +899,8 @@ begin
 	// Update first row of monsters
 	UpdateMonsters(0); 
 	AnimateMonsters(0); // Prepare sprites for row 1
+
+	// Debug clear moved to UpdateTick (runs once per enemy tick)
 	
 	RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal);
 	
@@ -867,7 +912,7 @@ end;
 interrupt MainRasterRow2();
 begin	
 	StartIRQ(@useKernal);	
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLUE;
 	//ShowBullet();
 	
@@ -893,14 +938,14 @@ end;
 procedure BorderDebug();
 begin
 	border_debug_color := peek(^$D01E, 0);
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := border_debug_color;
 end;
 
 interrupt MainRasterRow3();
 begin		
 	//BorderDebug();
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := GREEN;
 	//ShowBullet();
 
@@ -924,7 +969,7 @@ end;
 
 interrupt MainRasterJoystick();
 begin	
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := RED;
 	//BorderDebug();
 	/*if player_bullet_active <> 0 then
@@ -974,7 +1019,7 @@ end;
 interrupt MainRasterPlayer();
 begin
 	UpdateSprite();
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLACK;
 	StartIRQ(@useKernal);	
 	//border_debug_color := peek($D01E, 0);
