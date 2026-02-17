@@ -103,7 +103,7 @@ var
 	interrupt MainRasterJoystick();
 	interrupt MainRasterPlayer();
 	interrupt MainRasterStarfield();
-	procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
+	procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 	procedure AnimateMonsters(enemyRow: byte);
 	procedure UpdateMonsters(rowOffset: byte);
 	procedure FirePlayerBullet();
@@ -131,6 +131,18 @@ end;
 // Clears all enemies in the rightmost column and bottom row
 procedure PreclearRightmostAndBottomEnemies();
 begin
+	ClearMonster(0, 0);
+	ClearMonster(0, 1);
+	/*ClearMonster(1, 0);
+	ClearMonster(1, 1);
+	ClearMonster(2, 0);
+	ClearMonster(2, 1);
+	ClearMonster(3, 0);
+	ClearMonster(3, 1);*/
+	ClearMonster(4, 0);
+	ClearMonster(4, 1);
+	ClearMonster(8, 0);
+	ClearMonster(8, 1);
 end;
 
 Procedure DisplayScore();
@@ -346,7 +358,7 @@ begin
 							if (enemy_alive & cbc_enemy_mask) <> 0 then
 							begin
 								// Hit! Clear enemy and trigger explosion
-								ClearMonster(block_index, 1, hit_enemy_index);
+								ClearMonster(block_index, hit_enemy_index);
 								block_enemies[block_index] := enemy_alive & (cbc_enemy_mask xor $FF);
 								player_bullet_active := 2;
 								explosion_frame_counter := 0;
@@ -424,7 +436,7 @@ begin
 	end;
 	temp_enemy_index := enemy_type;
 	temp_block_index := clear_col + clear_row * 4;
-	ClearMonster(temp_block_index, 1, temp_enemy_index);
+	ClearMonster(temp_block_index, temp_enemy_index);
 	// Update block_enemies array to mark this enemy as cleared
 	cec_enemy_mask := 1 << enemy_type;
 	block_enemies[temp_block_index] := block_enemies[temp_block_index] & (cec_enemy_mask xor $FF);
@@ -659,7 +671,7 @@ begin
 end;
 
 
-procedure ClearMonster(blockIndex: byte; numBlocks: byte; enemyIndex: byte);
+procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 var
 	sprite_data_ptr : ^byte;
 	frame1_sprite_index : byte;
