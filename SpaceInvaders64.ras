@@ -19,7 +19,7 @@ var
 	
 	// Game constants
 	const INITIAL_INVADER_COUNT : byte = 72; // Arcade has 55
-	const ENEMIES_TO_CLEAR : byte = 71;  // How many enemies to clear (out of 72 total)
+	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
 	const MONSTER_SPACING : byte = 54;
 	const MONSTER_ROW_OFFSET : byte = 26;
 	const PLAYER_MIN_X : byte = 39;
@@ -806,15 +806,15 @@ Begin
 	sprite_data_ptr^ := 0;
 	
 	// Speed up as enemies decrease
-		// Update block_enemies bitmask for this enemy and increment cleared count
-		enemy_mask := 1 << enemyIndex;
-		was_alive := (block_enemies[blockIndex] & enemy_mask) <> 0;
-		if was_alive <> 0 then
-		begin
-			block_enemies[blockIndex] := block_enemies[blockIndex] & (enemy_mask xor $FF);
-			if (numberOfEnemies < INITIAL_INVADER_COUNT) then
-				inc(numberOfEnemies);
-		end;
+	// Update block_enemies bitmask for this enemy and increment cleared count
+	enemy_mask := 1 << enemyIndex;
+	was_alive := (block_enemies[blockIndex] & enemy_mask) <> 0;
+	if was_alive <> 0 then
+	begin
+		block_enemies[blockIndex] := block_enemies[blockIndex] & (enemy_mask xor $FF);
+		if (numberOfEnemies < INITIAL_INVADER_COUNT) then
+			inc(numberOfEnemies);
+	end;
 end;
 
 procedure MakeMonsters();
