@@ -19,7 +19,7 @@ var
 	
 	// Game constants
 	const INITIAL_INVADER_COUNT : byte = 72; // Arcade has 55
-	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
+	const ENEMIES_TO_CLEAR : byte = 54;  // How many enemies to clear (out of 72 total)
 	const MONSTER_SPACING : byte = 54;
 	const MONSTER_ROW_OFFSET : byte = 26;
 	const PLAYER_MIN_X : byte = 39;
@@ -67,10 +67,11 @@ var
 	
 	// Track which enemies are alive in each block (12 blocks, 6 enemies per block)
 	// Each bit 0-5 represents an enemy: bit set = alive, bit clear = dead
+	// Note: blocks are stored row-major with row 0 = TOP, row 2 = BOTTOM
 	block_enemies : array[12] of byte = (
-		$3F, $3F, $3F, $3F,  // Row 0 blocks (bottom): all 6 enemies alive
+		$3F, $3F, $3F, $3F,  // Row 0 blocks (top): all 6 enemies alive
 		$3F, $3F, $3F, $3F,  // Row 1 blocks
-		$3F, $3F, $3F, $3F   // Row 2 blocks (top)
+		$3F, $3F, $3F, $3F   // Row 2 blocks (bottom)
 	);
 	
 	const monsterSprite1:byte = 1;
@@ -151,6 +152,7 @@ begin
 	ClearMonster(11, 3);
 	ClearMonster(11, 5);
 end;
+
 
 Procedure DisplayScore();
 Begin	
@@ -365,8 +367,8 @@ begin
 							if (enemy_alive & cbc_enemy_mask) <> 0 then
 							begin
 								// Hit! Clear enemy and trigger explosion
+								// Clear sprite + update block_enemies handled inside ClearMonster
 								ClearMonster(block_index, hit_enemy_index);
-								block_enemies[block_index] := enemy_alive & (cbc_enemy_mask xor $FF);
 								player_bullet_active := 2;
 								explosion_frame_counter := 0;
 								found_hit := 1;
@@ -427,7 +429,8 @@ begin
 	clear_local_index := Helpers::Mod(clear_index, 18);
 	pair_index := Helpers::Div(clear_local_index, 6);
 	sub_local := Helpers::Mod(clear_local_index, 6);
-	clear_row := 2 - Helpers::Div(sub_local, 2);
+	// Map local sub-index to block row (0=top,1=middle,2=bottom)
+	clear_row := Helpers::Div(sub_local, 2);
 	enemy_sub := Helpers::Mod(sub_local, 2);
 	// Column-based enemy indexing: Col0(0,1), Col1(2,3), Col2(4,5)
 	// Clear from right to left, bottom then top within each column
@@ -444,11 +447,17 @@ begin
 		if enemy_sub = 0 then enemy_type := 1 else enemy_type := 0;  // Left column
 	end;
 	temp_enemy_index := enemy_type;
-	temp_block_index := clear_col + clear_row * 4;
-	ClearMonster(temp_block_index, temp_enemy_index);
-	// Update block_enemies array to mark this enemy as cleared
-	cec_enemy_mask := 1 << enemy_type;
-	block_enemies[temp_block_index] := block_enemies[temp_block_index] & (cec_enemy_mask xor $FF);
+	// block_enemies is row-major with row 0 = TOP. The clearing sequence
+	// should still clear bottom-first visually, so map the computed row
+	// (0=top..2=bottom) to the block index accordingly.
+	temp_block_index := clear_col + (2 - clear_row) * 4;
+	// Only clear if this enemy is still alive according to block_enemies
+	cec_enemy_mask := 1 << temp_enemy_index;
+	if (block_enemies[temp_block_index] & cec_enemy_mask) <> 0 then
+	begin
+		// ClearMonster will clear the sprite and update the block_enemies bitmask
+		ClearMonster(temp_block_index, temp_enemy_index);
+	end;
 end;
 
 // Find the rightmost occupied enemy column offset (0-172)
@@ -683,6 +692,8 @@ var
 	enemy_horizontal_offset : byte;
 	enemy_vertical_offset : byte;
 	sprite_base_address : integer;
+	enemy_mask : byte;
+	was_alive : byte;
 Begin
 	// Calculate sprite indices for both animation frames
 	// Each block has 2 sprites (animation frames)
@@ -756,12 +767,15 @@ Begin
 	sprite_data_ptr^ := 0;
 	
 	// Speed up as enemies decrease
-	if (numberOfEnemies < INITIAL_INVADER_COUNT - 1) then
-	begin
-		inc(numberOfEnemies);	
-		/*inc(numberOfEnemies);	
-		inc(numberOfEnemies);*/
-	end;
+		// Update block_enemies bitmask for this enemy and increment cleared count
+		enemy_mask := 1 << enemyIndex;
+		was_alive := (block_enemies[blockIndex] & enemy_mask) <> 0;
+		if was_alive <> 0 then
+		begin
+			block_enemies[blockIndex] := block_enemies[blockIndex] & (enemy_mask xor $FF);
+			if (numberOfEnemies < INITIAL_INVADER_COUNT) then
+				inc(numberOfEnemies);
+		end;
 end;
 
 procedure MakeMonsters();
