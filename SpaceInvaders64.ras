@@ -20,13 +20,13 @@ var
 	
 	// Game constants
 	const INITIAL_INVADER_COUNT : byte = 72; // Arcade has 55
+	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
 	const MONSTER_SPACING : byte = 54;
 	const MONSTER_ROW_OFFSET : byte = 26;
 	const PLAYER_MIN_X : byte = 39;
 	const PLAYER_MAX_X : byte = 218;
 	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
 	const SCORE_INCREMENT : byte = 9;
-	const ENEMIES_TO_CLEAR : byte = 71;  // How many enemies to clear (out of 72 total)
 	const MONSTER_SPRITE_HEIGHT : byte = 21;
 	const ENEMY_COLUMN_WIDTH : byte = 16;
 	const ENEMY_HITBOX_HALF_WIDTH : byte = 8;
@@ -127,33 +127,10 @@ begin
 	togglebit(sprite_bitmask,useSprite,1);
 end;
 
-// Clears all enemies in the rightmost column (column 3 of each block row)
-procedure ClearRightmostColumnEnemies();
 
 // Clears all enemies in the rightmost column and bottom row
 procedure PreclearRightmostAndBottomEnemies();
-var
-	preclear_block_row : byte;
-	preclear_enemy_index : byte;
-	preclear_block_index : byte;
 begin
-	// Clear rightmost column (blocks 3, 7, 11)
-	for preclear_block_row := 0 to 2 do
-	begin
-		preclear_block_index := 3 + preclear_block_row * 4;
-		for preclear_enemy_index := 0 to 5 do
-		begin
-			ClearMonster(preclear_block_index, 1, preclear_enemy_index);
-		end;
-	end;
-	// Clear bottom row (blocks 0 to 3)
-	for preclear_block_index := 0 to 3 do
-	begin
-		for preclear_enemy_index := 0 to 5 do
-		begin
-			ClearMonster(preclear_block_index, 1, preclear_enemy_index);
-		end;
-	end;
 end;
 
 Procedure DisplayScore();
