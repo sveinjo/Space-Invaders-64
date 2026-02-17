@@ -33,7 +33,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 1;
+	const debug_enable_bgcol : byte = 0;
 	border_debug_color : byte = 2;
 	// Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
     debug_last_cleared : byte = 0;
@@ -621,12 +621,13 @@ begin
 		leftmost_offset := GetLeftmostEnemyOffset();
 		right_edge := monster_base_x + rightmost_offset + 10;  // +10 for double-width enemy (5 sprite pixels × 2)
 		left_edge := monster_base_x + leftmost_offset;
-		
-		// Check boundaries and switch direction
-		// Right boundary: ensure rightmost enemy doesn't exceed screen edge (~254)
-		if right_edge >= 254 then
+		// Boundaries set so all enemy configurations bounce at the same visual offset from each wall (36px).
+		// Left: bounce when leftmost enemy visual edge <= 36 (i.e. left_edge <= 36).
+		// Right: symmetric restriction, 12px inward from original 254 = 242.
+		// No byte overflow risk: right boundary caps monster_base_x low enough that left_edge sum stays < 255.
+		if right_edge >= 242 then
 			enemy_direction := 0
-		else if left_edge <= 24 then
+		else if left_edge <= 36 then
 			enemy_direction := 1;
 			
 		if enemyMoveCounter = 2 then
@@ -1060,7 +1061,7 @@ begin
 	
 	initializeMonsters();
 	//ClearMonster();
-	//PreclearRightmostAndBottomEnemies();
+	PreclearRightmostAndBottomEnemies();
 	MakeMonsters();
 	
 	InitSid(sidfile_1_init);
