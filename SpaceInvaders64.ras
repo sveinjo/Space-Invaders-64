@@ -93,8 +93,9 @@ var
 	// image is located under sprites/sprites.flf 
 		
 	// Export all sprites automatically on each build
-	@export "sprites/spritesheet.flf" "sprites/spritesheet.bin" 1664 	  	
+	//@export "sprites/spritesheet.flf" "sprites/spritesheet.bin" 1664 	  	
 	sprites:incbin("sprites/spritesheet.bin", @spriteLoc); 
+	
 
 	// Declarations
 	interrupt MainRasterRow1();
@@ -133,16 +134,21 @@ procedure PreclearRightmostAndBottomEnemies();
 begin
 	ClearMonster(0, 0);
 	ClearMonster(0, 1);
-	/*ClearMonster(1, 0);
-	ClearMonster(1, 1);
-	ClearMonster(2, 0);
-	ClearMonster(2, 1);
-	ClearMonster(3, 0);
-	ClearMonster(3, 1);*/
 	ClearMonster(4, 0);
 	ClearMonster(4, 1);
 	ClearMonster(8, 0);
 	ClearMonster(8, 1);
+	ClearMonster(8, 3);
+	ClearMonster(8, 5);
+	ClearMonster(9, 1);
+	ClearMonster(9, 3);
+	ClearMonster(9, 5);
+	ClearMonster(10, 1);
+	ClearMonster(10, 3);
+	ClearMonster(10, 5);
+	ClearMonster(11, 1);
+	ClearMonster(11, 3);
+	ClearMonster(11, 5);
 end;
 
 Procedure DisplayScore();
@@ -590,13 +596,7 @@ begin
 			ClearEnemyAtCounter();
 			dec(sequential_clear_counter);
 			
-			// Speed up as enemies decrease
-			if (numberOfEnemies < INITIAL_INVADER_COUNT - 1) then
-			begin
-				inc(numberOfEnemies);	
-				/*inc(numberOfEnemies);	
-				inc(numberOfEnemies);*/
-			end;
+			
 		end;
 		
 		should_move_enemy := 1;
@@ -751,6 +751,14 @@ Begin
 	sprite_data_ptr^ := 0;
 	sprite_data_ptr := sprite_data_ptr + 3;
 	sprite_data_ptr^ := 0;
+	
+	// Speed up as enemies decrease
+	if (numberOfEnemies < INITIAL_INVADER_COUNT - 1) then
+	begin
+		inc(numberOfEnemies);	
+		/*inc(numberOfEnemies);	
+		inc(numberOfEnemies);*/
+	end;
 end;
 
 procedure MakeMonsters();
