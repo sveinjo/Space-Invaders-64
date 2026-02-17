@@ -7,6 +7,9 @@ program SpaceInvaders64;
 
 var
 	sidfile: incsid("sid/Courier.sid",2);
+
+	// Debug flag: set to 1 to enable debug color changes, 0 to disable
+	debug_enable_bgcol : byte = 0;
 	
 	const useKernal:byte=0;
 
@@ -821,7 +824,8 @@ end;
 interrupt MainRasterRow2();
 begin	
 	StartIRQ(@useKernal);	
-	SCREEN_BG_COL := BLUE;
+	if debug_enable_bgcol = 1 then
+		SCREEN_BG_COL := BLUE;
 	//ShowBullet();
 	
 	//border_debug_color := peek(^$D01E, 0);
@@ -846,13 +850,15 @@ end;
 procedure BorderDebug();
 begin
 	border_debug_color := peek(^$D01E, 0);
-	SCREEN_BG_COL := border_debug_color;
+	if debug_enable_bgcol = 1 then
+		SCREEN_BG_COL := border_debug_color;
 end;
 
 interrupt MainRasterRow3();
 begin		
 	//BorderDebug();
-	SCREEN_BG_COL := GREEN;
+	if debug_enable_bgcol = 1 then
+		SCREEN_BG_COL := GREEN;
 	//ShowBullet();
 
 	StartIRQ(@useKernal);
@@ -875,7 +881,8 @@ end;
 
 interrupt MainRasterJoystick();
 begin	
-	SCREEN_BG_COL := RED;
+	if debug_enable_bgcol = 1 then
+		SCREEN_BG_COL := RED;
 	//BorderDebug();
 	/*if player_bullet_active <> 0 then
 	begin
@@ -924,7 +931,8 @@ end;
 interrupt MainRasterPlayer();
 begin
 	UpdateSprite();
-	SCREEN_BG_COL := BLACK;
+	if debug_enable_bgcol = 1 then
+		SCREEN_BG_COL := BLACK;
 	StartIRQ(@useKernal);	
 	//border_debug_color := peek($D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
@@ -977,7 +985,8 @@ begin
 	setmemoryconfig(1,0,useKernal);
 	
 	DisableCIAInterrupts();
-    SCREEN_BG_COL:=BLACK;
+	
+	SCREEN_BG_COL:=BLACK;
     SCREEN_FG_COL:=BLACK;
 	
 	// Clear sprite collision registers to remove garbage data
