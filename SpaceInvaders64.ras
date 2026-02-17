@@ -8,15 +8,14 @@ program SpaceInvaders64;
 var
 	sidfile: incsid("sid/Courier.sid",2);
 
-	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	debug_enable_bgcol : byte = 0;
+	
 	
 	const useKernal:byte=0;
 
-	Score : Integer = 9950;
-	Score2 : Integer = 0;
+	//Score : Integer = 9950;
+	//Score2 : Integer = 0;
 	
-	border_debug_color : byte = 2;
+	
 	
 	// Game constants
 	const INITIAL_INVADER_COUNT : byte = 72; // Arcade has 55
@@ -26,23 +25,25 @@ var
 	const PLAYER_MIN_X : byte = 39;
 	const PLAYER_MAX_X : byte = 218;
 	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
-	const SCORE_INCREMENT : byte = 9;
-	const MONSTER_SPRITE_HEIGHT : byte = 21;
-	const ENEMY_COLUMN_WIDTH : byte = 16;
-	const ENEMY_HITBOX_HALF_WIDTH : byte = 8;
-	const ENEMY_HITBOX_HALF_HEIGHT : byte = 10;
-	const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
+	//const SCORE_INCREMENT : byte = 9;
+	const SPRITE_HEIGHT : byte = 21;
+	//const ENEMY_COLUMN_WIDTH : byte = 16;
+	//const ENEMY_HITBOX_HALF_WIDTH : byte = 8;
+	//const ENEMY_HITBOX_HALF_HEIGHT : byte = 10;
+	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
+	// Debug flag: set to 1 to enable debug color changes, 0 to disable
+	const debug_enable_bgcol : byte = 1;
+	border_debug_color : byte = 2;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
-	monster_vertical_adjustment : byte = 8;
+	const monster_vertical_adjustment : byte = 8;
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
-	temp_block_index : byte = 0;
-	temp_enemy_index : byte = 0;
 	
-	pos_x : byte = PLAYER_MIN_X;
+	//pos_x : byte = PLAYER_MIN_X;
+	
 
 	// Player bullet variables
 	player_bullet_active : byte = 0;  // 0 = inactive, 1 = active, 2 = exploding
@@ -51,10 +52,10 @@ var
 	explosion_frame_counter : byte = 0;  // Counts frames for explosion animation
 	previous_fire_state : byte = 0;  // Track previous fire button state for debounce
 	const BULLET_SPEED : byte = 4;  // Pixels per frame
-	const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
+	//const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
 	const EXPLOSION_DURATION : byte = 16;  // Frames to show explosion
 
-								
+							
   
 	// sprite_x is usually an integer since x values range between 
 	// 0 and 320. But we have a smaller play area.
@@ -200,18 +201,18 @@ procedure UpdateSprite();
 begin
 		
 	// Update player position based on joystick input
-	pos_x := Helpers::Clamp(pos_x + (joystickright - joystickleft), PLAYER_MIN_X, PLAYER_MAX_X);
-	player_sprite_x := pos_x;
+	player_sprite_x := Helpers::Clamp(player_sprite_x + (joystickright - joystickleft), PLAYER_MIN_X, PLAYER_MAX_X);
+	//player_sprite_x := pos_x;
 	
 	
 	// Update the sprite position on screen for sprite number @useSprite	
 	SpritePos(player_sprite_x, player_sprite_y, useSprite);
 	
 	// Set left/right offset pointer for sprite
-	if (joystickright) then
+	/*if (joystickright) then
 		player_joystick_direction := 1;
 	if (joystickleft) then
-		player_joystick_direction := 0;
+		player_joystick_direction := 0;*/
 		
 	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
 	//showBullet();
@@ -223,7 +224,7 @@ procedure FirePlayerBullet();
 begin
 	player_bullet_active := 1;
 	player_bullet_x := player_sprite_x;  // Same X as player
-	player_bullet_y := player_sprite_y - BULLET_SPRITE_HEIGHT;  // One sprite height above player
+	player_bullet_y := player_sprite_y - SPRITE_HEIGHT;  // One sprite height above player
 	//player_bullet_y := player_sprite_y - 30;  // One sprite height above player
 end;
 
@@ -418,6 +419,8 @@ var
 	sub_local : byte;
 	enemy_sub : byte;
 	cec_enemy_mask : byte;
+	temp_block_index : byte = 0;
+	temp_enemy_index : byte = 0;
 begin
 	clear_index := 71 - sequential_clear_counter;
 	clear_col := 3 - Helpers::Div(clear_index, 18);
