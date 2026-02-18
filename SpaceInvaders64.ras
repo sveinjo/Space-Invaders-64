@@ -33,7 +33,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 0;
+	const debug_enable_bgcol : byte = 1;
 	border_debug_color : byte = 2;
 	// Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
     debug_last_cleared : byte = 0;
@@ -43,7 +43,8 @@ var
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
-	const monster_vertical_adjustment : byte = 8;
+	monster_vertical_adjustment : byte = 6 + 52;
+	const MONSTER_DROP_AMOUNT : byte = 13;
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
 	//pos_x : byte = PLAYER_MIN_X;
@@ -779,6 +780,7 @@ var
 	leftmost_offset : byte;
 	right_edge : byte;
 	left_edge : byte;
+	prev_direction : byte;
 begin
 	should_move_enemy := 0;
 	
@@ -795,10 +797,17 @@ begin
 		// Left: bounce when leftmost enemy visual edge <= 36 (i.e. left_edge <= 36).
 		// Right: symmetric restriction, 12px inward from original 254 = 242.
 		// No byte overflow risk: right boundary caps monster_base_x low enough that left_edge sum stays < 255.
+		prev_direction := enemy_direction;
 		if right_edge >= 242 then
 			enemy_direction := 0
 		else if left_edge <= 36 then
 			enemy_direction := 1;
+
+		// If direction changed, drop the formation by MONSTER_DROP_AMOUNT pixels
+		if prev_direction <> enemy_direction then
+		begin
+			monster_vertical_adjustment := monster_vertical_adjustment + MONSTER_DROP_AMOUNT;
+		end;
 			
 		if enemyMoveCounter = 2 then
 			should_move_enemy := 1;
@@ -928,8 +937,8 @@ begin
 	
 	RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal);
 	
-	// Play music here - plenty of time after monsters
-	call(sidfile_1_play);
+		// Play music here - called each frame from raster IRQ to advance SID playback
+		call(sidfile_1_play);
 	CloseIRQ();
 end;
 
@@ -1121,6 +1130,11 @@ begin
 	DisplayText();	
 	RasterIRQ(MainRasterRow1(),0,@useKernal);
 	enableirq();
+
+	// Non-IRQ SID playback (main context). This runs once during init and is safe
+	// to execute outside the raster IRQ. Comment/uncomment to test.
+	//call(sidfile_1_play); // main-context playback (disabled)
+	//call(sidfile_1_play); // alternative: keep commented if you prefer raster IRQ playback
 
 	Loop();
 end.
