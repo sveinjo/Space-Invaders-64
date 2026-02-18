@@ -43,7 +43,7 @@ var
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
-	monster_vertical_adjustment : byte = 6 + 52;
+	monster_vertical_adjustment : byte = 6 + 78; // 52 is the perfect value
 	const MONSTER_DROP_AMOUNT : byte = 13;
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
@@ -894,24 +894,38 @@ end;
 // This interrupt is triggered one time pr raster cycle
 interrupt MainRasterRow1();
 begin
-	ShowBullet();	
-	//CheckBulletCollision();
+	ShowBullet();		
 	StartIRQ(@useKernal);  
 	
 	//border_debug_color := peek(^$D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
+	
 	// Clear sprite collision registers to remove garbage data
 	//asm(" lda $D01E");
 	//asm(" lda $D01F");
+	
 	// Update bullet position
 	UpdatePlayerBullet();
+		
+	// Lightweight joystick update only
+	//Memory::Fill(#joystickup,0,5);
+	Joystick(joystickPort);
+		
+	// Check fire button with debounce (only fire on button press, not hold)	
+	if (joystickbutton=1) then
+	begin
+		
+		if (previous_fire_state = 0 and player_bullet_active = 0) then		
+		begin
+			FirePlayerBullet();
+			//inc(border_debug_color);
+		end;
+		previous_fire_state := 1;
+	end
+	else
+		previous_fire_state := 0;
 	
-	// Show bullet sprite in this region
-	//if player_bullet_active <> 0 then
-	
-	
-
 	/*if player_bullet_active <> 0 then
 	begin
 		ShowBullet();
@@ -935,10 +949,15 @@ begin
 	UpdateMonsters(0); 
 	AnimateMonsters(0); // Prepare sprites for row 1
 	
-	RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal);
+	// Check collisions AFTER all sprite rows have been displayed
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
+		CheckBulletCollision();
 	
-		// Play music here - called each frame from raster IRQ to advance SID playback
-		call(sidfile_1_play);
+	// Play music here - called each frame from raster IRQ to advance SID playback
+	call(sidfile_1_play);
+	
+	RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal);			
 	CloseIRQ();
 end;
 
@@ -996,55 +1015,7 @@ begin
 	UpdateMonsters(MONSTER_ROW_OFFSET*2);
 	AnimateMonsters(2); // Prepare sprites for row 3
 	
-	RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
-	CloseIRQ();
-end;
-
-interrupt MainRasterJoystick();
-begin	
-	if debug_enable_bgcol = 1 then
-		SCREEN_BG_COL := RED;
-	//BorderDebug();
-	/*if player_bullet_active <> 0 then
-	begin
-		ShowBullet();
-		//SCREEN_BG_COL := border_debug_color;
-	end;*/
-	//ShowBullet();
-	//DisplayScore();
-	/*if player_bullet_active <> 0 then
-	begin
-		ShowBullet();
-		//SCREEN_BG_COL := border_debug_color;
-	end;*/
-	
-	StartIRQ(@useKernal);
-	
-	// Check collisions AFTER all sprite rows have been displayed
-	// Only check when bullet is actively moving (not exploding)
-	if player_bullet_active = 1 then
-		CheckBulletCollision();
-	
-	// Lightweight joystick and sprite update only
-	//Memory::Fill(#joystickup,0,5);
-	Joystick(joystickPort);
-	//UpdateSprite();
-	
-	// Check fire button with debounce (only fire on button press, not hold)	
-	if (joystickbutton=1) then
-	begin
-		
-		if (previous_fire_state = 0 and player_bullet_active = 0) then		
-		begin
-			FirePlayerBullet();
-			//inc(border_debug_color);
-		end;
-		previous_fire_state := 1;
-	end
-	else
-		previous_fire_state := 0;
-
-	//poke(^$D019, 0, 0);
+	//RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
 	RasterIRQ(MainRasterPlayer(), 224, @useKernal);
 	CloseIRQ();
 end;
