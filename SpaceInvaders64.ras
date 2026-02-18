@@ -99,7 +99,7 @@ var
 	// image is located under sprites/sprites.flf 
 		
 	// Export all sprites automatically on each build
-	//@export "sprites/spritesheet.flf" "sprites/spritesheet.bin" 1664 	  	
+	@export "sprites/spritesheet.flf" "sprites/spritesheet.bin" 1664 	  	
 	sprites:incbin("sprites/spritesheet.bin", @spriteLoc); 
 	
 
@@ -367,37 +367,43 @@ begin
 				block_x := monster_base_x + block_col * MONSTER_SPACING;
 				
 				// Quick horizontal range check
-				if player_bullet_x >= block_x then
-					if player_bullet_x < block_x + 48 then
+				// Bullet contact point is 12px into the sprite, so effective hit X = player_bullet_x + 12.
+				// Range: contact point must fall within [block_x, block_x+48).
+				// => player_bullet_x in [block_x-12, block_x+36). block_x >= 32 so block_x-12 >= 20, no underflow.
+				if player_bullet_x >= block_x - 12 then
+					if player_bullet_x < block_x + 36 then
 					begin
-						// Inside this block horizontally - check which enemy
-						// Note: Each enemy is 5 sprite pixels × 2 (stretch) = 10 screen pixels wide
-						// Shift bullet position left by 4 pixels to center hitbox on visual sprite
-						rel_x := player_bullet_x - block_x - 4;
-						if rel_x > 200 then rel_x := 0;  // Handle underflow (byte wraparound)
+						// rel_x = (player_bullet_x + 12) - block_x; no underflow since player_bullet_x >= block_x-12
+						rel_x := player_bullet_x - block_x + 12;
 						
 						block_y := monster_base_y + monster_vertical_adjustment + block_row * MONSTER_ROW_OFFSET;
 						rel_y := player_bullet_y - block_y;
 						
 						// Determine enemy column (0-2) by X position
-						// Enemy 0: pixels 0-9, Enemy 1: pixels 10-27, Enemy 2: pixels 28-47
-						if rel_x < 10 then
+						// Each enemy is 12px wide with 6px gaps between them
+						// Col 0: 0-11, Gap: 12-17, Col 1: 18-29, Gap: 30-35, Col 2: 36-47
+						if rel_x < 12 then
 							enemy_col := 0
-						else if rel_x < 28 then
+						else if rel_x < 18 then
+							enemy_col := $FF  // gap
+						else if rel_x < 30 then
 							enemy_col := 1
+						else if rel_x < 36 then
+							enemy_col := $FF  // gap
 						else
 							enemy_col := 2;
 						
 						// Determine enemy row (0-1) by Y position
-						// Each enemy is 8 pixels tall with a 5-pixel gap between rows
-						// Row 0 (top): Y 0-7, Gap: Y 8-12, Row 1 (bottom): Y 13-20
+						// Each enemy is 8px tall with 6px gap between rows
+						// Upper bounds extended by 3px to account for 4px-tall bullet
+						// Row 0 (top): Y 0-10, Gap: Y 11-13, Row 1 (bottom): Y 14-24
 						enemy_row := $FF;  // Invalid by default
-						if rel_y <= 7 then
+						if rel_y <= 10 then
 							enemy_row := 0
-						else if (rel_y >= 13 and rel_y <= 20) then
+						else if (rel_y >= 14 and rel_y <= 24) then
 							enemy_row := 1;
 						
-						if enemy_row <> $FF then
+						if (enemy_row <> $FF and enemy_col <> $FF) then
 						begin
 							hit_enemy_index := enemy_col * 2 + enemy_row;
 							cbc_enemy_mask := 1 << hit_enemy_index;
@@ -1046,7 +1052,7 @@ begin
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
 	inc(StarField_RasterCount);
-	StarField::DoStarfield();    
+	//StarField::DoStarfield();    
 	preventirq();  
 	poke(^$D019, 0, 0);  
 	RasterIRQ(MainRasterRow1(), 0, @useKernal);
