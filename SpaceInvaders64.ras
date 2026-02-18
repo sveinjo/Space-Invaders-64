@@ -824,7 +824,7 @@ var
 	
 begin
 	monster_base_y := 82;
-	monster_base_x := 32;
+	monster_base_x := 18;
 	
 	sprite_color[useSprite]:= monster_sprite_color;
 	
