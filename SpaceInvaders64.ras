@@ -115,22 +115,165 @@ var
 	sprites:incbin("sprites/spritesheet.bin", @spriteLoc); 
 	
 
-	// Declarations
-	interrupt MainRasterRow1();
+	// Declarations (commented out where no longer needed)
+	//interrupt MainRasterRow1();
 	interrupt MainRasterRow2();
 	interrupt MainRasterRow3();
 	interrupt MainRasterJoystick();
 	interrupt MainRasterPlayer();
 	interrupt MainRasterStarfield();
-	procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
-	procedure AnimateMonsters(enemyRow: byte);
-	procedure UpdateMonsters(rowOffset: byte);
-	procedure FirePlayerBullet();
-	procedure UpdatePlayerBullet();
-	procedure CheckBulletCollision();
-	procedure ShowBullet();
-	Procedure DisplayScore();
-	Procedure DebugBorder();
+	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
+	//procedure AnimateMonsters(enemyRow: byte);
+	//procedure UpdateMonsters(rowOffset: byte);
+	//procedure FirePlayerBullet();
+	//procedure UpdatePlayerBullet();
+	//procedure CheckBulletCollision();
+	//procedure ShowBullet();
+	//Procedure DisplayScore();
+	//Procedure DebugBorder();
+
+
+procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
+var
+	sprite_data_ptr : ^byte;
+	frame1_sprite_index : byte;
+	frame2_sprite_index : byte;
+	sprite_offset_start : byte;
+	enemy_horizontal_offset : byte;
+	enemy_vertical_offset : byte;
+	sprite_base_address : integer;
+	enemy_mask : byte;
+	was_alive : byte;
+Begin
+	// Calculate sprite indices for both animation frames
+	// Each block has 2 sprites (animation frames)
+	// Block 0 = sprites 26-27, Block 1 = sprites 28-29, etc.
+	frame1_sprite_index := 26 + (blockIndex << 1);  // First animation frame
+	frame2_sprite_index := frame1_sprite_index + 1;  // Second animation frame
+    
+	// Each block contains 6 enemies in a 3x2 grid (column-based indexing):
+	// Column 0: Enemy 0(top), 1(bottom)
+	// Column 1: Enemy 2(top), 3(bottom)
+	// Column 2: Enemy 4(top), 5(bottom)
+	// Each enemy is 5 pixels wide × 8 pixels tall
+    
+	// Calculate horizontal offset - which byte column (0, 1, or 2)
+	// Enemy index: 0,1=col0, 2,3=col1, 4,5=col2
+	enemy_horizontal_offset := enemyIndex >> 1;  // Divide by 2 to get column
+    
+	// Calculate vertical offset
+	// Even indices (0,2,4): top row at offset 0
+	// Odd indices (1,3,5): bottom row at offset 13 rows
+	if (enemyIndex & 1) <> 0 then
+		enemy_vertical_offset := 39  // 13 rows * 3 bytes = 39
+	else
+		enemy_vertical_offset := 0;
+    
+	// Total offset within the 64-byte sprite
+	sprite_offset_start := enemy_horizontal_offset + enemy_vertical_offset;
+    
+	// Clear first animation frame (8 pixel rows)
+	sprite_base_address := frame1_sprite_index;
+	sprite_base_address := sprite_base_address << 6;  // * 64
+	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
+    
+	// Unrolled loop for 8 pixel rows - faster than loop overhead
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+    
+	// Clear second animation frame (8 pixel rows)
+	sprite_base_address := frame2_sprite_index;
+	sprite_base_address := sprite_base_address << 6;  // * 64
+	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
+    
+	// Unrolled loop for 8 pixel rows
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+	sprite_data_ptr := sprite_data_ptr + 3;
+	sprite_data_ptr^ := 0;
+    
+	// Speed up as enemies decrease
+	// Update block_enemies bitmask for this enemy and increment cleared count
+	enemy_mask := 1 << enemyIndex;
+	was_alive := (block_enemies[blockIndex] & enemy_mask) <> 0;
+	if was_alive <> 0 then
+	begin
+		block_enemies[blockIndex] := block_enemies[blockIndex] & (enemy_mask xor $FF);
+		if (numberOfEnemies < INITIAL_INVADER_COUNT) then
+			inc(numberOfEnemies);
+	end;
+end;
+
+procedure AnimateMonsters(enemyRow: byte);
+var
+	sprite_ptr_base: byte;
+	current_sprite_ptr: byte;
+begin
+	// Calculate the base sprite pointer once for this row
+	// Row 0: blocks 0-3 (sprites 26-33)
+	// Row 1: blocks 4-7 (sprites 34-41)
+	// Row 2: blocks 8-11 (sprites 42-49)
+	sprite_ptr_base := @spriteLoc/64 + 26 + (enemyRow << 3) + monster_animation_frame;
+    
+	// Set sprite locations using pre-calculated base + incremental additions
+	current_sprite_ptr := sprite_ptr_base;
+	SetSpriteLoc(monsterSprite1, current_sprite_ptr, useBank);
+    
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite2, current_sprite_ptr, useBank);
+    
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite3, current_sprite_ptr, useBank);
+    
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite4, current_sprite_ptr, useBank);
+end;
+
+procedure UpdateMonsters(rowOffset: byte);
+var
+	y_position: byte;
+	x_position: byte;
+begin
+	// Pre-calculate Y position to avoid repeated additions
+	y_position := monster_base_y + rowOffset + monster_vertical_adjustment;
+    
+	// Update sprites using incremental X positions instead of multiplications
+	x_position := monster_base_x;
+	SpritePos(x_position, y_position, monsterSprite1);
+    
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite2);
+    
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite3);
+    
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite4);
+end;
 	
 
 procedure DebugClearNextMonster();
@@ -182,8 +325,8 @@ begin
 end;
 
 
-// Clears all enemies in the rightmost column and bottom row
-procedure PreclearRightmostAndBottomEnemies();
+// Clears all enemies in the leftmost column and bottom row
+procedure PreclearLeftmostAndBottomEnemies();
 begin
 	ClearMonster(0, 0);
 	ClearMonster(0, 1);
@@ -702,148 +845,7 @@ begin
 	end;
 end;
 
-procedure AnimateMonsters(enemyRow: byte);
-var
-	sprite_ptr_base: byte;
-	current_sprite_ptr: byte;
-begin
-	// Calculate the base sprite pointer once for this row
-	// Row 0: blocks 0-3 (sprites 26-33)
-	// Row 1: blocks 4-7 (sprites 34-41)
-	// Row 2: blocks 8-11 (sprites 42-49)
-	sprite_ptr_base := @spriteLoc/64 + 26 + (enemyRow << 3) + monster_animation_frame;
-	
-	// Set sprite locations using pre-calculated base + incremental additions
-	current_sprite_ptr := sprite_ptr_base;
-	SetSpriteLoc(monsterSprite1, current_sprite_ptr, useBank);
-	
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite2, current_sprite_ptr, useBank);
-	
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite3, current_sprite_ptr, useBank);
-	
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite4, current_sprite_ptr, useBank);
-end;
 
-procedure UpdateMonsters(rowOffset: byte);
-var
-	y_position: byte;
-	x_position: byte;
-begin
-	// Pre-calculate Y position to avoid repeated additions
-	y_position := monster_base_y + rowOffset + monster_vertical_adjustment;
-	
-	// Update sprites using incremental X positions instead of multiplications
-	x_position := monster_base_x;
-	SpritePos(x_position, y_position, monsterSprite1);
-	
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite2);
-	
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite3);
-	
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite4);
-end;
-
-
-procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
-var
-	sprite_data_ptr : ^byte;
-	frame1_sprite_index : byte;
-	frame2_sprite_index : byte;
-	sprite_offset_start : byte;
-	enemy_horizontal_offset : byte;
-	enemy_vertical_offset : byte;
-	sprite_base_address : integer;
-	enemy_mask : byte;
-	was_alive : byte;
-Begin
-	// Calculate sprite indices for both animation frames
-	// Each block has 2 sprites (animation frames)
-	// Block 0 = sprites 26-27, Block 1 = sprites 28-29, etc.
-	frame1_sprite_index := 26 + (blockIndex << 1);  // First animation frame
-	frame2_sprite_index := frame1_sprite_index + 1;  // Second animation frame
-	
-	// Each block contains 6 enemies in a 3x2 grid (column-based indexing):
-	// Column 0: Enemy 0(top), 1(bottom)
-	// Column 1: Enemy 2(top), 3(bottom)
-	// Column 2: Enemy 4(top), 5(bottom)
-	// Each enemy is 5 pixels wide × 8 pixels tall
-	
-	// Calculate horizontal offset - which byte column (0, 1, or 2)
-	// Enemy index: 0,1=col0, 2,3=col1, 4,5=col2
-	enemy_horizontal_offset := enemyIndex >> 1;  // Divide by 2 to get column
-	
-	// Calculate vertical offset
-	// Even indices (0,2,4): top row at offset 0
-	// Odd indices (1,3,5): bottom row at offset 13 rows
-	if (enemyIndex & 1) <> 0 then
-		enemy_vertical_offset := 39  // 13 rows * 3 bytes = 39
-	else
-		enemy_vertical_offset := 0;
-	
-	// Total offset within the 64-byte sprite
-	sprite_offset_start := enemy_horizontal_offset + enemy_vertical_offset;
-	
-	// Clear first animation frame (8 pixel rows)
-	sprite_base_address := frame1_sprite_index;
-	sprite_base_address := sprite_base_address << 6;  // * 64
-	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
-	
-	// Unrolled loop for 8 pixel rows - faster than loop overhead
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	
-	// Clear second animation frame (8 pixel rows)
-	sprite_base_address := frame2_sprite_index;
-	sprite_base_address := sprite_base_address << 6;  // * 64
-	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
-	
-	// Unrolled loop for 8 pixel rows
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	
-	// Speed up as enemies decrease
-	// Update block_enemies bitmask for this enemy and increment cleared count
-	enemy_mask := 1 << enemyIndex;
-	was_alive := (block_enemies[blockIndex] & enemy_mask) <> 0;
-	if was_alive <> 0 then
-	begin
-		block_enemies[blockIndex] := block_enemies[blockIndex] & (enemy_mask xor $FF);
-		if (numberOfEnemies < INITIAL_INVADER_COUNT) then
-			inc(numberOfEnemies);
-	end;
-end;
 
 procedure MakeMonsters();
 var 
@@ -1088,7 +1090,7 @@ begin
 	
 	initializeMonsters();
 	//ClearMonster();
-	PreclearRightmostAndBottomEnemies();
+	PreclearLeftmostAndBottomEnemies();
 	MakeMonsters();
 	
 	InitSid(sidfile_1_init);
