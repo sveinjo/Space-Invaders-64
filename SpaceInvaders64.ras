@@ -58,6 +58,18 @@ var
 	const BULLET_SPEED : byte = 4;  // Pixels per frame
 	//const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
 	const EXPLOSION_DURATION : byte = 16;  // Frames to show explosion
+	// --- Hitbox / explosion tuning ---
+	// Explosion sprite X alignment: subtracted from block_x + col*18 (increase = moves left)
+	const EXPLOSION_X_OFFSET : byte = 6;
+	// Explosion sprite Y alignment: added to block_y + row*14 (increase = moves down)
+	const EXPLOSION_Y_OFFSET : byte = 0;
+	// How many pixels below the enemy's bottom edge the bullet still registers a hit (increase = fires sooner)
+	const BULLET_Y_CONTACT_REACH : byte = 0;
+	// Distance from the top of the bullet sprite box to the actual contact pixels (bullet pixels are at the bottom)
+	// C64 sprite box is 21px tall; 4px contact strip at bottom => offset = 21 - 4 = 17
+	const BULLET_Y_CONTACT_OFFSET : byte = 13;
+	// How many pixels into the bullet sprite the contact point is (increase = aim further right to hit)
+	const BULLET_X_CONTACT_REACH : byte = 11;
 
 							
   
@@ -338,16 +350,18 @@ begin
 	found_hit := 0;
 	
 	// Early exit if bullet outside enemy formation area
-	// Formation spans from monster_base_y to monster_base_y + adjustment + (3 rows × 26) + 21 sprite height
-	if player_bullet_y < monster_base_y then
+	// Use contact pixel position (player_bullet_y + BULLET_Y_CONTACT_OFFSET) for the upper bound check.
+	// Lower bound is monster_base_y + monster_vertical_adjustment since no block exists before the adjustment.
+	if player_bullet_y + BULLET_Y_CONTACT_OFFSET < monster_base_y + monster_vertical_adjustment then
 		should_check := 0;
 	if player_bullet_y > monster_base_y + monster_vertical_adjustment + 80 then
 		should_check := 0;
 	
 	if should_check <> 0 then
 	begin
-		// Calculate which block row (0-2) the bullet is in
-		rel_y := player_bullet_y - monster_base_y - monster_vertical_adjustment;
+		// Calculate which block row (0-2) the bullet is in.
+		// Use contact pixel Y to avoid byte underflow when sprite top is above the formation.
+		rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - monster_base_y - monster_vertical_adjustment;
 		if rel_y < MONSTER_ROW_OFFSET then
 			block_row := 0
 		else if rel_y < MONSTER_ROW_OFFSET * 2 then
@@ -367,17 +381,19 @@ begin
 				block_x := monster_base_x + block_col * MONSTER_SPACING;
 				
 				// Quick horizontal range check
-				// Bullet contact point is 12px into the sprite, so effective hit X = player_bullet_x + 12.
+				// Bullet contact point is BULLET_X_CONTACT_REACH px into the sprite, so effective hit X = player_bullet_x + BULLET_X_CONTACT_REACH.
 				// Range: contact point must fall within [block_x, block_x+48).
-				// => player_bullet_x in [block_x-12, block_x+36). block_x >= 32 so block_x-12 >= 20, no underflow.
-				if player_bullet_x >= block_x - 12 then
-					if player_bullet_x < block_x + 36 then
+				// => player_bullet_x in [block_x-REACH, block_x+(48-REACH)). block_x >= 32 so left bound >= 20, no underflow.
+				if player_bullet_x >= block_x - BULLET_X_CONTACT_REACH then
+					if player_bullet_x < block_x + 48 - BULLET_X_CONTACT_REACH then
 					begin
-						// rel_x = (player_bullet_x + 12) - block_x; no underflow since player_bullet_x >= block_x-12
-						rel_x := player_bullet_x - block_x + 12;
+						// rel_x = (player_bullet_x + REACH) - block_x; no underflow since player_bullet_x >= block_x-REACH
+						rel_x := player_bullet_x - block_x + BULLET_X_CONTACT_REACH;
 						
 						block_y := monster_base_y + monster_vertical_adjustment + block_row * MONSTER_ROW_OFFSET;
-						rel_y := player_bullet_y - block_y;
+						// Add BULLET_Y_CONTACT_OFFSET to map sprite top position to actual contact pixel Y.
+						// No underflow: bullet enters the row from below so player_bullet_y + offset >= block_y.
+						rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - block_y;
 						
 						// Determine enemy column (0-2) by X position
 						// Each enemy is 12px wide with 6px gaps between them
@@ -395,12 +411,12 @@ begin
 						
 						// Determine enemy row (0-1) by Y position
 						// Each enemy is 8px tall with 6px gap between rows
-						// Upper bounds extended by 3px to account for 4px-tall bullet
-						// Row 0 (top): Y 0-10, Gap: Y 11-13, Row 1 (bottom): Y 14-24
+						// BULLET_Y_CONTACT_OFFSET already shifts rel_y to contact pixel; REACH is fine-tuning only
+						// Row 0 (top): Y 0-(7+REACH), Gap: 8-13, Row 1 (bottom): Y 14-(21+REACH)
 						enemy_row := $FF;  // Invalid by default
-						if rel_y <= 10 then
+						if rel_y <= 7 + BULLET_Y_CONTACT_REACH then
 							enemy_row := 0
-						else if (rel_y >= 14 and rel_y <= 24) then
+						else if (rel_y >= 14 and rel_y <= 21 + BULLET_Y_CONTACT_REACH) then
 							enemy_row := 1;
 						
 						if (enemy_row <> $FF and enemy_col <> $FF) then
@@ -414,6 +430,11 @@ begin
 								// Hit! Clear enemy and trigger explosion
 								// Clear sprite + update block_enemies handled inside ClearMonster
 								ClearMonster(block_index, hit_enemy_index);
+								// Snap explosion sprite to enemy hitbox top-left.
+								// enemy_col stride = 12px wide + 6px gap = 18px.
+								// enemy_row stride = 8px tall + 6px gap = 14px.
+								player_bullet_x := block_x + enemy_col * 18 - EXPLOSION_X_OFFSET;
+								player_bullet_y := block_y + enemy_row * 14 + EXPLOSION_Y_OFFSET;
 								player_bullet_active := 2;
 								explosion_frame_counter := 0;
 								found_hit := 1;
@@ -1052,7 +1073,7 @@ begin
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
 	inc(StarField_RasterCount);
-	//StarField::DoStarfield();    
+	StarField::DoStarfield();    
 	preventirq();  
 	poke(^$D019, 0, 0);  
 	RasterIRQ(MainRasterRow1(), 0, @useKernal);
