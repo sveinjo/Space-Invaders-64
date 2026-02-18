@@ -43,7 +43,8 @@ var
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
-	monster_vertical_adjustment : byte = 6 + 78; // 52 is the perfect value
+	//monster_vertical_adjustment : byte = 6 + 78; // 52 is the perfect value
+	monster_vertical_adjustment : byte = 6;
 	const MONSTER_DROP_AMOUNT : byte = 13;
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
@@ -335,8 +336,9 @@ begin
 	ClearMonster(4, 1);
 	ClearMonster(8, 0);
 	ClearMonster(8, 1);
+	
 	ClearMonster(8, 3);
-	ClearMonster(8, 5);
+	ClearMonster(8, 5);	
 	ClearMonster(9, 1);
 	ClearMonster(9, 3);
 	ClearMonster(9, 5);
@@ -346,6 +348,42 @@ begin
 	ClearMonster(11, 1);
 	ClearMonster(11, 3);
 	ClearMonster(11, 5);
+	
+	ClearMonster(8, 2);
+	ClearMonster(8, 4);	
+	ClearMonster(9, 0);
+	ClearMonster(9, 2);
+	ClearMonster(9, 4);
+	ClearMonster(10, 0);
+	ClearMonster(10, 2);
+	ClearMonster(10, 4);
+	ClearMonster(11, 0);
+	ClearMonster(11, 2);
+	ClearMonster(11, 4);
+	
+	//ClearMonster(4, 2);
+	//ClearMonster(4, 4);	
+	//ClearMonster(5, 0);
+	//ClearMonster(5, 2);
+	//ClearMonster(5, 4);
+	//ClearMonster(6, 0);
+	//ClearMonster(6, 2);
+	//ClearMonster(6, 4);
+	//ClearMonster(7, 0);
+	//ClearMonster(7, 2);
+	//ClearMonster(7, 4);
+	
+	ClearMonster(4, 3);
+	ClearMonster(4, 5);	
+	ClearMonster(5, 1);
+	ClearMonster(5, 3);
+	ClearMonster(5, 5);
+	//ClearMonster(6, 1);
+	//ClearMonster(6, 3);
+	//ClearMonster(6, 5);
+	//ClearMonster(7, 1);
+	//ClearMonster(7, 3);
+	//ClearMonster(7, 5);
 end;
 
 
@@ -773,6 +811,29 @@ begin
 	GetLeftmostEnemyOffset := leftmost_result_offset;
 end;
 
+// Returns 1 if any enemy remains in the specified row (0=top,1=middle,2=bottom)
+function RowHasMonsters(row: byte) : byte;
+var
+	col: byte;
+	idx: byte;
+	has_flag: byte;
+begin
+
+	has_flag := 0;
+	col := 0;
+	while (col < 4) do
+	begin
+		idx := row * 4 + col;
+		if block_enemies[idx] <> 0 then
+		begin
+			has_flag := 1;
+			col := 4; // break
+		end;
+		inc(col);
+	end;
+	RowHasMonsters := has_flag;
+end;
+
 procedure UpdateTick();
 var
 	should_move_enemy : byte;
@@ -894,20 +955,19 @@ end;
 // This interrupt is triggered one time pr raster cycle
 interrupt MainRasterRow1();
 begin
-	ShowBullet();		
+	ShowBullet();	
+	
 	StartIRQ(@useKernal);  
 	
 	//border_debug_color := peek(^$D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
-	
 	// Clear sprite collision registers to remove garbage data
 	//asm(" lda $D01E");
 	//asm(" lda $D01F");
-	
-	// Update bullet position
+
 	UpdatePlayerBullet();
-		
+	
 	// Lightweight joystick update only
 	//Memory::Fill(#joystickup,0,5);
 	Joystick(joystickPort);
@@ -944,20 +1004,30 @@ begin
 	
 	// Heavy game logic - done here at top of frame
 	UpdateTick();
-	
-	// Update first row of monsters
-	UpdateMonsters(0); 
-	AnimateMonsters(0); // Prepare sprites for row 1
+    
+	// Update first row of monsters only if there are monsters in that row
+	if RowHasMonsters(0) <> 0 then
+	begin
+		UpdateMonsters(0);
+		AnimateMonsters(0); // Prepare sprites for row 1
+	end;
 	
 	// Check collisions AFTER all sprite rows have been displayed
 	// Only check when bullet is actively moving (not exploding)
 	if player_bullet_active = 1 then
 		CheckBulletCollision();
+
+	// Choose next raster handler based on which subsequent rows still have monsters
+	if RowHasMonsters(1) <> 0 then
+		RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal)
+	else if RowHasMonsters(2) <> 0 then
+		RasterIRQ(MainRasterRow3(), 122+monster_vertical_adjustment, @useKernal)
+	else
+	RasterIRQ(MainRasterPlayer(), 224, @useKernal);
+
 	
 	// Play music here - called each frame from raster IRQ to advance SID playback
-	call(sidfile_1_play);
-	
-	RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal);			
+	//call(sidfile_1_play);
 	CloseIRQ();
 end;
 
@@ -980,10 +1050,19 @@ begin
 	end;*/
 	
 	
-	UpdateMonsters(MONSTER_ROW_OFFSET);
-	AnimateMonsters(1); // Prepare sprites for row 2
-	
-	RasterIRQ(MainRasterRow3(), 126+monster_vertical_adjustment, @useKernal);
+	// Update middle row only if it still contains monsters
+	if RowHasMonsters(1) <> 0 then
+	begin
+		UpdateMonsters(MONSTER_ROW_OFFSET);
+		AnimateMonsters(1); // Prepare sprites for row 2
+	end;
+
+	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
+	if RowHasMonsters(2) <> 0 then
+		RasterIRQ(MainRasterRow3(), 122+monster_vertical_adjustment, @useKernal)
+	else
+		RasterIRQ(MainRasterPlayer(), 224, @useKernal);
+
 	CloseIRQ();
 end;
 
@@ -1012,13 +1091,18 @@ begin
 	end;*/
 	
 	
-	UpdateMonsters(MONSTER_ROW_OFFSET*2);
-	AnimateMonsters(2); // Prepare sprites for row 3
-	
+	// Update bottom row only if it still contains monsters
+	if RowHasMonsters(2) <> 0 then
+	begin
+		UpdateMonsters(MONSTER_ROW_OFFSET*2);
+		AnimateMonsters(2); // Prepare sprites for row 3
+	end;
+
 	//RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
 	RasterIRQ(MainRasterPlayer(), 224, @useKernal);
 	CloseIRQ();
 end;
+
 
 interrupt MainRasterPlayer();
 begin
