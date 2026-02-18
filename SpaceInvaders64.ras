@@ -118,7 +118,7 @@ var
 	
 
 	// Declarations (commented out where no longer needed)
-	//interrupt MainRasterRow1();
+	interrupt MainRasterRow1();
 	interrupt MainRasterRow2();
 	interrupt MainRasterRow3();
 	interrupt MainRasterJoystick();
@@ -349,7 +349,7 @@ begin
 	ClearMonster(11, 3);
 	ClearMonster(11, 5);
 	
-	ClearMonster(8, 2);
+	/*ClearMonster(8, 2);
 	ClearMonster(8, 4);	
 	ClearMonster(9, 0);
 	ClearMonster(9, 2);
@@ -378,12 +378,12 @@ begin
 	ClearMonster(5, 1);
 	ClearMonster(5, 3);
 	ClearMonster(5, 5);
-	//ClearMonster(6, 1);
-	//ClearMonster(6, 3);
-	//ClearMonster(6, 5);
-	//ClearMonster(7, 1);
-	//ClearMonster(7, 3);
-	//ClearMonster(7, 5);
+	ClearMonster(6, 1);
+	ClearMonster(6, 3);
+	ClearMonster(6, 5);
+	ClearMonster(7, 1);
+	ClearMonster(7, 3);
+	ClearMonster(7, 5);*/
 end;
 
 
@@ -951,13 +951,13 @@ end;
 // Main raster interrupt routines.
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-
-// This interrupt is triggered one time pr raster cycle
-interrupt MainRasterRow1();
+interrupt MainRasterChain();
 begin
+	StartIRQ(@useKernal);	
+	if debug_enable_bgcol = 1 then
+		SCREEN_BG_COL := BLACK;
+		
 	ShowBullet();	
-	
-	StartIRQ(@useKernal);  
 	
 	//border_debug_color := peek(^$D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
@@ -987,13 +987,10 @@ begin
 		previous_fire_state := 0;
 	
 	/*if player_bullet_active <> 0 then
-	begin
-		ShowBullet();
+	begin	
 		//SCREEN_BG_COL := border_debug_color;
 	end;*/
-	
-	//SCREEN_BG_COL:=BLACK;  
-	
+		
 	// Do heavy work at start of frame where we have most time
 	// Increment score
 	/*Score += SCORE_INCREMENT;
@@ -1004,7 +1001,33 @@ begin
 	
 	// Heavy game logic - done here at top of frame
 	UpdateTick();
-    
+    	
+	// Check collisions AFTER all sprite rows have been displayed
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
+		CheckBulletCollision();
+
+	if RowHasMonsters(0) <> 0 then		
+		RasterIRQ(MainRasterRow1(), 81, @useKernal)
+	else if RowHasMonsters(1) <> 0 then
+		RasterIRQ(MainRasterRow2(), 96+monster_vertical_adjustment, @useKernal)
+	else if RowHasMonsters(2) <> 0 then
+		RasterIRQ(MainRasterRow3(), 122+monster_vertical_adjustment, @useKernal)
+	else
+		RasterIRQ(MainRasterPlayer(), 224, @useKernal);
+	
+	// Play music here - called each frame from raster IRQ to advance SID playback
+	//call(sidfile_1_play);
+	CloseIRQ();
+end;
+
+// This interrupt is triggered one time pr raster cycle
+interrupt MainRasterRow1();
+begin	
+	StartIRQ(@useKernal);	
+	if debug_enable_bgcol = 1 then
+		SCREEN_BG_COL := RED; 	
+	
 	// Update first row of monsters only if there are monsters in that row
 	if RowHasMonsters(0) <> 0 then
 	begin
@@ -1012,22 +1035,14 @@ begin
 		AnimateMonsters(0); // Prepare sprites for row 1
 	end;
 	
-	// Check collisions AFTER all sprite rows have been displayed
-	// Only check when bullet is actively moving (not exploding)
-	if player_bullet_active = 1 then
-		CheckBulletCollision();
-
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 97+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow2(), 96+monster_vertical_adjustment, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
 		RasterIRQ(MainRasterRow3(), 122+monster_vertical_adjustment, @useKernal)
 	else
-	RasterIRQ(MainRasterPlayer(), 224, @useKernal);
+		RasterIRQ(MainRasterPlayer(), 224, @useKernal);
 
-	
-	// Play music here - called each frame from raster IRQ to advance SID playback
-	//call(sidfile_1_play);
 	CloseIRQ();
 end;
 
@@ -1081,15 +1096,11 @@ begin
 	//ShowBullet();
 
 	StartIRQ(@useKernal);
-
-	//DisplayScore();
 	
 	/*if player_bullet_active <> 0 then
 	begin
-		showBullet();
 		//SCREEN_BG_COL := border_debug_color;
-	end;*/
-	
+	end;*/	
 	
 	// Update bottom row only if it still contains monsters
 	if RowHasMonsters(2) <> 0 then
@@ -1118,8 +1129,7 @@ begin
 	//asm(" lda $D01F");
 	//border_debug_color := peek($D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
-	
-		
+			
 	//SCREEN_BG_COL := border_debug_color;
 	
 	// Switch sprite 0 from bullet back to player
@@ -1142,7 +1152,7 @@ begin
 	StarField::DoStarfield();    
 	preventirq();  
 	poke(^$D019, 0, 0);  
-	RasterIRQ(MainRasterRow1(), 0, @useKernal);
+	RasterIRQ(MainRasterChain(), 0, @useKernal);
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
