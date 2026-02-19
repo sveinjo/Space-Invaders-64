@@ -33,7 +33,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 1;
+	const debug_enable_bgcol : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -46,7 +46,7 @@ var
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	//monster_vertical_adjustment : byte = 6 + 78; // 52 is the perfect value
-	monster_vertical_adjustment : byte = 5 + 52;
+	monster_vertical_adjustment : byte = 5;
 	const MONSTER_DROP_AMOUNT : byte = 13;
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
@@ -1107,13 +1107,13 @@ begin
 		CheckBulletCollision();
 
 	if RowHasMonsters(0) <> 0 then		
-		RasterIRQ(MainRasterRow1(), 81, @useKernal)
+		RasterIRQ(MainRasterRow1(), 80, @useKernal)
 	else if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 96+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow2(), 95+monster_vertical_adjustment, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 122+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 121+monster_vertical_adjustment, @useKernal)
 	else
-		RasterIRQ(MainRasterPlayer(), 224, @useKernal);
+		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 	
 	// Play music here - called each frame from raster IRQ to advance SID playback
 	//call(sidfile_1_play);
@@ -1136,11 +1136,11 @@ begin
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 96+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow2(), 95+monster_vertical_adjustment, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 122+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 121+monster_vertical_adjustment, @useKernal)
 	else
-		RasterIRQ(MainRasterPlayer(), 224, @useKernal);
+		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
 	CloseIRQ();
 end;
@@ -1173,9 +1173,9 @@ begin
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 122+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 121+monster_vertical_adjustment, @useKernal)
 	else
-		RasterIRQ(MainRasterPlayer(), 224, @useKernal);
+		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
 	CloseIRQ();
 end;
