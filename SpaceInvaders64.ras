@@ -634,7 +634,7 @@ begin
 								// enemy_col stride = 12px wide + 6px gap = 18px.
 								// enemy_row stride = 8px tall + 6px gap = 14px.
 								player_bullet_x := block_x + enemy_col * 18 - EXPLOSION_X_OFFSET;
-								player_bullet_y := block_y + enemy_row * 14 + EXPLOSION_Y_OFFSET;
+								player_bullet_y := block_y + enemy_row * 14 + EXPLOSION_Y_OFFSET - 13;
 								player_bullet_active := 2;
 								explosion_frame_counter := 0;
 								found_hit := 1;
