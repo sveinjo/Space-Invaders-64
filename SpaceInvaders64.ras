@@ -33,7 +33,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 1;
+	const debug_enable_bgcol : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -1111,7 +1111,8 @@ begin
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 	
 	// Play music here - called each frame from raster IRQ to advance SID playback
-	//call(sidfile_1_play);
+	call(sidfile_1_play);
+	
 	CloseIRQ();
 end;
 
