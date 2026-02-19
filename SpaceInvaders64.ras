@@ -33,7 +33,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 0;
+	const debug_enable_bgcol : byte = 1;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -1100,12 +1100,7 @@ begin
 	
 	// Heavy game logic - done here at top of frame
 	UpdateTick();
-    	
-	// Check collisions AFTER all sprite rows have been displayed
-	// Only check when bullet is actively moving (not exploding)
-	if player_bullet_active = 1 then
-		CheckBulletCollision();
-
+    
 	if RowHasMonsters(0) <> 0 then		
 		RasterIRQ(MainRasterRow1(), 80, @useKernal)
 	else if RowHasMonsters(1) <> 0 then
@@ -1223,6 +1218,10 @@ begin
 	//border_debug_color := peek($D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
 
+	// Check collisions AFTER all sprite rows have been displayed
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
+		CheckBulletCollision();
 	
 	//asm(" lda $D01E");
 	//asm(" lda $D01F");
