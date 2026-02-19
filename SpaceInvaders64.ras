@@ -34,6 +34,8 @@ var
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
 	const debug_enable_bgcol : byte = 1;
+	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
+	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
 	// Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
     debug_last_cleared : byte = 0;
@@ -44,7 +46,7 @@ var
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	//monster_vertical_adjustment : byte = 6 + 78; // 52 is the perfect value
-	monster_vertical_adjustment : byte = 6;
+	monster_vertical_adjustment : byte = 6 + 52;
 	const MONSTER_DROP_AMOUNT : byte = 13;
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
@@ -840,6 +842,69 @@ begin
 	RowHasMonsters := has_flag;
 end;
 
+// Returns the Y pixel coordinate of the bottom edge of the lowest alive enemy.
+// Scans monster rows bottom-to-top; byte underflow (dec past 0 -> 255) exits the loop naturally.
+// Used to clamp formation drops so enemies never reach the player.
+function GetLowestEnemyBottomY() : byte;
+var
+	gleby_r : byte;
+	gleby_b : byte;
+	gleby_found : byte;
+	gleby_lowest_row : byte;
+	gleby_row_offset : byte;
+	gleby_has_bottom_enemy : byte;
+	gleby_bottom_in_sprite : byte;
+	gleby_result : byte;
+begin
+	gleby_found := 0;
+	gleby_lowest_row := 0;
+	gleby_r := 2;
+	// Scan from bottom row (2) upward; dec past 0 wraps to 255 which exits 'r <= 2'
+	while (gleby_r <= 2 and gleby_found = 0) do
+	begin
+		gleby_b := 0;
+		while (gleby_b <= 3 and gleby_found = 0) do
+		begin
+			if block_enemies[gleby_r * 4 + gleby_b] <> 0 then
+			begin
+				gleby_lowest_row := gleby_r;
+				gleby_found := 1;
+			end;
+			inc(gleby_b);
+		end;
+		if gleby_found = 0 then
+			dec(gleby_r);  // at r=0 wraps to 255, exiting the while
+	end;
+
+	// Row Y offsets: row 0 = 0, row 1 = MONSTER_ROW_OFFSET, row 2 = MONSTER_ROW_OFFSET*2
+	if gleby_lowest_row = 0 then
+		gleby_row_offset := 0
+	else if gleby_lowest_row = 1 then
+		gleby_row_offset := MONSTER_ROW_OFFSET
+	else
+		gleby_row_offset := MONSTER_ROW_OFFSET * 2;
+
+	// Check whether any 'bottom' enemy (odd index; bits 1,3,5 = mask $2A) is alive in this row.
+	// Bottom enemies occupy sprite pixel rows 13-20 (bottom pixel offset = 20).
+	// Top-only enemies occupy rows 0-7 (bottom pixel offset = 7).
+	gleby_has_bottom_enemy := 0;
+	gleby_b := 0;
+	while gleby_b <= 3 do
+	begin
+		if (block_enemies[gleby_lowest_row * 4 + gleby_b] & $2A) <> 0 then
+			gleby_has_bottom_enemy := 1;
+		inc(gleby_b);
+	end;
+
+	if gleby_has_bottom_enemy <> 0 then
+		gleby_bottom_in_sprite := 20
+	else
+		gleby_bottom_in_sprite := 7;
+
+	gleby_result := monster_base_y + gleby_row_offset + monster_vertical_adjustment + gleby_bottom_in_sprite;
+	GetLowestEnemyBottomY := gleby_result;
+end;
+
 procedure UpdateTick();
 var
 	should_move_enemy : byte;
@@ -873,7 +938,16 @@ begin
 		// If direction changed, drop the formation by MONSTER_DROP_AMOUNT pixels
 		if prev_direction <> enemy_direction then
 		begin
-			monster_vertical_adjustment := monster_vertical_adjustment + MONSTER_DROP_AMOUNT;
+			// ENABLE_DROP_FLOOR: only drop if the lowest enemy's bottom pixel, after the drop,
+			// would still be at least 1 pixel above the player's top pixel.
+			// Safe byte check: lowest_bottom_y < player_sprite_y - MONSTER_DROP_AMOUNT - 1
+			if ENABLE_DROP_FLOOR <> 0 then
+			begin
+				if GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT - 0 then // Adjust this to tune where the drops stop
+					monster_vertical_adjustment := monster_vertical_adjustment + MONSTER_DROP_AMOUNT;
+			end
+			else
+				monster_vertical_adjustment := monster_vertical_adjustment + MONSTER_DROP_AMOUNT;
 		end;
 			
 		if enemyMoveCounter = 2 then
