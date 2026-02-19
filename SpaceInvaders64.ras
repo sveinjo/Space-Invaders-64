@@ -46,7 +46,7 @@ var
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	//monster_vertical_adjustment : byte = 6 + 78; // 52 is the perfect value
-	monster_vertical_adjustment : byte = 6 + 52;
+	monster_vertical_adjustment : byte = 5 + 52;
 	const MONSTER_DROP_AMOUNT : byte = 13;
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
@@ -67,6 +67,11 @@ var
 	const EXPLOSION_X_OFFSET : byte = 6;
 	// Explosion sprite Y alignment: added to block_y + row*14 (increase = moves down)
 	const EXPLOSION_Y_OFFSET : byte = 0;
+	// Number of pixels from the TOP of the sprite box to where the explosion lit pixels begin.
+	// Set to (SPRITE_HEIGHT - pixel_height) when pixels are packed at the bottom of the sprite frame,
+	// so the snap calculation places the box above the enemy and the pixels land on it visually.
+	// Must match the actual sprite pixel layout in the .flf sheet.
+	const EXPLOSION_PIXELS_FROM_TOP : byte = 13;
 	// How many pixels below the enemy's bottom edge the bullet still registers a hit (increase = fires sooner)
 	const BULLET_Y_CONTACT_REACH : byte = 0;
 	// Distance from the top of the bullet sprite box to the actual contact pixels (bullet pixels are at the bottom)
@@ -469,25 +474,27 @@ procedure ShowBullet();
 var
 	bullet_sprite_index : byte;
 begin
-	// Only display if bullet is active AND the sprite fits entirely above the player raster line (224).
-	// If player_bullet_y > 224 - SPRITE_HEIGHT (= 203), the 21-pixel sprite would extend past line 224,
-	// causing the VIC to be mid-draw when MainRasterPlayer fires -- the player sprite can never start
-	// on that line, making the ship disappear. Leaving sprite 0 alone lets MainRasterPlayer draw the
-	// player cleanly instead.
+	// Only display bullet/explosion if the sprite box fits entirely above the player raster line.
+	// The VIC-II triggers sprite DMA at the TOP of the sprite box (player_bullet_y), not at the
+	// pixel content. DMA runs for SPRITE_HEIGHT (21) lines. If player_bullet_y + SPRITE_HEIGHT >= 224,
+	// the DMA window overlaps MainRasterPlayer, which can no longer retrigger sprite 0 for the player
+	// at Y=226 that frame -> ship disappears. The guard is: player_bullet_y <= 224 - SPRITE_HEIGHT.
+	// (= 203). Note: EXPLOSION_PIXELS_FROM_TOP shifts lit pixels downward inside the box, so the
+	// explosion is still visually correct even when the box top is well above the enemy.
 	if player_bullet_active <> 0 then
 	begin
 		//if player_bullet_y <= 224 - SPRITE_HEIGHT then
 		//begin
-		// Select sprite based on bullet state: 1=normal bullet, 2=explosion
-		if player_bullet_active = 2 then
-			bullet_sprite_index := 2  // Explosion sprite
-		else
-			bullet_sprite_index := 1;  // Normal bullet sprite
-		
-		SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
-		SpritePos(player_bullet_x, player_bullet_y, useSprite);
+			// Select sprite based on bullet state: 1=normal bullet, 2=explosion
+			if player_bullet_active = 2 then
+				bullet_sprite_index := 2  // Explosion sprite
+			else
+				bullet_sprite_index := 1;  // Normal bullet sprite
+			
+			SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
+			SpritePos(player_bullet_x, player_bullet_y, useSprite);
 		//end;
-		// else: bullet/explosion is too close to the player row -- leave sprite 0 as the player
+		// else: sprite box would overlap raster 224 - leave sprite 0 as player
 	end;
 end;
 
@@ -633,8 +640,10 @@ begin
 								// Snap explosion sprite to enemy hitbox top-left.
 								// enemy_col stride = 12px wide + 6px gap = 18px.
 								// enemy_row stride = 8px tall + 6px gap = 14px.
+								// Shift box upward by EXPLOSION_PIXELS_FROM_TOP so the lit pixels
+								// (packed at the bottom of the sprite frame) land on the enemy visually.
 								player_bullet_x := block_x + enemy_col * 18 - EXPLOSION_X_OFFSET;
-								player_bullet_y := block_y + enemy_row * 14 + EXPLOSION_Y_OFFSET - 13;
+								player_bullet_y := block_y + enemy_row * 14 + EXPLOSION_Y_OFFSET - EXPLOSION_PIXELS_FROM_TOP;
 								player_bullet_active := 2;
 								explosion_frame_counter := 0;
 								found_hit := 1;
