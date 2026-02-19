@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 0;
+	const debug_enable_bgcol : byte = 1;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -134,6 +134,9 @@ var
 	es_shot_anim_index : byte = 0;
 	es_shot_move_tick : byte = 0;
 	es_shot_explode_counter : byte = 0;
+
+	// simple PRNG seed for enemy-shot X generation
+	es_rand_seed : byte = $55;
 	
 	const ES_SHOT_SPRITE:byte = 6;
 	const ES_SHOT_ANIM_START:byte = 5;
@@ -549,106 +552,31 @@ begin
 	end;
 end;
 
-// Enemy shot routines
-procedure FireEnemyShot();
+
+// FireEnemyShot2: very small, fast routine that fires from the top of the screen
+// with a random X between PLAYER_MIN_X and PLAYER_MAX_X if no enemy shot active.
+procedure FireEnemyShot2();
 var
-	es_block_idx: byte;
-	es_enemy_idx: byte;
-	es_emask: byte;
-	es_best_dx: byte;
-	es_found_flag: byte;
-	es_target_block: byte;
-	es_target_enemy: byte;
-	es_block_col: byte;
-	es_block_row: byte;
-	es_enemy_col: byte;
-	es_enemy_row: byte;
-	es_block_x: byte;
-	es_block_y: byte;
-	es_candidate_x: byte;
-	es_candidate_bottom: byte;
-	es_center_x: byte;
-	es_bottom_in_sprite: byte;
+	es2_r: byte;
+	es2_range: byte;
 begin
 	if es_shot_active = 0 then
 	begin
-		// Find alive enemy closest in X to player_sprite_x
-		es_found_flag := 0;
-		es_best_dx := 255;
-		es_block_idx := 0;
-		while es_block_idx <= 11 do
-		begin
-			es_emask := 1;
-			es_enemy_idx := 0;
-			while es_enemy_idx <= 5 do
-			begin
-				if (block_enemies[es_block_idx] & es_emask) <> 0 then
-				begin
-					// compute block col/row
-					es_block_row := es_block_idx >> 2; // 0..2
-					es_block_col := es_block_idx & 3;  // 0..3
-					es_enemy_col := es_enemy_idx >> 1; // 0..2
-					es_enemy_row := es_enemy_idx & 1;  // 0 or 1
+		// advance simple PRNG
+		//es_rand_seed := es_rand_seed * 3 + 7;
+		//es2_r := es_rand_seed;
 
-					es_block_x := monster_base_x + es_block_col * MONSTER_SPACING;
-					es_block_y := monster_base_y + es_block_row * MONSTER_ROW_OFFSET + monster_vertical_adjustment;
+		// map random byte into [PLAYER_MIN_X .. PLAYER_MAX_X]
+		//es2_range := PLAYER_MAX_X - PLAYER_MIN_X;
+		//es_shot_x := PLAYER_MIN_X + (es2_r * es2_range) / 255;
+		es_shot_x := PLAYER_MIN_X + 50;
 
-					// estimate center x of the enemy (col stride = 18px, approximate center offset +6)
-					es_center_x := es_block_x + es_enemy_col * 18 + 6;
+		// spawn at top of screen
+		es_shot_y := 0;
 
-					// bottom pixel offset depends on top/bottom enemy
-					if (es_enemy_row <> 0) then
-						es_bottom_in_sprite := 20
-					else
-						es_bottom_in_sprite := 7;
-
-					es_candidate_bottom := es_block_y + es_enemy_row * 14 + es_bottom_in_sprite;
-
-					// distance in x (absolute)
-					if es_center_x >= player_sprite_x then
-						es_candidate_x := es_center_x - player_sprite_x
-					else
-						es_candidate_x := player_sprite_x - es_center_x;
-
-					if es_candidate_x < es_best_dx then
-					begin
-						es_best_dx := es_candidate_x;
-						es_target_block := es_block_idx;
-						es_target_enemy := es_enemy_idx;
-						es_found_flag := 1;
-					end;
-				end;
-				inc(es_enemy_idx);
-				es_emask := es_emask << 1;
-			end;
-			inc(es_block_idx);
-		end;
-
-		if es_found_flag <> 0 then
-		begin
-			// compute final positions for chosen enemy
-			es_block_row := es_target_block >> 2;
-			es_block_col := es_target_block & 3;
-			es_enemy_col := es_target_enemy >> 1;
-			es_enemy_row := es_target_enemy & 1;
-
-			es_block_x := monster_base_x + es_block_col * MONSTER_SPACING;
-			es_block_y := monster_base_y + es_block_row * MONSTER_ROW_OFFSET + monster_vertical_adjustment;
-
-			// X snap to middle similarly to explosion centering (approx)
-			es_shot_x := es_block_x + es_enemy_col * 18 + 6;
-
-			// Y starts 9 pixels below the lowest point of the enemy
-			if (es_enemy_row <> 0) then
-				es_bottom_in_sprite := 20
-			else
-				es_bottom_in_sprite := 7;
-			es_shot_y := es_block_y + es_enemy_row * 14 + es_bottom_in_sprite + 9;
-
-			es_shot_anim_index := 0;
-			es_shot_move_tick := 0;
-			es_shot_active := 1;
-		end;
+		es_shot_anim_index := 0;
+		es_shot_move_tick := 0;
+		es_shot_active := 1;
 	end;
 end;
 
@@ -663,7 +591,7 @@ begin
 		else // exploding
 			es_sprite_frame_index := 4; // explosion graphic
 
-		SetSpriteLoc(ES_SHOT_SPRITE, @spriteLoc/64 + es_sprite_frame_index, useBank);
+		SetSpriteLoc(ES_SHOT_SPRITE, @spriteLoc/64 + es_sprite_frame_index -1, useBank);
 		SpritePos(es_shot_x, es_shot_y, ES_SHOT_SPRITE);
 	end;
 end;
@@ -673,22 +601,26 @@ begin
 	if es_shot_active = 1 then	
 	begin
 		inc(es_shot_move_tick);
-		if es_shot_move_tick >= ES_SHOT_MOVE_FRAMES then
+		//if es_shot_move_tick >= ES_SHOT_MOVE_FRAMES then
+		if es_shot_move_tick >= 3 then
 		begin
 			es_shot_move_tick := 0;
 			// move down
-			es_shot_y := es_shot_y + ES_SHOT_MOVE_PIXELS;
-			//es_shot_y := es_shot_y + 1;
+			//es_shot_y := es_shot_y + ES_SHOT_MOVE_PIXELS;
+			es_shot_y := es_shot_y + 1;
 			// cycle animation frames 0..3
 			es_shot_anim_index := (es_shot_anim_index + 1) & (ES_SHOT_ANIM_FRAMES - 1);
 
-			// If reached bottom of screen -> explode
-			if es_shot_y >= (230 - SPRITE_HEIGHT) then
+			
+			
+		end;
+		// If reached bottom of screen -> explode
+			if es_shot_y >= (249 - SPRITE_HEIGHT) then
 			begin
 				es_shot_active := 2;
 				es_shot_explode_counter := 0;
 			end;
-		end;
+		es_shot_y := es_shot_y + 1;
 	end
 	else if es_shot_active = 2 then
 	begin
@@ -699,7 +631,7 @@ begin
 			es_shot_explode_counter := 0;
 			// If there are still enemies alive, fire another
 			if (INITIAL_INVADER_COUNT - numberOfEnemies) > 0 then
-				FireEnemyShot();
+				FireEnemyShot2();
 		end;
 	end;
 	//es_shot_y := es_shot_y + 1;
@@ -1264,12 +1196,7 @@ begin
 	else
 		previous_fire_state := 0;
 
-	// If no enemy shot active and enemies remain, fire one
-	if es_shot_active = 0 then
-	begin
-		if (INITIAL_INVADER_COUNT - numberOfEnemies) > 0 then
-			FireEnemyShot();
-	end;
+	
 	
 	/*if player_bullet_active <> 0 then
 	begin	
@@ -1399,6 +1326,13 @@ end;
 
 interrupt MainRasterPlayer();
 begin
+	// If no enemy shot active and enemies remain, fire one
+	if es_shot_active = 0 then
+	begin
+		if (INITIAL_INVADER_COUNT - numberOfEnemies) > 0 then
+			FireEnemyShot2();
+	end;
+	
 	UpdateSprite();
 	if debug_enable_bgcol = 1 then
 		SCREEN_BG_COL := BLACK;
@@ -1422,7 +1356,30 @@ begin
 
 	//togglebit(sprite_bitmask, useSprite, 1);  // Ensure sprite is enabled for player
 
-	RasterIRQ(MainRasterStarfield(),253,@useKernal);
+	//RasterIRQ(MainRasterStarfield(),253,@useKernal);
+	
+	//border_debug_color := peek($D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
+	//DisplayScore();
+	inc(StarField_RasterCount);
+	StarField::DoStarfield();    
+	preventirq();  
+	poke(^$D019, 0, 0);  
+	
+	// Check collisions AFTER all sprite rows have been displayed
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
+		CheckBulletCollision();
+	
+	
+		
+	// Update enemy shot movement/animation
+	UpdateEnemyShot();
+	
+	// Show enemy shot sprite if active
+	ShowEnemyShot();
+	
+	RasterIRQ(MainRasterChain(), 0, @useKernal);
 	CloseIRQ();
 end;
 
@@ -1441,6 +1398,8 @@ begin
 	// Only check when bullet is actively moving (not exploding)
 	if player_bullet_active = 1 then
 		CheckBulletCollision();
+	
+	
 		
 	// Update enemy shot movement/animation
 	UpdateEnemyShot();
