@@ -531,13 +531,19 @@ begin
 	should_check := 1;
 	found_hit := 0;
 	
-	// Early exit if bullet outside enemy formation area
-	// Use contact pixel position (player_bullet_y + BULLET_Y_CONTACT_OFFSET) for the upper bound check.
-	// Lower bound is monster_base_y + monster_vertical_adjustment since no block exists before the adjustment.
+	// Early exit if bullet outside enemy formation area.
+	// Lower bound: contact pixel (bullet_y + OFFSET) above the formation top -> skip.
 	if player_bullet_y + BULLET_Y_CONTACT_OFFSET < monster_base_y + monster_vertical_adjustment then
 		should_check := 0;
-	if player_bullet_y > monster_base_y + monster_vertical_adjustment + 80 then
-		should_check := 0;
+	// Upper bound: bullet sprite top below the formation bottom -> skip.
+	// BYTE OVERFLOW GUARD: monster_base_y(82) + monster_vertical_adjustment + 80 wraps after ~7 drops.
+	// Fold the two constants: 82 + 80 = 162, so check becomes bullet_y > adj + 162.
+	// adj + 162 overflows when adj > 93 (enemies already off-screen), so skip the guard in that case.
+	if monster_vertical_adjustment <= 93 then
+	begin
+		if player_bullet_y > monster_vertical_adjustment + 162 then
+			should_check := 0;
+	end;
 	
 	if should_check <> 0 then
 	begin
