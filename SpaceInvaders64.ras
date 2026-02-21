@@ -47,8 +47,12 @@ var
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	//monster_vertical_adjustment : byte = 6 + 78; // 52 is the perfect value
-	monster_vertical_adjustment : byte = 5;
-	const MONSTER_DROP_AMOUNT : byte = 13;
+	monster_vertical_adjustment : byte = 41;
+	const MONSTER_DROP_AMOUNT : byte = 6;
+	const MONSTER_DROP_AMOUNT2 : byte = 10;
+	
+	const MONSTER_START_Y : byte = 71 ;
+	
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
 	//pos_x : byte = PLAYER_MIN_X;
@@ -128,22 +132,33 @@ var
 	
 
 	// Enemy-shot globals (prefixed es_ to avoid global namespace collisions)
-	es_shot_active : byte = 0; // 0 = inactive, 1 = moving, 2 = exploding
-	es_shot_x : byte;
-	es_shot_y : byte;
-	es_shot_anim_index : byte = 0;
-	es_shot_move_tick : byte = 0;
-	es_shot_explode_counter : byte = 0;
+	// Support 3 simultaneous hardware-shot slots with staggered firing
+	es_shot_active : array[3] of byte = (0,0,0); // 0=inactive,1=moving,2=exploding
+	es_shot_x : array[3] of byte = (0,0,0);
+	es_shot_y : array[3] of byte = (0,0,0);
+	es_shot_anim_index : array[3] of byte = (0,0,0);
+	es_shot_move_tick : array[3] of byte = (0,0,0);
+	es_shot_explode_counter : array[3] of byte = (0,0,0);
+
+	// Sequence/stagger scheduler
+	es_shot_sequence_active : byte = 0; // 0 = idle, 1 = firing sequence active
+	es_shot_next_to_fire : byte = 0; // 0..2 index of next shot to spawn
+	es_shot_stagger_counter : byte = 0; // countdown frames between staggered shots
 
 	// simple PRNG seed for enemy-shot X generation
 	es_rand_seed : byte = $55;
 	
-	const ES_SHOT_SPRITE:byte = 6;
-	const ES_SHOT_ANIM_START:byte = 5;
+	// Shot sprite hardware indices (use remaining hardware sprites)
+	const ES_SHOT_SPRITE1:byte = 6;
+	const ES_SHOT_SPRITE2:byte = 5;
+	const ES_SHOT_SPRITE3:byte = 7;
+
+	const ES_SHOT_ANIM_START:byte = 5; // image indices 5..8
 	const ES_SHOT_ANIM_FRAMES:byte = 4;
 	const ES_SHOT_MOVE_FRAMES:byte = 3;
 	const ES_SHOT_MOVE_PIXELS:byte = 4;
 	const ES_SHOT_EXPLODE_DURATION:byte = 9;
+	const ES_SHOT_STAGGER_FRAMES:byte = 50; // ~1 second at 50Hz
 	interrupt MainRasterRow2();
 	interrupt MainRasterRow3();
 	interrupt MainRasterJoystick();
@@ -352,9 +367,13 @@ begin
 	sprite_color[useSprite]:=light_blue;
 	// Turn on sprite 0 (or @useSprite)
 	togglebit(sprite_bitmask,useSprite,1);
-	// Enable enemy-shot sprite and set color
-	sprite_color[ES_SHOT_SPRITE]:=cyan;
-	togglebit(sprite_bitmask,ES_SHOT_SPRITE,1);
+	// Enable enemy-shot hardware sprites and set color
+	sprite_color[ES_SHOT_SPRITE1]:=cyan;
+	sprite_color[ES_SHOT_SPRITE2]:=cyan;
+	sprite_color[ES_SHOT_SPRITE3]:=cyan;
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE1,1);
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE2,1);
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE3,1);
 end;
 
 
@@ -555,86 +574,166 @@ end;
 
 // FireEnemyShot2: very small, fast routine that fires from the top of the screen
 // with a random X between PLAYER_MIN_X and PLAYER_MAX_X if no enemy shot active.
+// Start a staggered sequence of three shots centered on centerX
+procedure StartEnemyShotSequence(centerX: byte);
+var
+	i: byte;
+begin
+	es_shot_sequence_active := 1;
+	es_shot_next_to_fire := 0;
+	es_shot_stagger_counter := 0; // fire first immediately
+
+	// compute X positions (-20, 0, +20) clamped to allowed range
+	if centerX > 20 + PLAYER_MIN_X then
+		es_shot_x[0] := centerX + 20
+	else
+		es_shot_x[0] := PLAYER_MIN_X;
+
+	es_shot_x[1] := centerX;
+
+	if centerX + 20 < PLAYER_MAX_X then
+		es_shot_x[2] := centerX + 40
+	else
+		es_shot_x[2] := PLAYER_MAX_X;
+
+	// reset per-shot state
+	i := 0;
+	while i <= 2 do
+	begin
+		es_shot_active[i] := 0;
+		es_shot_y[i] := 0;
+		es_shot_anim_index[i] := 0;
+		es_shot_move_tick[i] := 0;
+		es_shot_explode_counter[i] := 0;
+		inc(i);
+	end;
+end;
+
 procedure FireEnemyShot2();
 var
 	es2_r: byte;
 	es2_range: byte;
 begin
-	if es_shot_active = 0 then
+	// Only proceed if no sequence is active and all slots are free
+	if es_shot_sequence_active = 0 then
 	begin
-		// advance simple PRNG
-		//es_rand_seed := es_rand_seed * 3 + 7;
-		//es2_r := es_rand_seed;
+		if es_shot_active[0] = 0 then
+		begin
+			if es_shot_active[1] = 0 then
+			begin
+				if es_shot_active[2] = 0 then
+				begin
+					// advance simple PRNG and map into range
+					/*es_rand_seed := es_rand_seed * 3 + 7;
+					es2_r := es_rand_seed;
+					es2_range := PLAYER_MAX_X - PLAYER_MIN_X;
+					es2_r := (es2_r * es2_range) / 255;
+					es2_r := PLAYER_MIN_X + es2_r;
 
-		// map random byte into [PLAYER_MIN_X .. PLAYER_MAX_X]
-		//es2_range := PLAYER_MAX_X - PLAYER_MIN_X;
-		//es_shot_x := PLAYER_MIN_X + (es2_r * es2_range) / 255;
-		es_shot_x := PLAYER_MIN_X + 50;
-
-		// spawn at top of screen
-		es_shot_y := 0;
-
-		es_shot_anim_index := 0;
-		es_shot_move_tick := 0;
-		es_shot_active := 1;
+					StartEnemyShotSequence(es2_r)*/;
+					StartEnemyShotSequence(20);
+				end;
+			end;
+		end;
 	end;
 end;
 
 procedure ShowEnemyShot();
 var
+	se_i: byte;
 	es_sprite_frame_index: byte;
+	spr: byte;
 begin
-	if es_shot_active <> 0 then
+	se_i := 0;
+	while se_i <= 2 do
 	begin
-		if es_shot_active = 1 then
-			es_sprite_frame_index := ES_SHOT_ANIM_START + es_shot_anim_index
-		else // exploding
-			es_sprite_frame_index := 4; // explosion graphic
+		if es_shot_active[se_i] <> 0 then
+		begin
+			if es_shot_active[se_i] = 1 then
+				es_sprite_frame_index := ES_SHOT_ANIM_START + es_shot_anim_index[se_i]
+			else
+				es_sprite_frame_index := 4; // explosion graphic
 
-		SetSpriteLoc(ES_SHOT_SPRITE, @spriteLoc/64 + es_sprite_frame_index -1, useBank);
-		SpritePos(es_shot_x, es_shot_y, ES_SHOT_SPRITE);
+			if se_i = 0 then spr := ES_SHOT_SPRITE1
+			else if se_i = 1 then spr := ES_SHOT_SPRITE2
+			else spr := ES_SHOT_SPRITE3;
+
+			SetSpriteLoc(spr, @spriteLoc/64 + es_sprite_frame_index -1, useBank);
+			SpritePos(es_shot_x[se_i], es_shot_y[se_i], spr);
+		end;
+		inc(se_i);
 	end;
 end;
 
 procedure UpdateEnemyShot();
+var
+	ue_i: byte;
 begin
-	if es_shot_active = 1 then	
+	// Handle staggered firing sequence
+	if es_shot_sequence_active <> 0 then
 	begin
-		inc(es_shot_move_tick);
-		//if es_shot_move_tick >= ES_SHOT_MOVE_FRAMES then
-		if es_shot_move_tick >= 3 then
+		if es_shot_stagger_counter = 0 then
 		begin
-			es_shot_move_tick := 0;
-			// move down
-			//es_shot_y := es_shot_y + ES_SHOT_MOVE_PIXELS;
-			es_shot_y := es_shot_y + 1;
-			// cycle animation frames 0..3
-			es_shot_anim_index := (es_shot_anim_index + 1) & (ES_SHOT_ANIM_FRAMES - 1);
-
-			
-			
-		end;
-		// If reached bottom of screen -> explode
-			if es_shot_y >= (249 - SPRITE_HEIGHT) then
-			begin
-				es_shot_active := 2;
-				es_shot_explode_counter := 0;
-			end;
-		es_shot_y := es_shot_y + 1;
-	end
-	else if es_shot_active = 2 then
-	begin
-		inc(es_shot_explode_counter);
-		if es_shot_explode_counter >= ES_SHOT_EXPLODE_DURATION then
-		begin
-			es_shot_active := 0;
-			es_shot_explode_counter := 0;
-			// If there are still enemies alive, fire another
-			if (INITIAL_INVADER_COUNT - numberOfEnemies) > 0 then
-				FireEnemyShot2();
-		end;
+			ue_i := es_shot_next_to_fire;
+			// spawn this shot
+			es_shot_y[ue_i] := 0;
+			es_shot_anim_index[ue_i] := 0;
+			es_shot_move_tick[ue_i] := 0;
+			es_shot_active[ue_i] := 1;
+			inc(es_shot_next_to_fire);
+			if es_shot_next_to_fire > 2 then
+				es_shot_sequence_active := 0
+			else
+				es_shot_stagger_counter := ES_SHOT_STAGGER_FRAMES;
+		end
+		else
+			dec(es_shot_stagger_counter);
 	end;
-	//es_shot_y := es_shot_y + 1;
+
+	// Update each active shot
+	ue_i := 0;
+	while ue_i <= 2 do
+	begin
+		if es_shot_active[ue_i] = 1 then
+		begin
+			inc(es_shot_move_tick[ue_i]);
+			if es_shot_move_tick[ue_i] >= ES_SHOT_MOVE_FRAMES then
+			begin
+				es_shot_move_tick[ue_i] := 0;
+				es_shot_y[ue_i] := es_shot_y[ue_i] + 1;
+				es_shot_anim_index[ue_i] := (es_shot_anim_index[ue_i] + 1) & (ES_SHOT_ANIM_FRAMES - 1);
+			end;
+			// additional movement to approximate intended speed
+			es_shot_y[ue_i] := es_shot_y[ue_i] + 1;
+			if es_shot_y[ue_i] >= (249 - SPRITE_HEIGHT) then
+			begin
+				es_shot_active[ue_i] := 2;
+				es_shot_explode_counter[ue_i] := 0;
+			end;
+		end
+		else if es_shot_active[ue_i] = 2 then
+		begin
+			inc(es_shot_explode_counter[ue_i]);
+			if es_shot_explode_counter[ue_i] >= ES_SHOT_EXPLODE_DURATION then
+			begin
+				es_shot_active[ue_i] := 0;
+				es_shot_explode_counter[ue_i] := 0;
+				// If all shots cleared and enemies remain, queue another sequence
+				if es_shot_active[0] = 0 then
+				begin
+					if es_shot_active[1] = 0 then
+					begin
+						if es_shot_active[2] = 0 then
+						begin
+							if (INITIAL_INVADER_COUNT - numberOfEnemies) > 0 then
+								FireEnemyShot2();
+						end;
+					end;
+				end;
+			end;
+		end;
+		inc(ue_i);
+	end;
 end;
 
 procedure CheckBulletCollision();
@@ -1130,7 +1229,8 @@ var
 	monster_sprite_color : byte = cyan;
 	
 begin
-	monster_base_y := 82;
+	//monster_base_y := 82;
+	monster_base_y := MONSTER_START_Y;
 	monster_base_x := 18;
 	
 	sprite_color[useSprite]:= monster_sprite_color;
@@ -1176,6 +1276,12 @@ begin
 	//asm(" lda $D01F");
 
 	UpdatePlayerBullet();
+	
+	// Update enemy shot movement/animation
+	UpdateEnemyShot();
+	
+	// Show enemy shot sprite if active
+	ShowEnemyShot();
 
 	
 	// Lightweight joystick update only
@@ -1196,7 +1302,12 @@ begin
 	else
 		previous_fire_state := 0;
 
+	// Check collisions AFTER all sprite rows have been displayed
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
+		CheckBulletCollision();
 	
+
 	
 	/*if player_bullet_active <> 0 then
 	begin	
@@ -1213,19 +1324,19 @@ begin
 	
 	// Heavy game logic - done here at top of frame
 	UpdateTick();
-    
+    //RasterIRQ(MainRasterRow1(), 80-MONSTER_DROP_AMOUNT2+34+monster_vertical_adjustment-15-25, @useKernal)
+    //RasterIRQ(MainRasterRow2(), 95-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
+    //RasterIRQ(MainRasterRow3(), 121-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
 	if RowHasMonsters(0) <> 0 then		
-		RasterIRQ(MainRasterRow1(), 80, @useKernal)
+		RasterIRQ(MainRasterRow1(), -7 + MONSTER_START_Y + monster_vertical_adjustment, @useKernal)
 	else if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 95+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow2(), 15 + MONSTER_START_Y + monster_vertical_adjustment, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 121+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 26 + MONSTER_START_Y + monster_vertical_adjustment, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 	
-	// Play music here - called each frame from raster IRQ to advance SID playback
-	if debug_enable_bgcol = 0 then
-		call(sidfile_1_play);
+
 	
 	CloseIRQ();
 end;
@@ -1246,9 +1357,9 @@ begin
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 95+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow2(), 95-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 121+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 121-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
@@ -1283,7 +1394,7 @@ begin
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 121+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 121-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
@@ -1326,11 +1437,20 @@ end;
 
 interrupt MainRasterPlayer();
 begin
-	// If no enemy shot active and enemies remain, fire one
-	if es_shot_active = 0 then
+	// If no enemy shot active and enemies remain, start a staggered sequence
+	if es_shot_sequence_active = 0 then
 	begin
-		if (INITIAL_INVADER_COUNT - numberOfEnemies) > 0 then
-			FireEnemyShot2();
+		if es_shot_active[0] = 0 then
+		begin
+			if es_shot_active[1] = 0 then
+			begin
+				if es_shot_active[2] = 0 then
+				begin
+					if (INITIAL_INVADER_COUNT - numberOfEnemies) > 0 then
+						FireEnemyShot2();
+				end;
+			end;
+		end;
 	end;
 	
 	UpdateSprite();
@@ -1366,18 +1486,15 @@ begin
 	preventirq();  
 	poke(^$D019, 0, 0);  
 	
-	// Check collisions AFTER all sprite rows have been displayed
-	// Only check when bullet is actively moving (not exploding)
-	if player_bullet_active = 1 then
-		CheckBulletCollision();
+	
 	
 	
 		
-	// Update enemy shot movement/animation
+	/*// Update enemy shot movement/animation
 	UpdateEnemyShot();
 	
 	// Show enemy shot sprite if active
-	ShowEnemyShot();
+	ShowEnemyShot();*/
 	
 	RasterIRQ(MainRasterChain(), 0, @useKernal);
 	CloseIRQ();
@@ -1394,18 +1511,11 @@ begin
 	preventirq();  
 	poke(^$D019, 0, 0);  
 	
-	// Check collisions AFTER all sprite rows have been displayed
-	// Only check when bullet is actively moving (not exploding)
-	if player_bullet_active = 1 then
-		CheckBulletCollision();
+	
 	
 	
 		
-	// Update enemy shot movement/animation
-	UpdateEnemyShot();
 	
-	// Show enemy shot sprite if active
-	ShowEnemyShot();
 	
 	RasterIRQ(MainRasterChain(), 0, @useKernal);
 end;
