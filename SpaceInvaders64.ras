@@ -92,6 +92,10 @@ var
 	
 	monster_base_x : byte;
 	monster_base_y : byte;
+	// Cached formation edge offsets (pixel offset from monster_base_x).
+	// Updated in ClearMonster whenever an enemy dies. Read-only in UpdateTick.
+	cached_rightmost_offset : byte = 198; // 3*54+36 = full formation default
+	cached_leftmost_offset : byte = 0;   // leftmost enemy at offset 0
 	
 	// Track which enemies are alive in each block (12 blocks, 6 enemies per block)
 	// Each bit 0-5 represents an enemy: bit set = alive, bit clear = dead
@@ -165,6 +169,8 @@ var
 	
 	// Declarations (commented out where no longer needed)
 	interrupt MainRasterRow1();
+	function GetRightmostEnemyOffset() : byte;
+	function GetLeftmostEnemyOffset() : byte;
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 	//procedure AnimateMonsters(enemyRow: byte);
 	//procedure UpdateMonsters(rowOffset: byte);
@@ -268,6 +274,10 @@ Begin
 		block_enemies[blockIndex] := block_enemies[blockIndex] & (enemy_mask xor $FF);
 		if (numberOfEnemies < INITIAL_INVADER_COUNT) then
 			inc(numberOfEnemies);
+		// Refresh cached edge offsets so UpdateTick always reads a valid value
+		// without scanning every frame. Cost is one scan per kill event only.
+		cached_rightmost_offset := GetRightmostEnemyOffset();
+		cached_leftmost_offset := GetLeftmostEnemyOffset();
 	end;
 end;
 
@@ -753,24 +763,20 @@ var
 begin
 	should_check := 1;
 	found_hit := 0;
-	
+
 	// Early exit if bullet outside enemy formation area.
-	// Lower bound: contact pixel (bullet_y + OFFSET) above the formation top -> skip.
 	if player_bullet_y + BULLET_Y_CONTACT_OFFSET < monster_base_y then
 		should_check := 0;
-	// Upper bound: bullet sprite top below the formation bottom -> skip.
-	// BYTE OVERFLOW GUARD: monster_base_y + 80 wraps when monster_base_y > 175 (enemies already off-screen).
-	// Skip the guard in that case.
+	// BYTE OVERFLOW GUARD: monster_base_y + 80 wraps when monster_base_y > 175.
 	if monster_base_y <= 175 then
 	begin
 		if player_bullet_y > monster_base_y + 80 then
 			should_check := 0;
 	end;
-	
+
 	if should_check <> 0 then
 	begin
-		// Calculate which block row (0-2) the bullet is in.
-		// Use contact pixel Y to avoid byte underflow when sprite top is above the formation.
+		// Determine block row (0-2) from bullet Y.
 		rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - monster_base_y;
 		if rel_y < MONSTER_ROW_OFFSET then
 			block_row := 0
@@ -778,36 +784,28 @@ begin
 			block_row := 1
 		else
 			block_row := 2;
-		
-		// Check all 4 blocks in the bullet's row
+
+		// Scan the 4 block columns in this row. Skip empty blocks immediately.
 		block_col := 0;
 		while (block_col <= 3 and found_hit = 0) do
 		begin
 			block_index := block_row * 4 + block_col;
 			enemy_alive := block_enemies[block_index];
-			
+
 			if enemy_alive <> 0 then
 			begin
 				block_x := monster_base_x + block_col * MONSTER_SPACING;
-				
-				// Quick horizontal range check
-				// Bullet contact point is BULLET_X_CONTACT_REACH px into the sprite, so effective hit X = player_bullet_x + BULLET_X_CONTACT_REACH.
-				// Range: contact point must fall within [block_x, block_x+48).
-				// => player_bullet_x in [block_x-REACH, block_x+(48-REACH)). block_x >= 32 so left bound >= 20, no underflow.
+
+				// Horizontal range check: contact point must fall within [block_x, block_x+48).
 				if player_bullet_x >= block_x - BULLET_X_CONTACT_REACH then
 					if player_bullet_x < block_x + 48 - BULLET_X_CONTACT_REACH then
 					begin
-						// rel_x = (player_bullet_x + REACH) - block_x; no underflow since player_bullet_x >= block_x-REACH
 						rel_x := player_bullet_x - block_x + BULLET_X_CONTACT_REACH;
-						
+
 						block_y := monster_base_y + block_row * MONSTER_ROW_OFFSET;
-						// Add BULLET_Y_CONTACT_OFFSET to map sprite top position to actual contact pixel Y.
-						// No underflow: bullet enters the row from below so player_bullet_y + offset >= block_y.
 						rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - block_y;
-						
-						// Determine enemy column (0-2) by X position
-						// Each enemy is 12px wide with 6px gaps between them
-						// Col 0: 0-11, Gap: 12-17, Col 1: 18-29, Gap: 30-35, Col 2: 36-47
+
+						// Enemy column within block (0-2): 12px wide, 6px gaps.
 						if rel_x < 12 then
 							enemy_col := 0
 						else if rel_x < 18 then
@@ -818,35 +816,23 @@ begin
 							enemy_col := $FF  // gap
 						else
 							enemy_col := 2;
-						
-						// Determine enemy row (0-1) by Y position
-						// Each enemy is 8px tall with a 6px gap between rows (offsets 8-13 in the sprite).
-						// BULLET_SPEED=4 can skip the 8-pixel bottom zone entirely when the formation is
-						// very low: the bullet jumps from rel_y=13 (gap) to rel_y=9 (gap) to rel_y=5 (top),
-						// never passing through range 14-21. Extending the bottom zone upward to rel_y>=8
-						// closes the dead zone so odd-indexed (bottom) enemies are always hittable.
-						enemy_row := $FF;  // Invalid by default
+
+						// Enemy row within block (0=top, 1=bottom).
+						// Extended bottom zone (rel_y >= 8) closes the dead zone at high BULLET_SPEED.
+						enemy_row := $FF;
 						if rel_y <= 7 + BULLET_Y_CONTACT_REACH then
 							enemy_row := 0
 						else if (rel_y >= 8 and rel_y <= 21 + BULLET_Y_CONTACT_REACH) then
 							enemy_row := 1;
-						
+
 						if (enemy_row <> $FF and enemy_col <> $FF) then
 						begin
 							hit_enemy_index := enemy_col * 2 + enemy_row;
 							cbc_enemy_mask := 1 << hit_enemy_index;
-							
-							// Check if this enemy is alive
+
 							if (enemy_alive & cbc_enemy_mask) <> 0 then
 							begin
-								// Hit! Clear enemy and trigger explosion
-								// Clear sprite + update block_enemies handled inside ClearMonster
 								ClearMonster(block_index, hit_enemy_index);
-								// Snap explosion sprite to enemy hitbox top-left.
-								// enemy_col stride = 12px wide + 6px gap = 18px.
-								// enemy_row stride = 8px tall + 6px gap = 14px.
-								// Shift box upward by EXPLOSION_PIXELS_FROM_TOP so the lit pixels
-								// (packed at the bottom of the sprite frame) land on the enemy visually.
 								player_bullet_x := block_x + enemy_col * 18 - EXPLOSION_X_OFFSET;
 								player_bullet_y := block_y + enemy_row * 14 + EXPLOSION_Y_OFFSET - EXPLOSION_PIXELS_FROM_TOP;
 								player_bullet_active := 2;
@@ -856,7 +842,7 @@ begin
 						end;
 					end;
 			end;
-			
+
 			inc(block_col);
 		end;
 	end;
@@ -1132,8 +1118,6 @@ end;
 procedure UpdateTick();
 var
 	should_move_enemy : byte;
-	rightmost_offset : byte;
-	leftmost_offset : byte;
 	right_edge : byte;
 	left_edge : byte;
 	prev_direction : byte;
@@ -1143,37 +1127,6 @@ begin
 	if enemyMoveCounter <> 0 then
 	begin
 		dec(enemyMoveCounter);
-		
-		// Calculate actual enemy formation edges based on remaining enemies
-		rightmost_offset := GetRightmostEnemyOffset();
-		leftmost_offset := GetLeftmostEnemyOffset();
-		right_edge := monster_base_x + rightmost_offset + 10;  // +10 for double-width enemy (5 sprite pixels × 2)
-		left_edge := monster_base_x + leftmost_offset;
-		// Boundaries set so all enemy configurations bounce at the same visual offset from each wall (36px).
-		// Left: bounce when leftmost enemy visual edge <= 36 (i.e. left_edge <= 36).
-		// Right: symmetric restriction, 12px inward from original 254 = 242.
-		// No byte overflow risk: right boundary caps monster_base_x low enough that left_edge sum stays < 255.
-		prev_direction := enemy_direction;
-		if right_edge >= 242 then
-			enemy_direction := 0
-		else if left_edge <= 36 then
-			enemy_direction := 1;
-
-		// If direction changed, drop the formation by MONSTER_DROP_AMOUNT pixels
-		if prev_direction <> enemy_direction then
-		begin
-			// ENABLE_DROP_FLOOR: only drop if the lowest enemy's bottom pixel, after the drop,
-			// would still be at least 1 pixel above the player's top pixel.
-			// Safe byte check: lowest_bottom_y < player_sprite_y - MONSTER_DROP_AMOUNT - 1
-			if ENABLE_DROP_FLOOR <> 0 then
-			begin
-				if GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT - 0 then // Adjust this to tune where the drops stop
-					monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
-			end
-			else
-				monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
-		end;
-			
 		if enemyMoveCounter = 2 then
 			should_move_enemy := 1;
 	end
@@ -1183,16 +1136,13 @@ begin
 		monster_animation_frame := monster_animation_frame xor 1;
 		
 		// Update sprite pointers for row 0 - rows 1 and 2 are updated in raster interrupt
-		// Each row uses different sprite blocks: row 0 (3-10), row 1 (11-18), row 2 (19-26)
-		AnimateMonsters(0); // Row 0 uses sprites based on row parameter
+		AnimateMonsters(0);
 		
 		// Clear enemies based on ENEMIES_TO_CLEAR constant
 		if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
 		begin
 			ClearEnemyAtCounter();
 			dec(sequential_clear_counter);
-			
-			
 		end;
 		
 		should_move_enemy := 1;
@@ -1200,21 +1150,47 @@ begin
 	
 	if should_move_enemy <> 0 then
 	begin
-		// At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed
-		// At slower speeds, move 1 pixel
-		if (INITIAL_INVADER_COUNT - numberOfEnemies) <= 2 then
+		// Read cached edge offsets — updated in ClearMonster, so O(1) cost here
+		// every tick regardless of enemy count.
+		right_edge := monster_base_x + cached_rightmost_offset + 10;  // +10 for double-width enemy
+		left_edge := monster_base_x + cached_leftmost_offset;
+
+		prev_direction := enemy_direction;
+		if right_edge >= 242 then
+			enemy_direction := 0
+		else if left_edge <= 36 then
+			enemy_direction := 1;
+
+		// If direction changed, drop instead of moving horizontally this tick.
+		// This keeps movement flow clean: one tick = one action (drop OR move, never both).
+		if prev_direction <> enemy_direction then
 		begin
-			if (enemy_direction <> 0) then
-				monster_base_x := monster_base_x + 2
+			if ENABLE_DROP_FLOOR <> 0 then
+			begin
+				if GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT - 0 then
+					monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
+			end
 			else
-				monster_base_x := monster_base_x - 2;
+				monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
 		end
 		else
 		begin
-			if (enemy_direction <> 0) then
-				inc(monster_base_x)
+			// No direction change: move horizontally.
+			// At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed.
+			if (INITIAL_INVADER_COUNT - numberOfEnemies) <= 2 then
+			begin
+				if (enemy_direction <> 0) then
+					monster_base_x := monster_base_x + 2
+				else
+					monster_base_x := monster_base_x - 2;
+			end
 			else
-				dec(monster_base_x);
+			begin
+				if (enemy_direction <> 0) then
+					inc(monster_base_x)
+				else
+					dec(monster_base_x);
+			end;
 		end;
 	end;
 end;
@@ -1229,6 +1205,9 @@ begin
 	//monster_base_y := 82;
 	monster_base_y := MONSTER_START_Y;
 	monster_base_x := 18;
+	// Sync cached edges with the formation state after pre-clearing.
+	cached_rightmost_offset := GetRightmostEnemyOffset();
+	cached_leftmost_offset := GetLeftmostEnemyOffset();
 	
 	sprite_color[useSprite]:= monster_sprite_color;
 	
@@ -1327,7 +1306,7 @@ begin
 	if RowHasMonsters(0) <> 0 then		
 		RasterIRQ(MainRasterRow1(), monster_base_y - 13 , @useKernal)
 	else if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 12 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
 		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	else
@@ -1361,7 +1340,7 @@ begin
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 12 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
 		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	else
