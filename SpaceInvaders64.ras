@@ -1325,11 +1325,11 @@ begin
     //RasterIRQ(MainRasterRow2(), 14 + monster_base_y, @useKernal)
     //RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	if RowHasMonsters(0) <> 0 then		
-		RasterIRQ(MainRasterRow1(), -13 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow1(), monster_base_y - 13 , @useKernal)
 	else if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), sprite_height -9 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow2(), 12 + monster_base_y, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 2 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 		
@@ -1361,9 +1361,9 @@ begin
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), sprite_height -9 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow2(), 12 + monster_base_y, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 2 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
@@ -1400,7 +1400,7 @@ begin
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 2 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
