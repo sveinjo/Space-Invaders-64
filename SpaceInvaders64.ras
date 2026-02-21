@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 1;
+	const debug_enable_bgcol : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -137,15 +137,16 @@ var
 	// Support 3 simultaneous hardware-shot slots with staggered firing
 	es_shot_active : array[3] of byte = (0,0,0); // 0=inactive,1=moving,2=exploding
 	es_shot_x : array[3] of byte = (0,0,0);
-	// In state 1 (moving): y holds the screen position.
-	// In state 2 (exploding): y is repurposed as a frame counter (0..ES_SHOT_EXPLODE_DURATION).
-	// This avoids a separate explode_counter array and the TRSE inc()-on-array-index issue.
-	es_shot_y : array[3] of byte = (0,0,0);
+	es_shot_y : array[3] of byte = (0,0,0);  // screen Y position while moving (state 1)
 	es_shot_anim_index : array[3] of byte = (0,0,0);
 	// Single shared movement tick — all shots advance together each tick.
 	es_move_tick : byte = 0;
 	// Single shared animation tick — controls when anim frame advances.
 	es_anim_tick : byte = 0;
+	// Scalar explosion frame counter. Only one shot can be exploding at a time
+	// (50-frame stagger vs ~170-frame travel), so a single scalar is safe and
+	// avoids the TRSE array-write-with-variable-index bug.
+	es_explode_counter : byte = 0;
 
 	// Sequence/stagger scheduler
 	es_shot_sequence_active : byte = 0; // 0 = idle, 1 = firing sequence active
@@ -426,17 +427,17 @@ begin
 	ClearMonster(11, 2);
 	ClearMonster(11, 4);
 	
-	//ClearMonster(4, 2);
-	//ClearMonster(4, 4);	
-	//ClearMonster(5, 0);
-	//ClearMonster(5, 2);
-	//ClearMonster(5, 4);
-	//ClearMonster(6, 0);
-	//ClearMonster(6, 2);
-	//ClearMonster(6, 4);
-	//ClearMonster(7, 0);
-	//ClearMonster(7, 2);
-	//ClearMonster(7, 4);
+	ClearMonster(4, 2);
+	ClearMonster(4, 4);	
+	ClearMonster(5, 0);
+	ClearMonster(5, 2);
+	ClearMonster(5, 4);
+	ClearMonster(6, 0);
+	ClearMonster(6, 2);
+	ClearMonster(6, 4);
+	ClearMonster(7, 0);
+	ClearMonster(7, 2);
+	ClearMonster(7, 4);
 	
 	ClearMonster(4, 3);
 	ClearMonster(4, 5);	
@@ -637,7 +638,7 @@ begin
 			// Use lookup array — avoids if/else chain for hardware sprite index
 			spr := es_shot_sprite_num[se_i];
 			SetSpriteLoc(spr, @spriteLoc/64 + es_sprite_frame_index - 1, useBank);
-			// State 2 (exploding): draw at fixed bottom-of-screen y; es_shot_y is a frame counter.
+			// State 2 (exploding): draw at fixed bottom-of-screen y.
 			if es_shot_active[se_i] = 2 then
 				SpritePos(es_shot_x[se_i], 249 - SPRITE_HEIGHT, spr)
 			else
@@ -704,20 +705,20 @@ begin
 			// Animation advances on its own hold timer
 			if ue_anim_tick_fired <> 0 then
 				es_shot_anim_index[ue_i] := (es_shot_anim_index[ue_i] + 1) & (ES_SHOT_ANIM_FRAMES - 1);
-			// Hit bottom: switch to exploding, repurpose y as a frame counter
+			// Hit bottom: switch to exploding, reset the scalar explosion counter
 			if es_shot_y[ue_i] >= (249 - SPRITE_HEIGHT) then
 			begin
 				es_shot_active[ue_i] := 2;
-				es_shot_y[ue_i] := 0;
+				es_explode_counter := 0;
 			end;
 		end
 		else if es_shot_active[ue_i] = 2 then
 		begin
-			// y is now the frame counter; safe explicit +1 (avoids inc-on-array-index)
-			es_shot_y[ue_i] := es_shot_y[ue_i] + 1;
-			if es_shot_y[ue_i] >= ES_SHOT_EXPLODE_DURATION then
+			// Scalar counter: no array index involved, always advances correctly.
+			es_explode_counter := es_explode_counter + 1;
+			if es_explode_counter >= ES_SHOT_EXPLODE_DURATION then
 				es_shot_active[ue_i] := 0;
-			// Restarting is handled by MainRasterPlayer each frame when all slots read 0.
+			// Restarting is handled by MainRasterChain when all slots read 0.
 		end;
 		inc(ue_i);
 	end;
@@ -1231,18 +1232,18 @@ begin
 	// byte overflow (40 + monster_base_y > 255), and keeps targets below player IRQ at 223.
 	if RowHasMonsters(0) <> 0 then
 	begin
-		mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
-		RasterIRQ(MainRasterRow1(), mc_row_target, @useKernal);
+		//mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
+		RasterIRQ(MainRasterRow1(), monster_base_y - 33, @useKernal); // There is room between 33 and 13 for tuning if needed.
 	end
 	else if RowHasMonsters(1) <> 0 then
 	begin
-		mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
-		RasterIRQ(MainRasterRow2(), mc_row_target, @useKernal);
+		//mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
+		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, @useKernal);
 	end
 	else if RowHasMonsters(2) <> 0 then
 	begin
-		mc_row_target := Helpers::Clamp(40 + monster_base_y, 40, 222);
-		RasterIRQ(MainRasterRow3(), mc_row_target, @useKernal);
+		//mc_row_target := Helpers::Clamp(40 + monster_base_y, 40, 222);
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal);
 	end
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
@@ -1416,6 +1417,8 @@ begin
 		UpdateMonsters(MONSTER_ROW_OFFSET*2);
 		AnimateMonsters(2); // Prepare sprites for row 3
 	end;
+	
+	
 
 	//RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
 	RasterIRQ(MainRasterPlayer(), 223, @useKernal);
@@ -1432,6 +1435,7 @@ begin
 	UpdateSprite();
 	if debug_enable_bgcol = 1 then
 		SCREEN_BG_COL := BLACK;
+		
 	StartIRQ(@useKernal);	
 	//border_debug_color := peek($D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
@@ -1463,16 +1467,10 @@ begin
 	poke(^$D019, 0, 0);  
 	
 	
+	if debug_enable_bgcol = 0 then
+		call(sidfile_1_play); // main-context playback (disabled)
 	
-	
-		
-	/*// Update enemy shot movement/animation
-	UpdateEnemyShot();
-	
-	// Show enemy shot sprite if active
-	ShowEnemyShot();*/
-	
-	RasterIRQ(MainRasterChain(), 0, @useKernal);
+	RasterIRQ(MainRasterChain(), 0, @useKernal);	
 	CloseIRQ();
 end;
 
@@ -1486,12 +1484,6 @@ begin
 	StarField::DoStarfield();    
 	preventirq();  
 	poke(^$D019, 0, 0);  
-	
-	
-	
-	
-		
-	
 	
 	RasterIRQ(MainRasterChain(), 0, @useKernal);
 end;
