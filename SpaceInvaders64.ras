@@ -49,7 +49,7 @@ var
 	const MONSTER_DROP_AMOUNT : byte = 6;
 	const MONSTER_DROP_AMOUNT2 : byte = 10;
 	
-	const MONSTER_START_Y : byte = 112 ; // Initial monster base Y (was 71 base + 41 adjustment)
+	const MONSTER_START_Y : byte = 102 ; // Initial monster base Y (was 71 base + 41 adjustment)
 
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
@@ -1327,9 +1327,9 @@ begin
 	if RowHasMonsters(0) <> 0 then		
 		RasterIRQ(MainRasterRow1(), -13 + monster_base_y, @useKernal)
 	else if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), sprite_height -8 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow2(), sprite_height -9 + monster_base_y, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 3 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 2 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 		
@@ -1361,9 +1361,9 @@ begin
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), sprite_height -8 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow2(), sprite_height -9 + monster_base_y, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 3 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 2 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
@@ -1400,7 +1400,7 @@ begin
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 3 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow3(), sprite_height + sprite_height - 2 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
