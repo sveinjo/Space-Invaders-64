@@ -46,13 +46,11 @@ var
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
-	//monster_vertical_adjustment : byte = 6 + 78; // 52 is the perfect value
-	monster_vertical_adjustment : byte = 41;
 	const MONSTER_DROP_AMOUNT : byte = 6;
 	const MONSTER_DROP_AMOUNT2 : byte = 10;
 	
-	const MONSTER_START_Y : byte = 71 ;
-	
+	const MONSTER_START_Y : byte = 112 ; // Initial monster base Y (was 71 base + 41 adjustment)
+
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
 	//pos_x : byte = PLAYER_MIN_X;
@@ -304,7 +302,7 @@ var
 	x_position: byte;
 begin
 	// Pre-calculate Y position to avoid repeated additions
-	y_position := monster_base_y + rowOffset + monster_vertical_adjustment;
+	y_position := monster_base_y + rowOffset;
     
 	// Update sprites using incremental X positions instead of multiplications
 	x_position := monster_base_x;
@@ -758,15 +756,14 @@ begin
 	
 	// Early exit if bullet outside enemy formation area.
 	// Lower bound: contact pixel (bullet_y + OFFSET) above the formation top -> skip.
-	if player_bullet_y + BULLET_Y_CONTACT_OFFSET < monster_base_y + monster_vertical_adjustment then
+	if player_bullet_y + BULLET_Y_CONTACT_OFFSET < monster_base_y then
 		should_check := 0;
 	// Upper bound: bullet sprite top below the formation bottom -> skip.
-	// BYTE OVERFLOW GUARD: monster_base_y(82) + monster_vertical_adjustment + 80 wraps after ~7 drops.
-	// Fold the two constants: 82 + 80 = 162, so check becomes bullet_y > adj + 162.
-	// adj + 162 overflows when adj > 93 (enemies already off-screen), so skip the guard in that case.
-	if monster_vertical_adjustment <= 93 then
+	// BYTE OVERFLOW GUARD: monster_base_y + 80 wraps when monster_base_y > 175 (enemies already off-screen).
+	// Skip the guard in that case.
+	if monster_base_y <= 175 then
 	begin
-		if player_bullet_y > monster_vertical_adjustment + 162 then
+		if player_bullet_y > monster_base_y + 80 then
 			should_check := 0;
 	end;
 	
@@ -774,7 +771,7 @@ begin
 	begin
 		// Calculate which block row (0-2) the bullet is in.
 		// Use contact pixel Y to avoid byte underflow when sprite top is above the formation.
-		rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - monster_base_y - monster_vertical_adjustment;
+		rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - monster_base_y;
 		if rel_y < MONSTER_ROW_OFFSET then
 			block_row := 0
 		else if rel_y < MONSTER_ROW_OFFSET * 2 then
@@ -803,7 +800,7 @@ begin
 						// rel_x = (player_bullet_x + REACH) - block_x; no underflow since player_bullet_x >= block_x-REACH
 						rel_x := player_bullet_x - block_x + BULLET_X_CONTACT_REACH;
 						
-						block_y := monster_base_y + monster_vertical_adjustment + block_row * MONSTER_ROW_OFFSET;
+						block_y := monster_base_y + block_row * MONSTER_ROW_OFFSET;
 						// Add BULLET_Y_CONTACT_OFFSET to map sprite top position to actual contact pixel Y.
 						// No underflow: bullet enters the row from below so player_bullet_y + offset >= block_y.
 						rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - block_y;
@@ -1128,7 +1125,7 @@ begin
 	else
 		gleby_bottom_in_sprite := 7;
 
-	gleby_result := monster_base_y + gleby_row_offset + monster_vertical_adjustment + gleby_bottom_in_sprite;
+	gleby_result := monster_base_y + gleby_row_offset + gleby_bottom_in_sprite;
 	GetLowestEnemyBottomY := gleby_result;
 end;
 
@@ -1171,10 +1168,10 @@ begin
 			if ENABLE_DROP_FLOOR <> 0 then
 			begin
 				if GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT - 0 then // Adjust this to tune where the drops stop
-					monster_vertical_adjustment := monster_vertical_adjustment + MONSTER_DROP_AMOUNT;
+					monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
 			end
 			else
-				monster_vertical_adjustment := monster_vertical_adjustment + MONSTER_DROP_AMOUNT;
+				monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
 		end;
 			
 		if enemyMoveCounter = 2 then
@@ -1324,15 +1321,15 @@ begin
 	
 	// Heavy game logic - done here at top of frame
 	UpdateTick();
-    //RasterIRQ(MainRasterRow1(), 80-MONSTER_DROP_AMOUNT2+34+monster_vertical_adjustment-15-25, @useKernal)
-    //RasterIRQ(MainRasterRow2(), 95-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
-    //RasterIRQ(MainRasterRow3(), 121-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
+    //RasterIRQ(MainRasterRow1(), -7 + monster_base_y, @useKernal)
+    //RasterIRQ(MainRasterRow2(), 14 + monster_base_y, @useKernal)
+    //RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	if RowHasMonsters(0) <> 0 then		
-		RasterIRQ(MainRasterRow1(), -7 + MONSTER_START_Y + monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow1(), -7 + monster_base_y, @useKernal)
 	else if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 15 + MONSTER_START_Y + monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow2(), 15 + monster_base_y, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 26 + MONSTER_START_Y + monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 26 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 	
@@ -1357,9 +1354,9 @@ begin
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 95-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow2(), 14 + monster_base_y, @useKernal)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 121-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
@@ -1394,7 +1391,7 @@ begin
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 121-MONSTER_DROP_AMOUNT2+monster_vertical_adjustment, @useKernal)
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
@@ -1429,7 +1426,7 @@ begin
 		AnimateMonsters(2); // Prepare sprites for row 3
 	end;
 
-	//RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
+	//RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
 	RasterIRQ(MainRasterPlayer(), 224, @useKernal);
 	CloseIRQ();
 end;
