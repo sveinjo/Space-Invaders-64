@@ -1220,7 +1220,9 @@ var
 	mc_row_target : byte;
 begin
 	StartIRQ(@useKernal);	
-	if debug_enable_bgcol = 1 then
+	if debug_enable_bgcol = 0 then
+		call(sidfile_1_play) // main-context playback (disabled)		
+	else 
 		SCREEN_BG_COL := BLACK;
 
 	// Schedule the next raster IRQ FIRST, before any heavy game logic.
@@ -1465,10 +1467,6 @@ begin
 	StarField::DoStarfield();    
 	preventirq();  
 	poke(^$D019, 0, 0);  
-	
-	
-	if debug_enable_bgcol = 0 then
-		call(sidfile_1_play); // main-context playback (disabled)
 	
 	RasterIRQ(MainRasterChain(), 0, @useKernal);	
 	CloseIRQ();
