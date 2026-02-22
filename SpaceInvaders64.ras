@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 1;
+	const DEBUG_ENABLE : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -646,7 +646,7 @@ begin
 	end;
 end;
 
-procedure StartEnemyShotSequence(centerX: byte);
+/*procedure StartEnemyShotSequence(centerX: byte);
 var
 	i: byte;
 begin
@@ -781,7 +781,7 @@ begin
 		end;
 		inc(ue_i);
 	end;
-end;
+end;*/
 
 procedure CheckBulletCollision();
 var
@@ -1286,7 +1286,7 @@ var
 	mc_row_target : byte;
 begin
 	StartIRQ(@useKernal);	
-	if debug_enable_bgcol = 0 then
+	if DEBUG_ENABLE = 0 then
 		call(sidfile_1_play) // main-context playback (disabled)		
 	else 
 		SCREEN_BG_COL := BLACK;
@@ -1335,10 +1335,10 @@ begin
 	UpdatePlayerBullet();
 	
 	// Update enemy shot movement/animation
-	UpdateEnemyShot();
+	//UpdateEnemyShot();
 	
 	// Show enemy shot sprite if active
-	ShowEnemyShot();
+	//ShowEnemyShot();
 
 	
 	// Lightweight joystick update only
@@ -1385,7 +1385,7 @@ begin
 	UpdateTick();
 
 	// If no enemy shot active and enemies remain, start a staggered sequence
-	if es_shot_sequence_active = 0 then
+	/*if es_shot_sequence_active = 0 then
 	begin
 		if es_shot_active[0] = 0 then
 		begin
@@ -1398,7 +1398,7 @@ begin
 				end;
 			end;
 		end;
-	end;
+	end;*/
 
 	CloseIRQ();
 end;
@@ -1425,7 +1425,7 @@ begin
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
 
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := RED; 	
 	CloseIRQ();
 end;
@@ -1461,7 +1461,7 @@ begin
 	else
 		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
 
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLUE;
 	CloseIRQ();
 end;
@@ -1469,7 +1469,7 @@ end;
 procedure BorderDebug();
 begin
 	border_debug_color := peek(^$D01E, 0);
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := border_debug_color;
 end;
 
@@ -1497,7 +1497,7 @@ begin
 
 	//RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
 	RasterIRQ(MainRasterPlayer(), 223, @useKernal);
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := GREEN;
 	CloseIRQ();
 end;
@@ -1508,7 +1508,7 @@ begin
 	
 	
 	UpdateSprite();
-	if debug_enable_bgcol = 1 then
+	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLACK;
 		
 	StartIRQ(@useKernal);	
