@@ -1166,8 +1166,13 @@ begin
 	if enemyMoveCounter <> 0 then
 	begin
 		dec(enemyMoveCounter);
+		// Premove: fires 2 frames before the main tick to smooth out the
+		// direction-change transition. Suppressed at high speed (reload <= 3)
+		// because the two ticks are too close together to provide any visual
+		// benefit, and the doubled left-edge pressure increases underflow risk.
 		if enemyMoveCounter = 2 then
-			should_move_enemy := 1;
+			if (INITIAL_INVADER_COUNT - numberOfEnemies) > 2 then
+				should_move_enemy := 1;
 	end
 	else begin
 		enemyMoveCounter := (INITIAL_INVADER_COUNT - numberOfEnemies);
