@@ -1157,10 +1157,12 @@ end;
 procedure UpdateTick();
 var
 	should_move_enemy : byte;
+	enemy_count_diff : byte;
 	right_edge : byte;
 	left_edge : byte;
 	prev_direction : byte;
 begin
+	enemy_count_diff := INITIAL_INVADER_COUNT - numberOfEnemies;
 	should_move_enemy := 0;
 	
 	if enemyMoveCounter <> 0 then
@@ -1171,11 +1173,11 @@ begin
 		// because the two ticks are too close together to provide any visual
 		// benefit, and the doubled left-edge pressure increases underflow risk.
 		if enemyMoveCounter = 2 then
-			if (INITIAL_INVADER_COUNT - numberOfEnemies) > 2 then
+			if enemy_count_diff > 2 then
 				should_move_enemy := 1;
 	end
 	else begin
-		enemyMoveCounter := (INITIAL_INVADER_COUNT - numberOfEnemies);
+		enemyMoveCounter := enemy_count_diff;
 				
 		monster_animation_frame := monster_animation_frame xor 1;
 		// Note: AnimateMonsters is NOT called here. All three rows are handled
@@ -1211,19 +1213,14 @@ begin
 		// This keeps movement flow clean: one tick = one action (drop OR move, never both).
 		if prev_direction <> enemy_direction then
 		begin
-			if ENABLE_DROP_FLOOR <> 0 then
-			begin
-				if GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT - 0 then
-					monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
-			end
-			else
+			if ((ENABLE_DROP_FLOOR = 0) or (GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT)) then
 				monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
 		end
 		else
 		begin
 			// No direction change: move horizontally.
 			// At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed.
-			if (INITIAL_INVADER_COUNT - numberOfEnemies) <= 2 then
+			if enemy_count_diff <= 2 then
 			begin
 				if (enemy_direction <> 0) then
 					monster_base_x := monster_base_x + 2
