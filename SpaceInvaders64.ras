@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const debug_enable_bgcol : byte = 0;
+	const debug_enable_bgcol : byte = 1;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -1173,9 +1173,11 @@ begin
 		enemyMoveCounter := (INITIAL_INVADER_COUNT - numberOfEnemies);
 				
 		monster_animation_frame := monster_animation_frame xor 1;
-		
-		// Update sprite pointers for row 0 - rows 1 and 2 are updated in raster interrupt
-		AnimateMonsters(0);
+		// Note: AnimateMonsters is NOT called here. All three rows are handled
+		// exclusively in their respective raster IRQs (Row1/2/3), which fire
+		// after the beam has passed UFO_Y but before each enemy row is scanned.
+		// This keeps sprite 1's image pointer owned solely by ShowUFO() until
+		// Row1 takes over, eliminating the UFO flash.
 		
 		// Clear enemies based on ENEMIES_TO_CLEAR constant
 		if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
@@ -1377,12 +1379,6 @@ begin
 	// the updated position correctly even though the latch was written with the old value.
 	UpdateTick();
 
-	// Re-assert the UFO sprite pointer after UpdateTick, because UpdateTick calls
-	// AnimateMonsters(0) on enemy-move frames, which overwrites the monsterSprite1
-	// (= UFO_HW_SPRITE) image pointer with the enemy animation frame. Without this,
-	// the VIC-II would read the enemy image instead of the UFO when it scans Y=UFO_Y.
-	ShowUFO();
-
 	// If no enemy shot active and enemies remain, start a staggered sequence
 	if es_shot_sequence_active = 0 then
 	begin
@@ -1410,9 +1406,9 @@ begin
 	togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 1);	
 	// Update first row of monsters only if there are monsters in that row
 	if RowHasMonsters(0) <> 0 then
-	begin
-		UpdateMonsters(0);
-		AnimateMonsters(0); // Prepare sprites for row 1
+	begin		
+		UpdateMonsters(0);  // Set screen positions for row 0
+		AnimateMonsters(0); // Set image pointers for row 0 — also transitions sprite 1 from UFO to enemy
 	end;
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
@@ -1449,9 +1445,9 @@ begin
 	
 	// Update middle row only if it still contains monsters
 	if RowHasMonsters(1) <> 0 then
-	begin
-		UpdateMonsters(MONSTER_ROW_OFFSET);
-		AnimateMonsters(1); // Prepare sprites for row 2
+	begin		
+		UpdateMonsters(MONSTER_ROW_OFFSET);  // Set screen positions for row 1
+		AnimateMonsters(1); // Set image pointers for row 1
 	end;
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
@@ -1487,9 +1483,9 @@ begin
 	
 	// Update bottom row only if it still contains monsters
 	if RowHasMonsters(2) <> 0 then
-	begin
-		UpdateMonsters(MONSTER_ROW_OFFSET*2);
-		AnimateMonsters(2); // Prepare sprites for row 3
+	begin		
+		UpdateMonsters(MONSTER_ROW_OFFSET*2);  // Set screen positions for row 2
+		AnimateMonsters(2); // Set image pointers for row 2
 	end;
 	
 	
