@@ -68,7 +68,6 @@ Helpers_temp	dc.w	0
 enemyMoveCounter	dc.b	$48
 enemy_direction	dc.b	$01
 numberOfEnemies	dc.b	$00
-monster_vertical_adjustment	dc.b	$39
 sequential_clear_counter	dc.b	$47
 player_bullet_active	dc.b	$00
 player_bullet_x	dc.b	0
@@ -79,9 +78,22 @@ player_sprite_x	dc.b	$27
 player_sprite_y	dc.b	$e2
 monster_base_x	dc.b	0
 monster_base_y	dc.b	0
+cached_rightmost_offset	dc.b	$c6
+cached_leftmost_offset	dc.b	$00
 block_enemies	dc.b $3f, $3f, $3f, $3f, $3f, $3f, $3f, $3f
 	dc.b $3f, $3f, $3f, $3f
 monster_animation_frame	dc.b	0
+es_shot_active	dc.b $0, $0, $0
+es_shot_x	dc.b $0, $0, $0
+es_shot_y	dc.b $0, $0, $0
+es_shot_anim_index	dc.b $0, $0, $0
+es_move_tick	dc.b	$00
+es_anim_tick	dc.b	$00
+es_explode_counter	dc.b	$00
+es_shot_sequence_active	dc.b	$00
+es_shot_next_to_fire	dc.b	$00
+es_shot_stagger_counter	dc.b	$00
+es_shot_sprite_num	dc.b $6, $5, $7
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : MainRasterJoystick
 	;    Procedure type : User-defined procedure
@@ -1816,6 +1828,15 @@ ClearMonster_ctb339: ;Main true block ;keep
 	; Test Inc dec D
 	inc numberOfEnemies
 ClearMonster_edblock341
+	
+; // Refresh cached edge offsets so UpdateTick always reads a valid value
+; // without scanning every frame. Cost is one scan per kill event only.
+	jsr GetRightmostEnemyOffset
+	; Calling storevariable on generic assign expression
+	sta cached_rightmost_offset
+	jsr GetLeftmostEnemyOffset
+	; Calling storevariable on generic assign expression
+	sta cached_leftmost_offset
 ClearMonster_edblock327
 	rts
 end_procedure_ClearMonster
@@ -1915,14 +1936,9 @@ UpdateMonsters
 ; // Pre-calculate Y position to avoid repeated additions
 	; 8 bit binop
 	; Add/sub where right value is constant number
-	; 8 bit binop
-	; Add/sub where right value is constant number
 	lda monster_base_y
 	clc
 	adc rowOffset
-	 ; end add / sub var with constant
-	clc
-	adc monster_vertical_adjustment
 	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta y_position
@@ -2045,6 +2061,67 @@ MakeSprites_bitmask_var363 = $54
 	sta MakeSprites_bitmask_var363
 	lda $d015
 	ora MakeSprites_bitmask_var363
+	sta $d015
+	
+; // Enable enemy-shot hardware sprites and set color
+	lda #$3
+	; Calling storevariable on generic assign expression
+	sta $D027+$6
+	; Calling storevariable on generic assign expression
+	sta $D027+$5
+	; Calling storevariable on generic assign expression
+	sta $D027+$7
+	; Toggle bit with constant
+	lda $d015
+	ora #%1000000
+	sta $d015
+	ldx #$6 ; optimized, look out for bugs
+	lda #1
+MakeSprites_shiftbit364
+	cpx #0
+	beq MakeSprites_shiftbitdone365
+	asl
+	dex
+	jmp MakeSprites_shiftbit364
+MakeSprites_shiftbitdone365
+MakeSprites_bitmask_var366 = $54
+	sta MakeSprites_bitmask_var366
+	lda $d015
+	ora MakeSprites_bitmask_var366
+	sta $d015
+	; Toggle bit with constant
+	ora #%100000
+	sta $d015
+	ldx #$5 ; optimized, look out for bugs
+	lda #1
+MakeSprites_shiftbit367
+	cpx #0
+	beq MakeSprites_shiftbitdone368
+	asl
+	dex
+	jmp MakeSprites_shiftbit367
+MakeSprites_shiftbitdone368
+MakeSprites_bitmask_var369 = $54
+	sta MakeSprites_bitmask_var369
+	lda $d015
+	ora MakeSprites_bitmask_var369
+	sta $d015
+	; Toggle bit with constant
+	ora #%10000000
+	sta $d015
+	ldx #$7 ; optimized, look out for bugs
+	lda #1
+MakeSprites_shiftbit370
+	cpx #0
+	beq MakeSprites_shiftbitdone371
+	asl
+	dex
+	jmp MakeSprites_shiftbit370
+MakeSprites_shiftbitdone371
+MakeSprites_bitmask_var372 = $54
+	sta MakeSprites_bitmask_var372
+	lda $d015
+	ora MakeSprites_bitmask_var372
 	sta $d015
 	rts
 end_procedure_MakeSprites
@@ -2189,12 +2266,12 @@ block_loop_counter	dc.b	0
 copy_loop_counter	dc.b	0
 source_sprite_ptr	= $24
 destination_sprite_ptr	= $68
-initializeMonsters_block365
+initializeMonsters_block374
 initializeMonsters
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta block_loop_counter
-initializeMonsters_forloop366
+initializeMonsters_forloop375
 	
 ; // Copy monster sprite data (frames 1 and 2) into 24 consecutive sprite locations
 ; // Each of the 12 monster blocks gets 2 animation frames
@@ -2209,18 +2286,18 @@ initializeMonsters_forloop366
 	; Integer constant assigning
 	; Load16bitvariable : #$2000
 	ldy #$20
-initializeMonsters_rightvarInteger_var405 = $54
-	sta initializeMonsters_rightvarInteger_var405
-	sty initializeMonsters_rightvarInteger_var405+1
+initializeMonsters_rightvarInteger_var414 = $54
+	sta initializeMonsters_rightvarInteger_var414
+	sty initializeMonsters_rightvarInteger_var414+1
 	; Right is PURE NUMERIC : Is word =1
 	; 16 bit mul or div
 	; Mul 16x8 setup
 	; Generic 16 bit op
 	ldy #0
 	lda #$1a
-initializeMonsters_rightvarInteger_var408 = $56
-	sta initializeMonsters_rightvarInteger_var408
-	sty initializeMonsters_rightvarInteger_var408+1
+initializeMonsters_rightvarInteger_var417 = $56
+	sta initializeMonsters_rightvarInteger_var417
+	sty initializeMonsters_rightvarInteger_var417+1
 	; Swapping nodes :  num * expr -> exp*num (mul only)
 	; Right is PURE NUMERIC : Is word =1
 	; 16 bit mul or div
@@ -2235,14 +2312,14 @@ initializeMonsters_rightvarInteger_var408 = $56
 	jsr mul16x8_procedure
 	; Low bit binop:
 	clc
-	adc initializeMonsters_rightvarInteger_var408
-initializeMonsters_wordAdd406
-	sta initializeMonsters_rightvarInteger_var408
+	adc initializeMonsters_rightvarInteger_var417
+initializeMonsters_wordAdd415
+	sta initializeMonsters_rightvarInteger_var417
 	; High-bit binop
 	tya
-	adc initializeMonsters_rightvarInteger_var408+1
+	adc initializeMonsters_rightvarInteger_var417+1
 	tay
-	lda initializeMonsters_rightvarInteger_var408
+	lda initializeMonsters_rightvarInteger_var417
 	sta mul16x8_num1
 	sty mul16x8_num1Hi
 	ldy #0   ; Force integer assignment, set y = 0 for values lower than 255
@@ -2251,20 +2328,20 @@ initializeMonsters_wordAdd406
 	jsr mul16x8_procedure
 	; Low bit binop:
 	clc
-	adc initializeMonsters_rightvarInteger_var405
-initializeMonsters_wordAdd403
-	sta initializeMonsters_rightvarInteger_var405
+	adc initializeMonsters_rightvarInteger_var414
+initializeMonsters_wordAdd412
+	sta initializeMonsters_rightvarInteger_var414
 	; High-bit binop
 	tya
-	adc initializeMonsters_rightvarInteger_var405+1
+	adc initializeMonsters_rightvarInteger_var414+1
 	tay
-	lda initializeMonsters_rightvarInteger_var405
+	lda initializeMonsters_rightvarInteger_var414
 	sta destination_sprite_ptr
 	sty destination_sprite_ptr+1
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta copy_loop_counter
-initializeMonsters_forloop409
+initializeMonsters_forloop418
 	
 ; // Destination: sprite 26, 28, 30, 32...
 	; Load pointer array
@@ -2278,26 +2355,26 @@ initializeMonsters_forloop409
 	adc #$01
 	sta source_sprite_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc initializeMonsters_WordAdd416
+	bcc initializeMonsters_WordAdd425
 	inc source_sprite_ptr+1
-initializeMonsters_WordAdd416
+initializeMonsters_WordAdd425
 	lda destination_sprite_ptr
 	clc
 	adc #$01
 	sta destination_sprite_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc initializeMonsters_WordAdd417
+	bcc initializeMonsters_WordAdd426
 	inc destination_sprite_ptr+1
-initializeMonsters_WordAdd417
-initializeMonsters_loopstart410
+initializeMonsters_WordAdd426
+initializeMonsters_loopstart419
 	; Compare is onpage
 	; Test Inc dec D
 	inc copy_loop_counter
 	lda #$3f
 	cmp copy_loop_counter ;keep
-	bne initializeMonsters_forloop409
-initializeMonsters_loopdone418: ;keep
-initializeMonsters_loopend411
+	bne initializeMonsters_forloop418
+initializeMonsters_loopdone427: ;keep
+initializeMonsters_loopend420
 	
 ; // Copy frame 2 (sprite index 25 from spritesheet)
 	lda #$40
@@ -2311,18 +2388,18 @@ initializeMonsters_loopend411
 	; Load16bitvariable : #$2000
 	ldy #$20
 	lda #$00
-initializeMonsters_rightvarInteger_var421 = $54
-	sta initializeMonsters_rightvarInteger_var421
-	sty initializeMonsters_rightvarInteger_var421+1
+initializeMonsters_rightvarInteger_var430 = $54
+	sta initializeMonsters_rightvarInteger_var430
+	sty initializeMonsters_rightvarInteger_var430+1
 	; Right is PURE NUMERIC : Is word =1
 	; 16 bit mul or div
 	; Mul 16x8 setup
 	; Generic 16 bit op
 	ldy #0
 	lda #$1b
-initializeMonsters_rightvarInteger_var424 = $56
-	sta initializeMonsters_rightvarInteger_var424
-	sty initializeMonsters_rightvarInteger_var424+1
+initializeMonsters_rightvarInteger_var433 = $56
+	sta initializeMonsters_rightvarInteger_var433
+	sty initializeMonsters_rightvarInteger_var433+1
 	; Swapping nodes :  num * expr -> exp*num (mul only)
 	; Right is PURE NUMERIC : Is word =1
 	; 16 bit mul or div
@@ -2337,14 +2414,14 @@ initializeMonsters_rightvarInteger_var424 = $56
 	jsr mul16x8_procedure
 	; Low bit binop:
 	clc
-	adc initializeMonsters_rightvarInteger_var424
-initializeMonsters_wordAdd422
-	sta initializeMonsters_rightvarInteger_var424
+	adc initializeMonsters_rightvarInteger_var433
+initializeMonsters_wordAdd431
+	sta initializeMonsters_rightvarInteger_var433
 	; High-bit binop
 	tya
-	adc initializeMonsters_rightvarInteger_var424+1
+	adc initializeMonsters_rightvarInteger_var433+1
 	tay
-	lda initializeMonsters_rightvarInteger_var424
+	lda initializeMonsters_rightvarInteger_var433
 	sta mul16x8_num1
 	sty mul16x8_num1Hi
 	ldy #0   ; Force integer assignment, set y = 0 for values lower than 255
@@ -2353,20 +2430,20 @@ initializeMonsters_wordAdd422
 	jsr mul16x8_procedure
 	; Low bit binop:
 	clc
-	adc initializeMonsters_rightvarInteger_var421
-initializeMonsters_wordAdd419
-	sta initializeMonsters_rightvarInteger_var421
+	adc initializeMonsters_rightvarInteger_var430
+initializeMonsters_wordAdd428
+	sta initializeMonsters_rightvarInteger_var430
 	; High-bit binop
 	tya
-	adc initializeMonsters_rightvarInteger_var421+1
+	adc initializeMonsters_rightvarInteger_var430+1
 	tay
-	lda initializeMonsters_rightvarInteger_var421
+	lda initializeMonsters_rightvarInteger_var430
 	sta destination_sprite_ptr
 	sty destination_sprite_ptr+1
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta copy_loop_counter
-initializeMonsters_forloop425
+initializeMonsters_forloop434
 	
 ; // Destination: sprite 27, 29, 31, 33...
 	; Load pointer array
@@ -2380,36 +2457,36 @@ initializeMonsters_forloop425
 	adc #$01
 	sta source_sprite_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc initializeMonsters_WordAdd432
+	bcc initializeMonsters_WordAdd441
 	inc source_sprite_ptr+1
-initializeMonsters_WordAdd432
+initializeMonsters_WordAdd441
 	lda destination_sprite_ptr
 	clc
 	adc #$01
 	sta destination_sprite_ptr+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc initializeMonsters_WordAdd433
+	bcc initializeMonsters_WordAdd442
 	inc destination_sprite_ptr+1
-initializeMonsters_WordAdd433
-initializeMonsters_loopstart426
+initializeMonsters_WordAdd442
+initializeMonsters_loopstart435
 	; Compare is onpage
 	; Test Inc dec D
 	inc copy_loop_counter
 	lda #$3f
 	cmp copy_loop_counter ;keep
-	bne initializeMonsters_forloop425
-initializeMonsters_loopdone434: ;keep
-initializeMonsters_loopend427
-initializeMonsters_loopstart367
+	bne initializeMonsters_forloop434
+initializeMonsters_loopdone443: ;keep
+initializeMonsters_loopend436
+initializeMonsters_loopstart376
 	; Test Inc dec D
 	inc block_loop_counter
 	lda #$c
 	cmp block_loop_counter ;keep
-	beq initializeMonsters_loopdone435
-initializeMonsters_loopnotdone436
-	jmp initializeMonsters_forloop366
-initializeMonsters_loopdone435
-initializeMonsters_loopend368
+	beq initializeMonsters_loopdone444
+initializeMonsters_loopnotdone445
+	jmp initializeMonsters_forloop375
+initializeMonsters_loopdone444
+initializeMonsters_loopend377
 	rts
 end_procedure_initializeMonsters
 	; NodeProcedureDecl -1
@@ -2447,11 +2524,11 @@ UpdateSprite
 	; isi-pisi: value is constant
 	ldx #0
 	sta $D000,x
-UpdateSprite_spritepos438
+UpdateSprite_spritepos447
 	lda $D010
 	and #%11111110
 	sta $D010
-UpdateSprite_spriteposcontinue439
+UpdateSprite_spriteposcontinue448
 	inx
 	txa
 	tay
@@ -2499,7 +2576,7 @@ end_procedure_FirePlayerBullet
 	; ***********  Defining procedure : ShowBullet
 	;    Procedure type : User-defined procedure
 bullet_sprite_index	dc.b	0
-ShowBullet_block441
+ShowBullet_block450
 ShowBullet
 	
 ; //end;
@@ -2508,14 +2585,14 @@ ShowBullet
 	clc
 	lda player_bullet_active
 	; cmp #$00 ignored
-	beq ShowBullet_edblock445
-ShowBullet_ctb443: ;Main true block ;keep 
+	beq ShowBullet_edblock454
+ShowBullet_ctb452: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne ShowBullet_eblock463
-ShowBullet_ctb462: ;Main true block ;keep 
+	bne ShowBullet_eblock472
+ShowBullet_ctb471: ;Main true block ;keep 
 	
 ; // Only display bullet/explosion if the sprite box fits entirely above the player raster line.
 ; // The VIC-II triggers sprite DMA at the TOP of the sprite box (player_bullet_y), not at the
@@ -2531,12 +2608,12 @@ ShowBullet_ctb462: ;Main true block ;keep
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta bullet_sprite_index
-	jmp ShowBullet_edblock464
-ShowBullet_eblock463
+	jmp ShowBullet_edblock473
+ShowBullet_eblock472
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta bullet_sprite_index
-ShowBullet_edblock464
+ShowBullet_edblock473
 	
 ; // Normal bullet sprite
 	; Set sprite location
@@ -2545,21 +2622,21 @@ ShowBullet_edblock464
 	; Generic 16 bit op
 	ldy #0
 	lda bullet_sprite_index
-ShowBullet_rightvarInteger_var471 = $54
-	sta ShowBullet_rightvarInteger_var471
-	sty ShowBullet_rightvarInteger_var471+1
+ShowBullet_rightvarInteger_var480 = $54
+	sta ShowBullet_rightvarInteger_var480
+	sty ShowBullet_rightvarInteger_var480+1
 	lda #128
 	ldy #0
 	; Low bit binop:
 	clc
-	adc ShowBullet_rightvarInteger_var471
-ShowBullet_wordAdd469
-	sta ShowBullet_rightvarInteger_var471
+	adc ShowBullet_rightvarInteger_var480
+ShowBullet_wordAdd478
+	sta ShowBullet_rightvarInteger_var480
 	; High-bit binop
 	tya
-	adc ShowBullet_rightvarInteger_var471+1
+	adc ShowBullet_rightvarInteger_var480+1
 	tay
-	lda ShowBullet_rightvarInteger_var471
+	lda ShowBullet_rightvarInteger_var480
 	ldx $50
 	sta $07f8 + $0,x
 	; Setting sprite position
@@ -2567,17 +2644,17 @@ ShowBullet_wordAdd469
 	lda player_bullet_x
 	ldx #0
 	sta $D000,x
-ShowBullet_spritepos472
+ShowBullet_spritepos481
 	lda $D010
 	and #%11111110
 	sta $D010
-ShowBullet_spriteposcontinue473
+ShowBullet_spriteposcontinue482
 	inx
 	txa
 	tay
 	lda player_bullet_y
 	sta $D000,y
-ShowBullet_edblock445
+ShowBullet_edblock454
 	rts
 end_procedure_ShowBullet
 	; NodeProcedureDecl -1
@@ -2588,14 +2665,14 @@ UpdatePlayerBullet
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne UpdatePlayerBullet_eblock477
-UpdatePlayerBullet_ctb476: ;Main true block ;keep 
+	bne UpdatePlayerBullet_eblock486
+UpdatePlayerBullet_ctb485: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_bullet_y
 	; Compare with pure num / var optimization
 	cmp #$5;keep
-	bcc UpdatePlayerBullet_eblock510
-UpdatePlayerBullet_ctb509: ;Main true block ;keep 
+	bcc UpdatePlayerBullet_eblock519
+UpdatePlayerBullet_ctb518: ;Main true block ;keep 
 	
 ; // Move bullet up
 	; Optimizer: a = a +/- b
@@ -2604,22 +2681,22 @@ UpdatePlayerBullet_ctb509: ;Main true block ;keep
 	sec
 	sbc #$4
 	sta player_bullet_y
-	jmp UpdatePlayerBullet_edblock511
-UpdatePlayerBullet_eblock510
+	jmp UpdatePlayerBullet_edblock520
+UpdatePlayerBullet_eblock519
 	
 ; // Bullet reached top of screen, deactivate
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta player_bullet_active
-UpdatePlayerBullet_edblock511
-	jmp UpdatePlayerBullet_edblock478
-UpdatePlayerBullet_eblock477
+UpdatePlayerBullet_edblock520
+	jmp UpdatePlayerBullet_edblock487
+UpdatePlayerBullet_eblock486
 	; Binary clause Simplified: EQUALS
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne UpdatePlayerBullet_edblock520
-UpdatePlayerBullet_ctb518: ;Main true block ;keep 
+	bne UpdatePlayerBullet_edblock529
+UpdatePlayerBullet_ctb527: ;Main true block ;keep 
 	
 ; // Explosion animation - count frames
 	; Test Inc dec D
@@ -2628,8 +2705,8 @@ UpdatePlayerBullet_ctb518: ;Main true block ;keep
 	lda explosion_frame_counter
 	; Compare with pure num / var optimization
 	cmp #$10;keep
-	bcc UpdatePlayerBullet_edblock532
-UpdatePlayerBullet_ctb530: ;Main true block ;keep 
+	bcc UpdatePlayerBullet_edblock541
+UpdatePlayerBullet_ctb539: ;Main true block ;keep 
 	
 ; // Explosion finished, reset bullet
 	lda #$0
@@ -2637,11 +2714,530 @@ UpdatePlayerBullet_ctb530: ;Main true block ;keep
 	sta player_bullet_active
 	; Calling storevariable on generic assign expression
 	sta explosion_frame_counter
-UpdatePlayerBullet_edblock532
-UpdatePlayerBullet_edblock520
-UpdatePlayerBullet_edblock478
+UpdatePlayerBullet_edblock541
+UpdatePlayerBullet_edblock529
+UpdatePlayerBullet_edblock487
 	rts
 end_procedure_UpdatePlayerBullet
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : StartEnemyShotSequence
+	;    Procedure type : User-defined procedure
+i	dc.b	0
+centerX	dc.b	0
+StartEnemyShotSequence_block544
+StartEnemyShotSequence
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta es_shot_sequence_active
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta es_shot_next_to_fire
+	; Calling storevariable on generic assign expression
+	sta es_shot_stagger_counter
+	; Optimization: replacing a > N with a >= N+1
+	; Binary clause Simplified: GREATEREQUAL
+	lda centerX
+	; Compare with pure num / var optimization
+	cmp #$3c;keep
+	bcc StartEnemyShotSequence_eblock547
+StartEnemyShotSequence_ctb546: ;Main true block ;keep 
+	
+; // fire first immediately
+; // compute X positions (-20, 0, +20) clamped to allowed range
+	; Optimizer: a = a +/- b
+	; Load16bitvariable : centerX
+	lda centerX
+	clc
+	adc #$14
+	sta es_shot_x+$0
+	jmp StartEnemyShotSequence_edblock548
+StartEnemyShotSequence_eblock547
+	lda #$27
+	; Calling storevariable on generic assign expression
+	sta es_shot_x+$0
+StartEnemyShotSequence_edblock548
+	lda centerX
+	; Calling storevariable on generic assign expression
+	sta es_shot_x+$1
+	; Binary clause Simplified: LESS
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	clc
+	adc #$14
+	 ; end add / sub var with constant
+	; Compare with pure num / var optimization
+	cmp #$da;keep
+	bcs StartEnemyShotSequence_eblock555
+StartEnemyShotSequence_ctb554: ;Main true block ;keep 
+	; Optimizer: a = a +/- b
+	; Load16bitvariable : centerX
+	lda centerX
+	clc
+	adc #$28
+	sta es_shot_x+$2
+	jmp StartEnemyShotSequence_edblock556
+StartEnemyShotSequence_eblock555
+	lda #$da
+	; Calling storevariable on generic assign expression
+	sta es_shot_x+$2
+StartEnemyShotSequence_edblock556
+	
+; // reset per-shot state
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta i
+StartEnemyShotSequence_while561
+StartEnemyShotSequence_loopstart565
+	; Optimization: replacing a <= N with a <= N-1
+	; Binary clause Simplified: LESS
+	lda i
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bcs StartEnemyShotSequence_edblock564
+StartEnemyShotSequence_ctb562: ;Main true block ;keep 
+	lda #$0
+	; Calling storevariable on generic assign expression
+	ldx i ; optimized, look out for bugs
+	sta es_shot_active,x
+	; Calling storevariable on generic assign expression
+	sta es_shot_y,x
+	; Calling storevariable on generic assign expression
+	sta es_shot_anim_index,x
+	; Test Inc dec D
+	inc i
+	jmp StartEnemyShotSequence_while561
+StartEnemyShotSequence_edblock564
+StartEnemyShotSequence_loopend566
+	rts
+end_procedure_StartEnemyShotSequence
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : ShowEnemyShot
+	;    Procedure type : User-defined procedure
+se_i	dc.b	0
+es_sprite_frame_index	dc.b	0
+spr	dc.b	0
+ShowEnemyShot_block569
+ShowEnemyShot
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta se_i
+ShowEnemyShot_while570
+ShowEnemyShot_loopstart574
+	; Optimization: replacing a <= N with a <= N-1
+	; Binary clause Simplified: LESS
+	lda se_i
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bcs ShowEnemyShot_localfailed670
+	jmp ShowEnemyShot_ctb571
+ShowEnemyShot_localfailed670
+	jmp ShowEnemyShot_edblock573
+ShowEnemyShot_ctb571: ;Main true block ;keep 
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	; Load Byte array
+	; CAST type NADA
+	ldx se_i
+	lda es_shot_active,x 
+	; cmp #$00 ignored
+	beq ShowEnemyShot_localfailed720
+	jmp ShowEnemyShot_ctb673
+ShowEnemyShot_localfailed720
+	jmp ShowEnemyShot_edblock675
+ShowEnemyShot_ctb673: ;Main true block ;keep 
+	; Binary clause Simplified: EQUALS
+	; Load Byte array
+	; CAST type NADA
+	ldx se_i
+	lda es_shot_active,x 
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne ShowEnemyShot_eblock724
+ShowEnemyShot_ctb723: ;Main true block ;keep 
+	; Optimizer: a = a +/- b
+	; Load Byte array
+	; CAST type NADA
+	ldx se_i
+	lda es_shot_anim_index,x 
+	clc
+	adc #$d
+	sta es_sprite_frame_index
+	jmp ShowEnemyShot_edblock725
+ShowEnemyShot_eblock724
+	lda #$4
+	; Calling storevariable on generic assign expression
+	sta es_sprite_frame_index
+ShowEnemyShot_edblock725
+	
+; // explosion graphic
+; // Use lookup array — avoids if/else chain for hardware sprite index
+	; Load Byte array
+	; CAST type NADA
+	ldx se_i
+	lda es_shot_sprite_num,x 
+	; Calling storevariable on generic assign expression
+	sta spr
+	; Set sprite location
+	sta $50
+	; Generic 16 bit op
+	ldy #0
+	lda #$1
+ShowEnemyShot_rightvarInteger_var732 = $54
+	sta ShowEnemyShot_rightvarInteger_var732
+	sty ShowEnemyShot_rightvarInteger_var732+1
+	; Generic 16 bit op
+	ldy #0
+	lda es_sprite_frame_index
+ShowEnemyShot_rightvarInteger_var735 = $56
+	sta ShowEnemyShot_rightvarInteger_var735
+	sty ShowEnemyShot_rightvarInteger_var735+1
+	lda #128
+	ldy #0
+	; Low bit binop:
+	clc
+	adc ShowEnemyShot_rightvarInteger_var735
+ShowEnemyShot_wordAdd733
+	sta ShowEnemyShot_rightvarInteger_var735
+	; High-bit binop
+	tya
+	adc ShowEnemyShot_rightvarInteger_var735+1
+	tay
+	lda ShowEnemyShot_rightvarInteger_var735
+	; Low bit binop:
+	sec
+	sbc ShowEnemyShot_rightvarInteger_var732
+ShowEnemyShot_wordAdd730
+	sta ShowEnemyShot_rightvarInteger_var732
+	; High-bit binop
+	tya
+	sbc ShowEnemyShot_rightvarInteger_var732+1
+	tay
+	lda ShowEnemyShot_rightvarInteger_var732
+	ldx $50
+	sta $07f8 + $0,x
+	; Binary clause Simplified: EQUALS
+	; Load Byte array
+	; CAST type NADA
+	ldx se_i
+	lda es_shot_active,x 
+	; Compare with pure num / var optimization
+	cmp #$2;keep
+	bne ShowEnemyShot_localfailed752
+	jmp ShowEnemyShot_ctb737
+ShowEnemyShot_localfailed752
+	jmp ShowEnemyShot_eblock738
+ShowEnemyShot_ctb737: ;Main true block ;keep 
+	
+; // State 2 (exploding): draw at fixed bottom-of-screen y.
+	; Setting sprite position
+	; Load Byte array
+	; CAST type NADA
+	ldx se_i
+	lda es_shot_x,x 
+	pha
+	lda spr
+	pha
+	tax
+	lda #1
+ShowEnemyShot_shiftbit756
+	cpx #0
+	beq ShowEnemyShot_shiftbitdone757
+	asl
+	dex
+	jmp ShowEnemyShot_shiftbit756
+ShowEnemyShot_shiftbitdone757
+ShowEnemyShot_bitmask_var758 = $54
+	sta ShowEnemyShot_bitmask_var758
+	pla
+	asl
+	tax
+	pla
+	sta $D000,x
+ShowEnemyShot_spritepos754
+	lda #$FF
+	eor ShowEnemyShot_bitmask_var758
+	sta ShowEnemyShot_bitmask_var758
+	lda $D010
+	and ShowEnemyShot_bitmask_var758
+	sta $D010
+ShowEnemyShot_spriteposcontinue755
+	inx
+	txa
+	tay
+	lda #$e4
+	sta $D000,y
+	jmp ShowEnemyShot_edblock739
+ShowEnemyShot_eblock738
+	; Setting sprite position
+	; Load Byte array
+	; CAST type NADA
+	ldx se_i
+	lda es_shot_x,x 
+	pha
+	lda spr
+	pha
+	tax
+	lda #1
+ShowEnemyShot_shiftbit762
+	cpx #0
+	beq ShowEnemyShot_shiftbitdone763
+	asl
+	dex
+	jmp ShowEnemyShot_shiftbit762
+ShowEnemyShot_shiftbitdone763
+ShowEnemyShot_bitmask_var764 = $54
+	sta ShowEnemyShot_bitmask_var764
+	pla
+	asl
+	tax
+	pla
+	sta $D000,x
+ShowEnemyShot_spritepos760
+	lda #$FF
+	eor ShowEnemyShot_bitmask_var764
+	sta ShowEnemyShot_bitmask_var764
+	lda $D010
+	and ShowEnemyShot_bitmask_var764
+	sta $D010
+ShowEnemyShot_spriteposcontinue761
+	inx
+	txa
+	tay
+	; Load Byte array
+	; CAST type NADA
+	ldx se_i
+	lda es_shot_y,x 
+	sta $D000,y
+ShowEnemyShot_edblock739
+ShowEnemyShot_edblock675
+	; Test Inc dec D
+	inc se_i
+	jmp ShowEnemyShot_while570
+ShowEnemyShot_edblock573
+ShowEnemyShot_loopend575
+	rts
+end_procedure_ShowEnemyShot
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : UpdateEnemyShot
+	;    Procedure type : User-defined procedure
+ue_i	dc.b	0
+ue_tick_fired	dc.b	0
+ue_anim_tick_fired	dc.b	0
+UpdateEnemyShot_block765
+UpdateEnemyShot
+	
+; // Movement tick: fires every ES_SHOT_MOVE_FRAMES frames.
+; // Shots always move 1px per frame; on tick frames they get 1 bonus px.
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta ue_tick_fired
+	; Test Inc dec D
+	inc es_move_tick
+	; Binary clause Simplified: GREATEREQUAL
+	lda es_move_tick
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bcc UpdateEnemyShot_edblock769
+UpdateEnemyShot_ctb767: ;Main true block ;keep 
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta es_move_tick
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta ue_tick_fired
+UpdateEnemyShot_edblock769
+	
+; // Animation tick: fires every ES_SHOT_ANIM_HOLD_FRAMES frames.
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta ue_anim_tick_fired
+	; Test Inc dec D
+	inc es_anim_tick
+	; Binary clause Simplified: GREATEREQUAL
+	lda es_anim_tick
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bcc UpdateEnemyShot_edblock775
+UpdateEnemyShot_ctb773: ;Main true block ;keep 
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta es_anim_tick
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta ue_anim_tick_fired
+UpdateEnemyShot_edblock775
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	lda es_shot_sequence_active
+	; cmp #$00 ignored
+	beq UpdateEnemyShot_edblock781
+UpdateEnemyShot_ctb779: ;Main true block ;keep 
+	; Binary clause Simplified: EQUALS
+	clc
+	lda es_shot_stagger_counter
+	; cmp #$00 ignored
+	bne UpdateEnemyShot_eblock810
+UpdateEnemyShot_ctb809: ;Main true block ;keep 
+	
+; // Handle staggered firing sequence
+	lda es_shot_next_to_fire
+	; Calling storevariable on generic assign expression
+	sta ue_i
+	lda #$0
+	; Calling storevariable on generic assign expression
+	ldx ue_i ; optimized, look out for bugs
+	sta es_shot_y,x
+	; Calling storevariable on generic assign expression
+	sta es_shot_anim_index,x
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta es_shot_active,x
+	; Test Inc dec D
+	inc es_shot_next_to_fire
+	; Binary clause Simplified: GREATEREQUAL
+	lda es_shot_next_to_fire
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bcc UpdateEnemyShot_eblock825
+UpdateEnemyShot_ctb824: ;Main true block ;keep 
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta es_shot_sequence_active
+	jmp UpdateEnemyShot_edblock826
+UpdateEnemyShot_eblock825
+	lda #$32
+	; Calling storevariable on generic assign expression
+	sta es_shot_stagger_counter
+UpdateEnemyShot_edblock826
+	jmp UpdateEnemyShot_edblock811
+UpdateEnemyShot_eblock810
+	; Test Inc dec D
+	dec es_shot_stagger_counter
+UpdateEnemyShot_edblock811
+UpdateEnemyShot_edblock781
+	
+; // Update each active shot. Movement and animation only advance on tick.
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta ue_i
+UpdateEnemyShot_while832
+UpdateEnemyShot_loopstart836
+	; Optimization: replacing a <= N with a <= N-1
+	; Binary clause Simplified: LESS
+	lda ue_i
+	; Compare with pure num / var optimization
+	cmp #$3;keep
+	bcs UpdateEnemyShot_localfailed919
+	jmp UpdateEnemyShot_ctb833
+UpdateEnemyShot_localfailed919
+	jmp UpdateEnemyShot_edblock835
+UpdateEnemyShot_ctb833: ;Main true block ;keep 
+	; Binary clause Simplified: EQUALS
+	; Load Byte array
+	; CAST type NADA
+	ldx ue_i
+	lda es_shot_active,x 
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne UpdateEnemyShot_eblock923
+UpdateEnemyShot_ctb922: ;Main true block ;keep 
+	
+; // 1px every frame; +1 bonus pixel on tick frame
+	; Test Inc dec D
+	ldx ue_i
+	; Optimize byte array inc 
+	inc es_shot_y,x
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	lda ue_tick_fired
+	; cmp #$00 ignored
+	beq UpdateEnemyShot_edblock967
+UpdateEnemyShot_ctb965: ;Main true block ;keep 
+	; Test Inc dec D
+	ldx ue_i
+	; Optimize byte array inc 
+	inc es_shot_y,x
+UpdateEnemyShot_edblock967
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	lda ue_anim_tick_fired
+	; cmp #$00 ignored
+	beq UpdateEnemyShot_edblock973
+UpdateEnemyShot_ctb971: ;Main true block ;keep 
+	
+; // Animation advances on its own hold timer
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; Load Byte array
+	; CAST type NADA
+	ldx ue_i
+	lda es_shot_anim_index,x 
+	clc
+	adc #$1
+	 ; end add / sub var with constant
+	and #$3
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta es_shot_anim_index,x
+UpdateEnemyShot_edblock973
+	; Binary clause Simplified: GREATEREQUAL
+	; Load Byte array
+	; CAST type NADA
+	ldx ue_i
+	lda es_shot_y,x 
+	; Compare with pure num / var optimization
+	cmp #$e4;keep
+	bcc UpdateEnemyShot_edblock979
+UpdateEnemyShot_ctb977: ;Main true block ;keep 
+	
+; // Hit bottom: switch to exploding, reset the scalar explosion counter
+	lda #$2
+	; Calling storevariable on generic assign expression
+	ldx ue_i ; optimized, look out for bugs
+	sta es_shot_active,x
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta es_explode_counter
+UpdateEnemyShot_edblock979
+	jmp UpdateEnemyShot_edblock924
+UpdateEnemyShot_eblock923
+	
+; // Restarting is handled by MainRasterChain when all slots read 0.
+	; Binary clause Simplified: EQUALS
+	; Load Byte array
+	; CAST type NADA
+	ldx ue_i
+	lda es_shot_active,x 
+	; Compare with pure num / var optimization
+	cmp #$2;keep
+	bne UpdateEnemyShot_edblock986
+UpdateEnemyShot_ctb984: ;Main true block ;keep 
+	
+; // Scalar counter: no array index involved, always advances correctly.
+	; Test Inc dec D
+	inc es_explode_counter
+	; Binary clause Simplified: GREATEREQUAL
+	lda es_explode_counter
+	; Compare with pure num / var optimization
+	cmp #$a;keep
+	bcc UpdateEnemyShot_edblock998
+UpdateEnemyShot_ctb996: ;Main true block ;keep 
+	lda #$0
+	; Calling storevariable on generic assign expression
+	ldx ue_i ; optimized, look out for bugs
+	sta es_shot_active,x
+UpdateEnemyShot_edblock998
+UpdateEnemyShot_edblock986
+UpdateEnemyShot_edblock924
+	; Test Inc dec D
+	inc ue_i
+	jmp UpdateEnemyShot_while832
+UpdateEnemyShot_edblock835
+UpdateEnemyShot_loopend837
+	rts
+end_procedure_UpdateEnemyShot
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : CheckBulletCollision
 	;    Procedure type : User-defined procedure
@@ -2659,7 +3255,7 @@ hit_enemy_index	dc.b	0
 cbc_enemy_mask	dc.b	0
 should_check	dc.b	0
 found_hit	dc.b	0
-CheckBulletCollision_block535
+CheckBulletCollision_block1001
 CheckBulletCollision
 	lda #$1
 	; Calling storevariable on generic assign expression
@@ -2674,69 +3270,52 @@ CheckBulletCollision
 	clc
 	adc #$d
 	 ; end add / sub var with constant
-CheckBulletCollision_binary_clause_temp_var541 = $54
-	sta CheckBulletCollision_binary_clause_temp_var541
+	; Compare with pure num / var optimization
+	cmp monster_base_y;keep
+	bcs CheckBulletCollision_edblock1005
+CheckBulletCollision_ctb1003: ;Main true block ;keep 
+	
+; // Early exit if bullet outside enemy formation area.
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta should_check
+CheckBulletCollision_edblock1005
+	; Optimization: replacing a <= N with a <= N-1
+	; Binary clause Simplified: LESS
+	lda monster_base_y
+	; Compare with pure num / var optimization
+	cmp #$b0;keep
+	bcs CheckBulletCollision_edblock1011
+CheckBulletCollision_ctb1009: ;Main true block ;keep 
+	; Binary clause Simplified: LESS
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda monster_base_y
 	clc
-	adc monster_vertical_adjustment
-	 ; end add / sub var with constant
-CheckBulletCollision_binary_clause_temp_2_var542 = $56
-	sta CheckBulletCollision_binary_clause_temp_2_var542
-	lda CheckBulletCollision_binary_clause_temp_var541
-	cmp CheckBulletCollision_binary_clause_temp_2_var542;keep
-	bcs CheckBulletCollision_edblock539
-CheckBulletCollision_ctb537: ;Main true block ;keep 
-	
-; // Early exit if bullet outside enemy formation area.
-; // Lower bound: contact pixel (bullet_y + OFFSET) above the formation top -> skip.
-	lda #$0
-	; Calling storevariable on generic assign expression
-	sta should_check
-CheckBulletCollision_edblock539
-	; Optimization: replacing a <= N with a <= N-1
-	; Binary clause Simplified: LESS
-	lda monster_vertical_adjustment
-	; Compare with pure num / var optimization
-	cmp #$5e;keep
-	bcs CheckBulletCollision_edblock547
-CheckBulletCollision_ctb545: ;Main true block ;keep 
-	; Binary clause Simplified: LESS
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda monster_vertical_adjustment
-	clc
-	adc #$a2
+	adc #$50
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp player_bullet_y;keep
-	bcs CheckBulletCollision_edblock559
-CheckBulletCollision_ctb557: ;Main true block ;keep 
+	bcs CheckBulletCollision_edblock1023
+CheckBulletCollision_ctb1021: ;Main true block ;keep 
 	
-; // Upper bound: bullet sprite top below the formation bottom -> skip.
-; // BYTE OVERFLOW GUARD: monster_base_y(82) + monster_vertical_adjustment + 80 wraps after ~7 drops.
-; // Fold the two constants: 82 + 80 = 162, so check becomes bullet_y > adj + 162.
-; // adj + 162 overflows when adj > 93 (enemies already off-screen), so skip the guard in that case.
+; // BYTE OVERFLOW GUARD: monster_base_y + 80 wraps when monster_base_y > 175.
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta should_check
-CheckBulletCollision_edblock559
-CheckBulletCollision_edblock547
+CheckBulletCollision_edblock1023
+CheckBulletCollision_edblock1011
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda should_check
 	; cmp #$00 ignored
-	beq CheckBulletCollision_localfailed3667
-	jmp CheckBulletCollision_ctb563
-CheckBulletCollision_localfailed3667
-	jmp CheckBulletCollision_edblock565
-CheckBulletCollision_ctb563: ;Main true block ;keep 
+	beq CheckBulletCollision_localfailed4115
+	jmp CheckBulletCollision_ctb1027
+CheckBulletCollision_localfailed4115
+	jmp CheckBulletCollision_edblock1029
+CheckBulletCollision_ctb1027: ;Main true block ;keep 
 	
-; // Calculate which block row (0-2) the bullet is in.
-; // Use contact pixel Y to avoid byte underflow when sprite top is above the formation.
-	; 8 bit binop
-	; Add/sub where right value is constant number
+; // Determine block row (0-2) from bullet Y.
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; 8 bit binop
@@ -2748,60 +3327,57 @@ CheckBulletCollision_ctb563: ;Main true block ;keep
 	sec
 	sbc monster_base_y
 	 ; end add / sub var with constant
-	sec
-	sbc monster_vertical_adjustment
-	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta rel_y
 	; Binary clause Simplified: LESS
 	; Compare with pure num / var optimization
 	cmp #$1a;keep
-	bcs CheckBulletCollision_eblock3671
-CheckBulletCollision_ctb3670: ;Main true block ;keep 
+	bcs CheckBulletCollision_eblock4119
+CheckBulletCollision_ctb4118: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta block_row
-	jmp CheckBulletCollision_edblock3672
-CheckBulletCollision_eblock3671
+	jmp CheckBulletCollision_edblock4120
+CheckBulletCollision_eblock4119
 	; Binary clause Simplified: LESS
 	lda rel_y
 	; Compare with pure num / var optimization
 	cmp #$34;keep
-	bcs CheckBulletCollision_eblock3687
-CheckBulletCollision_ctb3686: ;Main true block ;keep 
+	bcs CheckBulletCollision_eblock4135
+CheckBulletCollision_ctb4134: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta block_row
-	jmp CheckBulletCollision_edblock3688
-CheckBulletCollision_eblock3687
+	jmp CheckBulletCollision_edblock4136
+CheckBulletCollision_eblock4135
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta block_row
-CheckBulletCollision_edblock3688
-CheckBulletCollision_edblock3672
+CheckBulletCollision_edblock4136
+CheckBulletCollision_edblock4120
 	
-; // Check all 4 blocks in the bullet's row
+; // Scan the 4 block columns in this row. Skip empty blocks immediately.
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta block_col
-CheckBulletCollision_while3693
-CheckBulletCollision_loopstart3697
+CheckBulletCollision_while4141
+CheckBulletCollision_loopstart4145
 	; Binary clause Simplified: LESS
 	lda block_col
 	; Compare with pure num / var optimization
 	cmp #$4;keep
-	bcs CheckBulletCollision_localfailed5233
-CheckBulletCollision_localsuccess5234: ;keep
+	bcs CheckBulletCollision_localfailed5673
+CheckBulletCollision_localsuccess5674: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda found_hit
 	; cmp #$00 ignored
-	bne CheckBulletCollision_localfailed5233
-	jmp CheckBulletCollision_ctb3694
-CheckBulletCollision_localfailed5233
-	jmp CheckBulletCollision_edblock3696
-CheckBulletCollision_ctb3694: ;Main true block ;keep 
+	bne CheckBulletCollision_localfailed5673
+	jmp CheckBulletCollision_ctb4142
+CheckBulletCollision_localfailed5673
+	jmp CheckBulletCollision_edblock4144
+CheckBulletCollision_ctb4142: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -2824,11 +3400,11 @@ CheckBulletCollision_ctb3694: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; cmp #$00 ignored
-	beq CheckBulletCollision_localfailed6004
-	jmp CheckBulletCollision_ctb5237
-CheckBulletCollision_localfailed6004
-	jmp CheckBulletCollision_edblock5239
-CheckBulletCollision_ctb5237: ;Main true block ;keep 
+	beq CheckBulletCollision_localfailed6440
+	jmp CheckBulletCollision_ctb5677
+CheckBulletCollision_localfailed6440
+	jmp CheckBulletCollision_edblock5679
+CheckBulletCollision_ctb5677: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -2852,12 +3428,12 @@ CheckBulletCollision_ctb5237: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp player_bullet_x;keep
-	beq CheckBulletCollision_ctb6009
-	bcs CheckBulletCollision_localfailed6390
-	jmp CheckBulletCollision_ctb6009
-CheckBulletCollision_localfailed6390
-	jmp CheckBulletCollision_edblock6011
-CheckBulletCollision_ctb6009: ;Main true block ;keep 
+	beq CheckBulletCollision_ctb6445
+	bcs CheckBulletCollision_localfailed6824
+	jmp CheckBulletCollision_ctb6445
+CheckBulletCollision_localfailed6824
+	jmp CheckBulletCollision_edblock6447
+CheckBulletCollision_ctb6445: ;Main true block ;keep 
 	; Binary clause Simplified: GREATER
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -2872,18 +3448,14 @@ CheckBulletCollision_ctb6009: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp player_bullet_x;keep
-	bcc CheckBulletCollision_localfailed6582
-	beq CheckBulletCollision_localfailed6582
-	jmp CheckBulletCollision_ctb6393
-CheckBulletCollision_localfailed6582
-	jmp CheckBulletCollision_edblock6395
-CheckBulletCollision_ctb6393: ;Main true block ;keep 
+	bcc CheckBulletCollision_localfailed7015
+	beq CheckBulletCollision_localfailed7015
+	jmp CheckBulletCollision_ctb6827
+CheckBulletCollision_localfailed7015
+	jmp CheckBulletCollision_edblock6829
+CheckBulletCollision_ctb6827: ;Main true block ;keep 
 	
-; // Quick horizontal range check
-; // Bullet contact point is BULLET_X_CONTACT_REACH px into the sprite, so effective hit X = player_bullet_x + BULLET_X_CONTACT_REACH.
-; // Range: contact point must fall within [block_x, block_x+48).
-; // => player_bullet_x in [block_x-REACH, block_x+(48-REACH)). block_x >= 32 so left bound >= 20, no underflow.
-; // rel_x = (player_bullet_x + REACH) - block_x; no underflow since player_bullet_x >= block_x-REACH
+; // Horizontal range check: contact point must fall within [block_x, block_x+48).
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; 8 bit binop
@@ -2898,7 +3470,7 @@ CheckBulletCollision_ctb6393: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta rel_x
 	; 8 bit binop
-	; Add/sub right value is variable/expression
+	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
 	; 8 bit mul
 	ldx block_row ; optimized, look out for bugs
@@ -2907,21 +3479,11 @@ CheckBulletCollision_ctb6393: ;Main true block ;keep
 	jsr multiply_eightbit
 	txa
 	ldy #0 ; ::EightbitMul
-CheckBulletCollision_rightvarAddSub_var6586 = $54
-	sta CheckBulletCollision_rightvarAddSub_var6586
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda monster_base_y
 	clc
-	adc monster_vertical_adjustment
+	adc monster_base_y
 	 ; end add / sub var with constant
-	clc
-	adc CheckBulletCollision_rightvarAddSub_var6586
 	; Calling storevariable on generic assign expression
 	sta block_y
-	
-; // Add BULLET_Y_CONTACT_OFFSET to map sprite top position to actual contact pixel Y.
-; // No underflow: bullet enters the row from below so player_bullet_y + offset >= block_y.
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; 8 bit binop
@@ -2939,68 +3501,62 @@ CheckBulletCollision_rightvarAddSub_var6586 = $54
 	lda rel_x
 	; Compare with pure num / var optimization
 	cmp #$c;keep
-	bcs CheckBulletCollision_eblock6589
-CheckBulletCollision_ctb6588: ;Main true block ;keep 
+	bcs CheckBulletCollision_eblock7021
+CheckBulletCollision_ctb7020: ;Main true block ;keep 
 	
-; // Determine enemy column (0-2) by X position
-; // Each enemy is 12px wide with 6px gaps between them
-; // Col 0: 0-11, Gap: 12-17, Col 1: 18-29, Gap: 30-35, Col 2: 36-47
+; // Enemy column within block (0-2): 12px wide, 6px gaps.
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta enemy_col
-	jmp CheckBulletCollision_edblock6590
-CheckBulletCollision_eblock6589
+	jmp CheckBulletCollision_edblock7022
+CheckBulletCollision_eblock7021
 	; Binary clause Simplified: LESS
 	lda rel_x
 	; Compare with pure num / var optimization
 	cmp #$12;keep
-	bcs CheckBulletCollision_eblock6653
-CheckBulletCollision_ctb6652: ;Main true block ;keep 
+	bcs CheckBulletCollision_eblock7085
+CheckBulletCollision_ctb7084: ;Main true block ;keep 
 	
 ; // gap
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta enemy_col
-	jmp CheckBulletCollision_edblock6654
-CheckBulletCollision_eblock6653
+	jmp CheckBulletCollision_edblock7086
+CheckBulletCollision_eblock7085
 	; Binary clause Simplified: LESS
 	lda rel_x
 	; Compare with pure num / var optimization
 	cmp #$1e;keep
-	bcs CheckBulletCollision_eblock6685
-CheckBulletCollision_ctb6684: ;Main true block ;keep 
+	bcs CheckBulletCollision_eblock7117
+CheckBulletCollision_ctb7116: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta enemy_col
-	jmp CheckBulletCollision_edblock6686
-CheckBulletCollision_eblock6685
+	jmp CheckBulletCollision_edblock7118
+CheckBulletCollision_eblock7117
 	; Binary clause Simplified: LESS
 	lda rel_x
 	; Compare with pure num / var optimization
 	cmp #$24;keep
-	bcs CheckBulletCollision_eblock6701
-CheckBulletCollision_ctb6700: ;Main true block ;keep 
+	bcs CheckBulletCollision_eblock7133
+CheckBulletCollision_ctb7132: ;Main true block ;keep 
 	
 ; // gap
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta enemy_col
-	jmp CheckBulletCollision_edblock6702
-CheckBulletCollision_eblock6701
+	jmp CheckBulletCollision_edblock7134
+CheckBulletCollision_eblock7133
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta enemy_col
-CheckBulletCollision_edblock6702
-CheckBulletCollision_edblock6686
-CheckBulletCollision_edblock6654
-CheckBulletCollision_edblock6590
+CheckBulletCollision_edblock7134
+CheckBulletCollision_edblock7118
+CheckBulletCollision_edblock7086
+CheckBulletCollision_edblock7022
 	
-; // Determine enemy row (0-1) by Y position
-; // Each enemy is 8px tall with a 6px gap between rows (offsets 8-13 in the sprite).
-; // BULLET_SPEED=4 can skip the 8-pixel bottom zone entirely when the formation is
-; // very low: the bullet jumps from rel_y=13 (gap) to rel_y=9 (gap) to rel_y=5 (top),
-; // never passing through range 14-21. Extending the bottom zone upward to rel_y>=8
-; // closes the dead zone so odd-indexed (bottom) enemies are always hittable.
+; // Enemy row within block (0=top, 1=bottom).
+; // Extended bottom zone (rel_y >= 8) closes the dead zone at high BULLET_SPEED.
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta enemy_row
@@ -3008,49 +3564,47 @@ CheckBulletCollision_edblock6590
 	lda rel_y
 	; Compare with pure num / var optimization
 	cmp #$8;keep
-	bcs CheckBulletCollision_eblock6709
-CheckBulletCollision_ctb6708: ;Main true block ;keep 
-	
-; // Invalid by default
+	bcs CheckBulletCollision_eblock7141
+CheckBulletCollision_ctb7140: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta enemy_row
-	jmp CheckBulletCollision_edblock6710
-CheckBulletCollision_eblock6709
+	jmp CheckBulletCollision_edblock7142
+CheckBulletCollision_eblock7141
 	; Binary clause Simplified: GREATEREQUAL
 	lda rel_y
 	; Compare with pure num / var optimization
 	cmp #$8;keep
-	bcc CheckBulletCollision_edblock6725
-CheckBulletCollision_localsuccess6727: ;keep
+	bcc CheckBulletCollision_edblock7157
+CheckBulletCollision_localsuccess7159: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	lda rel_y
 	; Compare with pure num / var optimization
 	cmp #$16;keep
-	bcs CheckBulletCollision_edblock6725
-CheckBulletCollision_ctb6723: ;Main true block ;keep 
+	bcs CheckBulletCollision_edblock7157
+CheckBulletCollision_ctb7155: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta enemy_row
-CheckBulletCollision_edblock6725
-CheckBulletCollision_edblock6710
+CheckBulletCollision_edblock7157
+CheckBulletCollision_edblock7142
 	; Binary clause Simplified: NOTEQUALS
 	lda enemy_row
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckBulletCollision_localfailed6750
-CheckBulletCollision_localsuccess6751: ;keep
+	beq CheckBulletCollision_localfailed7182
+CheckBulletCollision_localsuccess7183: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: NOTEQUALS
 	lda enemy_col
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckBulletCollision_localfailed6750
-	jmp CheckBulletCollision_ctb6730
-CheckBulletCollision_localfailed6750
-	jmp CheckBulletCollision_edblock6732
-CheckBulletCollision_ctb6730: ;Main true block ;keep 
+	beq CheckBulletCollision_localfailed7182
+	jmp CheckBulletCollision_ctb7162
+CheckBulletCollision_localfailed7182
+	jmp CheckBulletCollision_edblock7164
+CheckBulletCollision_ctb7162: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -3066,13 +3620,13 @@ CheckBulletCollision_ctb6730: ;Main true block ;keep
 	tax ; optimized x, look out for bugs L22 ORG 	ldx hit_enemy_index ; optimized, look out for bugs
 	lda #$1
 	cpx #0
-	beq CheckBulletCollision_lblShiftDone6754
-CheckBulletCollision_lblShift6753
+	beq CheckBulletCollision_lblShiftDone7186
+CheckBulletCollision_lblShift7185
 	asl
 	dex
 	cpx #0
-	bne CheckBulletCollision_lblShift6753
-CheckBulletCollision_lblShiftDone6754
+	bne CheckBulletCollision_lblShift7185
+CheckBulletCollision_lblShiftDone7186
 	; Calling storevariable on generic assign expression
 	sta cbc_enemy_mask
 	; Binary clause Simplified: NOTEQUALS
@@ -3083,12 +3637,8 @@ CheckBulletCollision_lblShiftDone6754
 	and cbc_enemy_mask
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq CheckBulletCollision_edblock6758
-CheckBulletCollision_ctb6756: ;Main true block ;keep 
-	
-; // Check if this enemy is alive
-; // Hit! Clear enemy and trigger explosion
-; // Clear sprite + update block_enemies handled inside ClearMonster
+	beq CheckBulletCollision_edblock7190
+CheckBulletCollision_ctb7188: ;Main true block ;keep 
 	lda block_index
 	; Calling storevariable on generic assign expression
 	sta blockIndex
@@ -3096,12 +3646,6 @@ CheckBulletCollision_ctb6756: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta enemyIndex
 	jsr ClearMonster
-	
-; // Snap explosion sprite to enemy hitbox top-left.
-; // enemy_col stride = 12px wide + 6px gap = 18px.
-; // enemy_row stride = 8px tall + 6px gap = 14px.
-; // Shift box upward by EXPLOSION_PIXELS_FROM_TOP so the lit pixels
-; // (packed at the bottom of the sprite frame) land on the enemy visually.
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; 8 bit binop
@@ -3156,17 +3700,17 @@ CheckBulletCollision_ctb6756: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta found_hit
-CheckBulletCollision_edblock6758
-CheckBulletCollision_edblock6732
-CheckBulletCollision_edblock6395
-CheckBulletCollision_edblock6011
-CheckBulletCollision_edblock5239
+CheckBulletCollision_edblock7190
+CheckBulletCollision_edblock7164
+CheckBulletCollision_edblock6829
+CheckBulletCollision_edblock6447
+CheckBulletCollision_edblock5679
 	; Test Inc dec D
 	inc block_col
-	jmp CheckBulletCollision_while3693
-CheckBulletCollision_edblock3696
-CheckBulletCollision_loopend3698
-CheckBulletCollision_edblock565
+	jmp CheckBulletCollision_while4141
+CheckBulletCollision_edblock4144
+CheckBulletCollision_loopend4146
+CheckBulletCollision_edblock1029
 	rts
 end_procedure_CheckBulletCollision
 	; NodeProcedureDecl -1
@@ -3177,8 +3721,8 @@ DisplayText
 ; //moveto(29,1,hi(screen_char_loc));
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6771
-	ldy #>DisplayText_stringassignstr6771
+	lda #<DisplayText_stringassignstr7203
+	ldy #>DisplayText_stringassignstr7203
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -3194,8 +3738,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6773
-	ldy #>DisplayText_stringassignstr6773
+	lda #<DisplayText_stringassignstr7205
+	ldy #>DisplayText_stringassignstr7205
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -3211,8 +3755,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6775
-	ldy #>DisplayText_stringassignstr6775
+	lda #<DisplayText_stringassignstr7207
+	ldy #>DisplayText_stringassignstr7207
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -3228,8 +3772,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6777
-	ldy #>DisplayText_stringassignstr6777
+	lda #<DisplayText_stringassignstr7209
+	ldy #>DisplayText_stringassignstr7209
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -3245,8 +3789,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6779
-	ldy #>DisplayText_stringassignstr6779
+	lda #<DisplayText_stringassignstr7211
+	ldy #>DisplayText_stringassignstr7211
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -3262,8 +3806,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6781
-	ldy #>DisplayText_stringassignstr6781
+	lda #<DisplayText_stringassignstr7213
+	ldy #>DisplayText_stringassignstr7213
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -3279,8 +3823,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6783
-	ldy #>DisplayText_stringassignstr6783
+	lda #<DisplayText_stringassignstr7215
+	ldy #>DisplayText_stringassignstr7215
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -3296,8 +3840,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6785
-	ldy #>DisplayText_stringassignstr6785
+	lda #<DisplayText_stringassignstr7217
+	ldy #>DisplayText_stringassignstr7217
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -3313,8 +3857,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6787
-	ldy #>DisplayText_stringassignstr6787
+	lda #<DisplayText_stringassignstr7219
+	ldy #>DisplayText_stringassignstr7219
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$a
@@ -3330,8 +3874,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6789
-	ldy #>DisplayText_stringassignstr6789
+	lda #<DisplayText_stringassignstr7221
+	ldy #>DisplayText_stringassignstr7221
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$a
@@ -3347,8 +3891,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6791
-	ldy #>DisplayText_stringassignstr6791
+	lda #<DisplayText_stringassignstr7223
+	ldy #>DisplayText_stringassignstr7223
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -3364,8 +3908,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6793
-	ldy #>DisplayText_stringassignstr6793
+	lda #<DisplayText_stringassignstr7225
+	ldy #>DisplayText_stringassignstr7225
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -3381,8 +3925,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6795
-	ldy #>DisplayText_stringassignstr6795
+	lda #<DisplayText_stringassignstr7227
+	ldy #>DisplayText_stringassignstr7227
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -3398,8 +3942,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6797
-	ldy #>DisplayText_stringassignstr6797
+	lda #<DisplayText_stringassignstr7229
+	ldy #>DisplayText_stringassignstr7229
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -3415,8 +3959,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr6799
-	ldy #>DisplayText_stringassignstr6799
+	lda #<DisplayText_stringassignstr7231
+	ldy #>DisplayText_stringassignstr7231
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$0
@@ -3446,7 +3990,7 @@ enemy_sub	dc.b	0
 cec_enemy_mask	dc.b	0
 temp_block_index	dc.b	$00
 temp_enemy_index	dc.b	$00
-ClearEnemyAtCounter_block6800
+ClearEnemyAtCounter_block7232
 ClearEnemyAtCounter
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -3464,11 +4008,11 @@ ClearEnemyAtCounter
 	; Calling storevariable on generic assign expression
 	sta Helpers_divisorInput
 	jsr Helpers_Div
-ClearEnemyAtCounter_rightvarAddSub_var6801 = $54
-	sta ClearEnemyAtCounter_rightvarAddSub_var6801
+ClearEnemyAtCounter_rightvarAddSub_var7233 = $54
+	sta ClearEnemyAtCounter_rightvarAddSub_var7233
 	lda #$3
 	sec
-	sbc ClearEnemyAtCounter_rightvarAddSub_var6801
+	sbc ClearEnemyAtCounter_rightvarAddSub_var7233
 	; Calling storevariable on generic assign expression
 	sta clear_col
 	lda clear_index
@@ -3520,74 +4064,74 @@ ClearEnemyAtCounter_rightvarAddSub_var6801 = $54
 	clc
 	lda pair_index
 	; cmp #$00 ignored
-	bne ClearEnemyAtCounter_eblock6804
-ClearEnemyAtCounter_ctb6803: ;Main true block ;keep 
+	bne ClearEnemyAtCounter_eblock7236
+ClearEnemyAtCounter_ctb7235: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda enemy_sub
 	; cmp #$00 ignored
-	bne ClearEnemyAtCounter_eblock6859
-ClearEnemyAtCounter_ctb6858: ;Main true block ;keep 
+	bne ClearEnemyAtCounter_eblock7291
+ClearEnemyAtCounter_ctb7290: ;Main true block ;keep 
 	
 ; // Column-based enemy indexing: Col0(0,1), Col1(2,3), Col2(4,5)
 ; // Clear from right to left, bottom then top within each column
 	lda #$5
 	; Calling storevariable on generic assign expression
 	sta enemy_type
-	jmp ClearEnemyAtCounter_edblock6860
-ClearEnemyAtCounter_eblock6859
+	jmp ClearEnemyAtCounter_edblock7292
+ClearEnemyAtCounter_eblock7291
 	lda #$4
 	; Calling storevariable on generic assign expression
 	sta enemy_type
-ClearEnemyAtCounter_edblock6860
-	jmp ClearEnemyAtCounter_edblock6805
-ClearEnemyAtCounter_eblock6804
+ClearEnemyAtCounter_edblock7292
+	jmp ClearEnemyAtCounter_edblock7237
+ClearEnemyAtCounter_eblock7236
 	
 ; // Left column
 	; Binary clause Simplified: EQUALS
 	lda pair_index
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne ClearEnemyAtCounter_eblock6868
-ClearEnemyAtCounter_ctb6867: ;Main true block ;keep 
+	bne ClearEnemyAtCounter_eblock7300
+ClearEnemyAtCounter_ctb7299: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda enemy_sub
 	; cmp #$00 ignored
-	bne ClearEnemyAtCounter_eblock6891
-ClearEnemyAtCounter_ctb6890: ;Main true block ;keep 
+	bne ClearEnemyAtCounter_eblock7323
+ClearEnemyAtCounter_ctb7322: ;Main true block ;keep 
 	
 ; // Right column
 	lda #$3
 	; Calling storevariable on generic assign expression
 	sta enemy_type
-	jmp ClearEnemyAtCounter_edblock6892
-ClearEnemyAtCounter_eblock6891
+	jmp ClearEnemyAtCounter_edblock7324
+ClearEnemyAtCounter_eblock7323
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta enemy_type
-ClearEnemyAtCounter_edblock6892
-	jmp ClearEnemyAtCounter_edblock6869
-ClearEnemyAtCounter_eblock6868
+ClearEnemyAtCounter_edblock7324
+	jmp ClearEnemyAtCounter_edblock7301
+ClearEnemyAtCounter_eblock7300
 	; Binary clause Simplified: EQUALS
 	clc
 	lda enemy_sub
 	; cmp #$00 ignored
-	bne ClearEnemyAtCounter_eblock6900
-ClearEnemyAtCounter_ctb6899: ;Main true block ;keep 
+	bne ClearEnemyAtCounter_eblock7332
+ClearEnemyAtCounter_ctb7331: ;Main true block ;keep 
 	
 ; // Middle column
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta enemy_type
-	jmp ClearEnemyAtCounter_edblock6901
-ClearEnemyAtCounter_eblock6900
+	jmp ClearEnemyAtCounter_edblock7333
+ClearEnemyAtCounter_eblock7332
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta enemy_type
-ClearEnemyAtCounter_edblock6901
-ClearEnemyAtCounter_edblock6869
-ClearEnemyAtCounter_edblock6805
+ClearEnemyAtCounter_edblock7333
+ClearEnemyAtCounter_edblock7301
+ClearEnemyAtCounter_edblock7237
 	lda enemy_type
 	; Calling storevariable on generic assign expression
 	sta temp_enemy_index
@@ -3617,13 +4161,13 @@ ClearEnemyAtCounter_edblock6805
 	ldx temp_enemy_index ; optimized, look out for bugs
 	lda #$1
 	cpx #0
-	beq ClearEnemyAtCounter_lblShiftDone6907
-ClearEnemyAtCounter_lblShift6906
+	beq ClearEnemyAtCounter_lblShiftDone7339
+ClearEnemyAtCounter_lblShift7338
 	asl
 	dex
 	cpx #0
-	bne ClearEnemyAtCounter_lblShift6906
-ClearEnemyAtCounter_lblShiftDone6907
+	bne ClearEnemyAtCounter_lblShift7338
+ClearEnemyAtCounter_lblShiftDone7339
 	; Calling storevariable on generic assign expression
 	sta cec_enemy_mask
 	; Binary clause Simplified: NOTEQUALS
@@ -3637,8 +4181,8 @@ ClearEnemyAtCounter_lblShiftDone6907
 	and cec_enemy_mask
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq ClearEnemyAtCounter_edblock6911
-ClearEnemyAtCounter_ctb6909: ;Main true block ;keep 
+	beq ClearEnemyAtCounter_edblock7343
+ClearEnemyAtCounter_ctb7341: ;Main true block ;keep 
 	
 ; // ClearMonster will clear the sprite and update the block_enemies bitmask
 	lda temp_block_index
@@ -3648,7 +4192,7 @@ ClearEnemyAtCounter_ctb6909: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta enemyIndex
 	jsr ClearMonster
-ClearEnemyAtCounter_edblock6911
+ClearEnemyAtCounter_edblock7343
 	rts
 end_procedure_ClearEnemyAtCounter
 	
@@ -3664,7 +4208,7 @@ rightmost_enemies_byte	dc.b	0
 rightmost_found_flag	dc.b	0
 rightmost_result_offset	dc.b	0
 rightmost_column_loop_done	dc.b	0
-GetRightmostEnemyOffset_block6914
+GetRightmostEnemyOffset_block7346
 GetRightmostEnemyOffset
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -3678,40 +4222,40 @@ GetRightmostEnemyOffset
 	lda #$3
 	; Calling storevariable on generic assign expression
 	sta rightmost_block_column
-GetRightmostEnemyOffset_while6915
-GetRightmostEnemyOffset_loopstart6919
+GetRightmostEnemyOffset_while7347
+GetRightmostEnemyOffset_loopstart7351
 	; Binary clause Simplified: EQUALS
 	clc
 	lda rightmost_column_loop_done
 	; cmp #$00 ignored
-	bne GetRightmostEnemyOffset_localfailed7093
-	jmp GetRightmostEnemyOffset_ctb6916
-GetRightmostEnemyOffset_localfailed7093
-	jmp GetRightmostEnemyOffset_edblock6918
-GetRightmostEnemyOffset_ctb6916: ;Main true block ;keep 
+	bne GetRightmostEnemyOffset_localfailed7525
+	jmp GetRightmostEnemyOffset_ctb7348
+GetRightmostEnemyOffset_localfailed7525
+	jmp GetRightmostEnemyOffset_edblock7350
+GetRightmostEnemyOffset_ctb7348: ;Main true block ;keep 
 	
 ; // Check all 3 rows for this block column
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta rightmost_row_index
-GetRightmostEnemyOffset_while7095
-GetRightmostEnemyOffset_loopstart7099
+GetRightmostEnemyOffset_while7527
+GetRightmostEnemyOffset_loopstart7531
 	; Binary clause Simplified: LESS
 	lda rightmost_row_index
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs GetRightmostEnemyOffset_localfailed7178
-GetRightmostEnemyOffset_localsuccess7179: ;keep
+	bcs GetRightmostEnemyOffset_localfailed7610
+GetRightmostEnemyOffset_localsuccess7611: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda rightmost_found_flag
 	; cmp #$00 ignored
-	bne GetRightmostEnemyOffset_localfailed7178
-	jmp GetRightmostEnemyOffset_ctb7096
-GetRightmostEnemyOffset_localfailed7178
-	jmp GetRightmostEnemyOffset_edblock7098
-GetRightmostEnemyOffset_ctb7096: ;Main true block ;keep 
+	bne GetRightmostEnemyOffset_localfailed7610
+	jmp GetRightmostEnemyOffset_ctb7528
+GetRightmostEnemyOffset_localfailed7610
+	jmp GetRightmostEnemyOffset_edblock7530
+GetRightmostEnemyOffset_ctb7528: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -3738,8 +4282,8 @@ GetRightmostEnemyOffset_ctb7096: ;Main true block ;keep
 	and #$30
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetRightmostEnemyOffset_eblock7183
-GetRightmostEnemyOffset_ctb7182: ;Main true block ;keep 
+	beq GetRightmostEnemyOffset_eblock7615
+GetRightmostEnemyOffset_ctb7614: ;Main true block ;keep 
 	
 ; // Column-based indexing: check right to left
 ; // bits 4,5 set (right column: enemies 4,5)
@@ -3761,8 +4305,8 @@ GetRightmostEnemyOffset_ctb7182: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta rightmost_found_flag
-	jmp GetRightmostEnemyOffset_edblock7184
-GetRightmostEnemyOffset_eblock7183
+	jmp GetRightmostEnemyOffset_edblock7616
+GetRightmostEnemyOffset_eblock7615
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -3771,8 +4315,8 @@ GetRightmostEnemyOffset_eblock7183
 	and #$c
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetRightmostEnemyOffset_eblock7227
-GetRightmostEnemyOffset_ctb7226: ;Main true block ;keep 
+	beq GetRightmostEnemyOffset_eblock7659
+GetRightmostEnemyOffset_ctb7658: ;Main true block ;keep 
 	
 ; // bits 2,3 set (middle column: enemies 2,3)
 	; 8 bit binop
@@ -3793,8 +4337,8 @@ GetRightmostEnemyOffset_ctb7226: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta rightmost_found_flag
-	jmp GetRightmostEnemyOffset_edblock7228
-GetRightmostEnemyOffset_eblock7227
+	jmp GetRightmostEnemyOffset_edblock7660
+GetRightmostEnemyOffset_eblock7659
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -3803,8 +4347,8 @@ GetRightmostEnemyOffset_eblock7227
 	and #$3
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetRightmostEnemyOffset_edblock7250
-GetRightmostEnemyOffset_ctb7248: ;Main true block ;keep 
+	beq GetRightmostEnemyOffset_edblock7682
+GetRightmostEnemyOffset_ctb7680: ;Main true block ;keep 
 	
 ; // bits 0,1 set (left column: enemies 0,1)
 	; Right is PURE NUMERIC : Is word =0
@@ -3820,41 +4364,41 @@ GetRightmostEnemyOffset_ctb7248: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta rightmost_found_flag
-GetRightmostEnemyOffset_edblock7250
-GetRightmostEnemyOffset_edblock7228
-GetRightmostEnemyOffset_edblock7184
+GetRightmostEnemyOffset_edblock7682
+GetRightmostEnemyOffset_edblock7660
+GetRightmostEnemyOffset_edblock7616
 	; Test Inc dec D
 	inc rightmost_row_index
-	jmp GetRightmostEnemyOffset_while7095
-GetRightmostEnemyOffset_edblock7098
-GetRightmostEnemyOffset_loopend7100
+	jmp GetRightmostEnemyOffset_while7527
+GetRightmostEnemyOffset_edblock7530
+GetRightmostEnemyOffset_loopend7532
 	; Binary clause Simplified: EQUALS
 	lda rightmost_found_flag
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne GetRightmostEnemyOffset_localfailed7263
-	jmp GetRightmostEnemyOffset_ctb7258
-GetRightmostEnemyOffset_localfailed7263: ;keep
+	bne GetRightmostEnemyOffset_localfailed7695
+	jmp GetRightmostEnemyOffset_ctb7690
+GetRightmostEnemyOffset_localfailed7695: ;keep
 	; ; logical OR, second chance
 	; Binary clause Simplified: EQUALS
 	clc
 	lda rightmost_block_column
 	; cmp #$00 ignored
-	bne GetRightmostEnemyOffset_eblock7259
-GetRightmostEnemyOffset_ctb7258: ;Main true block ;keep 
+	bne GetRightmostEnemyOffset_eblock7691
+GetRightmostEnemyOffset_ctb7690: ;Main true block ;keep 
 	
 ; // Exit if found or if we've checked column 0
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta rightmost_column_loop_done
-	jmp GetRightmostEnemyOffset_edblock7260
-GetRightmostEnemyOffset_eblock7259
+	jmp GetRightmostEnemyOffset_edblock7692
+GetRightmostEnemyOffset_eblock7691
 	; Test Inc dec D
 	dec rightmost_block_column
-GetRightmostEnemyOffset_edblock7260
-	jmp GetRightmostEnemyOffset_while6915
-GetRightmostEnemyOffset_edblock6918
-GetRightmostEnemyOffset_loopend6920
+GetRightmostEnemyOffset_edblock7692
+	jmp GetRightmostEnemyOffset_while7347
+GetRightmostEnemyOffset_edblock7350
+GetRightmostEnemyOffset_loopend7352
 	lda rightmost_result_offset
 	rts
 end_procedure_GetRightmostEnemyOffset
@@ -3870,7 +4414,7 @@ leftmost_enemies_byte	dc.b	0
 leftmost_found_flag	dc.b	0
 leftmost_result_offset	dc.b	0
 leftmost_column_loop_done	dc.b	0
-GetLeftmostEnemyOffset_block7266
+GetLeftmostEnemyOffset_block7698
 GetLeftmostEnemyOffset
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -3883,40 +4427,40 @@ GetLeftmostEnemyOffset
 ; // Scan from leftmost block column (0) to right (3)
 	; Calling storevariable on generic assign expression
 	sta leftmost_block_column
-GetLeftmostEnemyOffset_while7267
-GetLeftmostEnemyOffset_loopstart7271
+GetLeftmostEnemyOffset_while7699
+GetLeftmostEnemyOffset_loopstart7703
 	; Binary clause Simplified: EQUALS
 	clc
 	lda leftmost_column_loop_done
 	; cmp #$00 ignored
-	bne GetLeftmostEnemyOffset_localfailed7445
-	jmp GetLeftmostEnemyOffset_ctb7268
-GetLeftmostEnemyOffset_localfailed7445
-	jmp GetLeftmostEnemyOffset_edblock7270
-GetLeftmostEnemyOffset_ctb7268: ;Main true block ;keep 
+	bne GetLeftmostEnemyOffset_localfailed7877
+	jmp GetLeftmostEnemyOffset_ctb7700
+GetLeftmostEnemyOffset_localfailed7877
+	jmp GetLeftmostEnemyOffset_edblock7702
+GetLeftmostEnemyOffset_ctb7700: ;Main true block ;keep 
 	
 ; // Check all 3 rows for this block column
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta leftmost_row_index
-GetLeftmostEnemyOffset_while7447
-GetLeftmostEnemyOffset_loopstart7451
+GetLeftmostEnemyOffset_while7879
+GetLeftmostEnemyOffset_loopstart7883
 	; Binary clause Simplified: LESS
 	lda leftmost_row_index
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs GetLeftmostEnemyOffset_localfailed7530
-GetLeftmostEnemyOffset_localsuccess7531: ;keep
+	bcs GetLeftmostEnemyOffset_localfailed7962
+GetLeftmostEnemyOffset_localsuccess7963: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda leftmost_found_flag
 	; cmp #$00 ignored
-	bne GetLeftmostEnemyOffset_localfailed7530
-	jmp GetLeftmostEnemyOffset_ctb7448
-GetLeftmostEnemyOffset_localfailed7530
-	jmp GetLeftmostEnemyOffset_edblock7450
-GetLeftmostEnemyOffset_ctb7448: ;Main true block ;keep 
+	bne GetLeftmostEnemyOffset_localfailed7962
+	jmp GetLeftmostEnemyOffset_ctb7880
+GetLeftmostEnemyOffset_localfailed7962
+	jmp GetLeftmostEnemyOffset_edblock7882
+GetLeftmostEnemyOffset_ctb7880: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -3943,8 +4487,8 @@ GetLeftmostEnemyOffset_ctb7448: ;Main true block ;keep
 	and #$3
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetLeftmostEnemyOffset_eblock7535
-GetLeftmostEnemyOffset_ctb7534: ;Main true block ;keep 
+	beq GetLeftmostEnemyOffset_eblock7967
+GetLeftmostEnemyOffset_ctb7966: ;Main true block ;keep 
 	
 ; // Column-based indexing: check left to right
 ; // bits 0,1 set (left column: enemies 0,1)
@@ -3961,8 +4505,8 @@ GetLeftmostEnemyOffset_ctb7534: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta leftmost_found_flag
-	jmp GetLeftmostEnemyOffset_edblock7536
-GetLeftmostEnemyOffset_eblock7535
+	jmp GetLeftmostEnemyOffset_edblock7968
+GetLeftmostEnemyOffset_eblock7967
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -3971,8 +4515,8 @@ GetLeftmostEnemyOffset_eblock7535
 	and #$c
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetLeftmostEnemyOffset_eblock7579
-GetLeftmostEnemyOffset_ctb7578: ;Main true block ;keep 
+	beq GetLeftmostEnemyOffset_eblock8011
+GetLeftmostEnemyOffset_ctb8010: ;Main true block ;keep 
 	
 ; // bits 2,3 set (middle column: enemies 2,3)
 	; 8 bit binop
@@ -3993,8 +4537,8 @@ GetLeftmostEnemyOffset_ctb7578: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta leftmost_found_flag
-	jmp GetLeftmostEnemyOffset_edblock7580
-GetLeftmostEnemyOffset_eblock7579
+	jmp GetLeftmostEnemyOffset_edblock8012
+GetLeftmostEnemyOffset_eblock8011
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -4003,8 +4547,8 @@ GetLeftmostEnemyOffset_eblock7579
 	and #$30
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetLeftmostEnemyOffset_edblock7602
-GetLeftmostEnemyOffset_ctb7600: ;Main true block ;keep 
+	beq GetLeftmostEnemyOffset_edblock8034
+GetLeftmostEnemyOffset_ctb8032: ;Main true block ;keep 
 	
 ; // bits 4,5 set (right column: enemies 4,5)
 	; 8 bit binop
@@ -4025,41 +4569,41 @@ GetLeftmostEnemyOffset_ctb7600: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta leftmost_found_flag
-GetLeftmostEnemyOffset_edblock7602
-GetLeftmostEnemyOffset_edblock7580
-GetLeftmostEnemyOffset_edblock7536
+GetLeftmostEnemyOffset_edblock8034
+GetLeftmostEnemyOffset_edblock8012
+GetLeftmostEnemyOffset_edblock7968
 	; Test Inc dec D
 	inc leftmost_row_index
-	jmp GetLeftmostEnemyOffset_while7447
-GetLeftmostEnemyOffset_edblock7450
-GetLeftmostEnemyOffset_loopend7452
+	jmp GetLeftmostEnemyOffset_while7879
+GetLeftmostEnemyOffset_edblock7882
+GetLeftmostEnemyOffset_loopend7884
 	; Binary clause Simplified: EQUALS
 	lda leftmost_found_flag
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne GetLeftmostEnemyOffset_localfailed7615
-	jmp GetLeftmostEnemyOffset_ctb7610
-GetLeftmostEnemyOffset_localfailed7615: ;keep
+	bne GetLeftmostEnemyOffset_localfailed8047
+	jmp GetLeftmostEnemyOffset_ctb8042
+GetLeftmostEnemyOffset_localfailed8047: ;keep
 	; ; logical OR, second chance
 	; Binary clause Simplified: EQUALS
 	lda leftmost_block_column
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bne GetLeftmostEnemyOffset_eblock7611
-GetLeftmostEnemyOffset_ctb7610: ;Main true block ;keep 
+	bne GetLeftmostEnemyOffset_eblock8043
+GetLeftmostEnemyOffset_ctb8042: ;Main true block ;keep 
 	
 ; // Exit if found or if we've checked column 3
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta leftmost_column_loop_done
-	jmp GetLeftmostEnemyOffset_edblock7612
-GetLeftmostEnemyOffset_eblock7611
+	jmp GetLeftmostEnemyOffset_edblock8044
+GetLeftmostEnemyOffset_eblock8043
 	; Test Inc dec D
 	inc leftmost_block_column
-GetLeftmostEnemyOffset_edblock7612
-	jmp GetLeftmostEnemyOffset_while7267
-GetLeftmostEnemyOffset_edblock7270
-GetLeftmostEnemyOffset_loopend7272
+GetLeftmostEnemyOffset_edblock8044
+	jmp GetLeftmostEnemyOffset_while7699
+GetLeftmostEnemyOffset_edblock7702
+GetLeftmostEnemyOffset_loopend7704
 	lda leftmost_result_offset
 	rts
 end_procedure_GetLeftmostEnemyOffset
@@ -4072,21 +4616,21 @@ col	dc.b	0
 idx	dc.b	0
 has_flag	dc.b	0
 row	dc.b	0
-RowHasMonsters_block7618
+RowHasMonsters_block8050
 RowHasMonsters
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta has_flag
 	; Calling storevariable on generic assign expression
 	sta col
-RowHasMonsters_while7619
-RowHasMonsters_loopstart7623
+RowHasMonsters_while8051
+RowHasMonsters_loopstart8055
 	; Binary clause Simplified: LESS
 	lda col
 	; Compare with pure num / var optimization
 	cmp #$4;keep
-	bcs RowHasMonsters_edblock7622
-RowHasMonsters_ctb7620: ;Main true block ;keep 
+	bcs RowHasMonsters_edblock8054
+RowHasMonsters_ctb8052: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -4109,20 +4653,20 @@ RowHasMonsters_ctb7620: ;Main true block ;keep
 	ldx idx
 	lda block_enemies,x 
 	; cmp #$00 ignored
-	beq RowHasMonsters_edblock7636
-RowHasMonsters_ctb7634: ;Main true block ;keep 
+	beq RowHasMonsters_edblock8068
+RowHasMonsters_ctb8066: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta has_flag
 	lda #$4
 	; Calling storevariable on generic assign expression
 	sta col
-RowHasMonsters_edblock7636
+RowHasMonsters_edblock8068
 	; Test Inc dec D
 	inc col
-	jmp RowHasMonsters_while7619
-RowHasMonsters_edblock7622
-RowHasMonsters_loopend7624
+	jmp RowHasMonsters_while8051
+RowHasMonsters_edblock8054
+RowHasMonsters_loopend8056
 	lda has_flag
 	rts
 end_procedure_RowHasMonsters
@@ -4141,7 +4685,7 @@ gleby_row_offset	dc.b	0
 gleby_has_bottom_enemy	dc.b	0
 gleby_bottom_in_sprite	dc.b	0
 gleby_result	dc.b	0
-GetLowestEnemyBottomY_block7639
+GetLowestEnemyBottomY_block8071
 GetLowestEnemyBottomY
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -4153,42 +4697,42 @@ GetLowestEnemyBottomY
 	sta gleby_r
 	
 ; // at r=0 wraps to 255, exiting the while
-GetLowestEnemyBottomY_while7640
-GetLowestEnemyBottomY_loopstart7644
+GetLowestEnemyBottomY_while8072
+GetLowestEnemyBottomY_loopstart8076
 	; Optimization: replacing a <= N with a <= N-1
 	; Binary clause Simplified: LESS
 	lda gleby_r
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs GetLowestEnemyBottomY_edblock7643
-GetLowestEnemyBottomY_localsuccess7674: ;keep
+	bcs GetLowestEnemyBottomY_edblock8075
+GetLowestEnemyBottomY_localsuccess8106: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda gleby_found
 	; cmp #$00 ignored
-	bne GetLowestEnemyBottomY_edblock7643
-GetLowestEnemyBottomY_ctb7641: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_edblock8075
+GetLowestEnemyBottomY_ctb8073: ;Main true block ;keep 
 	
 ; // Scan from bottom row (2) upward; dec past 0 wraps to 255 which exits 'r <= 2'
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta gleby_b
-GetLowestEnemyBottomY_while7676
-GetLowestEnemyBottomY_loopstart7680
+GetLowestEnemyBottomY_while8108
+GetLowestEnemyBottomY_loopstart8112
 	; Binary clause Simplified: LESS
 	lda gleby_b
 	; Compare with pure num / var optimization
 	cmp #$4;keep
-	bcs GetLowestEnemyBottomY_edblock7679
-GetLowestEnemyBottomY_localsuccess7689: ;keep
+	bcs GetLowestEnemyBottomY_edblock8111
+GetLowestEnemyBottomY_localsuccess8121: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda gleby_found
 	; cmp #$00 ignored
-	bne GetLowestEnemyBottomY_edblock7679
-GetLowestEnemyBottomY_ctb7677: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_edblock8111
+GetLowestEnemyBottomY_ctb8109: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
@@ -4207,61 +4751,61 @@ GetLowestEnemyBottomY_ctb7677: ;Main true block ;keep
 	tax
 	lda block_enemies,x 
 	; cmp #$00 ignored
-	beq GetLowestEnemyBottomY_edblock7694
-GetLowestEnemyBottomY_ctb7692: ;Main true block ;keep 
+	beq GetLowestEnemyBottomY_edblock8126
+GetLowestEnemyBottomY_ctb8124: ;Main true block ;keep 
 	lda gleby_r
 	; Calling storevariable on generic assign expression
 	sta gleby_lowest_row
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta gleby_found
-GetLowestEnemyBottomY_edblock7694
+GetLowestEnemyBottomY_edblock8126
 	; Test Inc dec D
 	inc gleby_b
-	jmp GetLowestEnemyBottomY_while7676
-GetLowestEnemyBottomY_edblock7679
-GetLowestEnemyBottomY_loopend7681
+	jmp GetLowestEnemyBottomY_while8108
+GetLowestEnemyBottomY_edblock8111
+GetLowestEnemyBottomY_loopend8113
 	; Binary clause Simplified: EQUALS
 	clc
 	lda gleby_found
 	; cmp #$00 ignored
-	bne GetLowestEnemyBottomY_edblock7700
-GetLowestEnemyBottomY_ctb7698: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_edblock8132
+GetLowestEnemyBottomY_ctb8130: ;Main true block ;keep 
 	; Test Inc dec D
 	dec gleby_r
-GetLowestEnemyBottomY_edblock7700
-	jmp GetLowestEnemyBottomY_while7640
-GetLowestEnemyBottomY_edblock7643
-GetLowestEnemyBottomY_loopend7645
+GetLowestEnemyBottomY_edblock8132
+	jmp GetLowestEnemyBottomY_while8072
+GetLowestEnemyBottomY_edblock8075
+GetLowestEnemyBottomY_loopend8077
 	; Binary clause Simplified: EQUALS
 	clc
 	lda gleby_lowest_row
 	; cmp #$00 ignored
-	bne GetLowestEnemyBottomY_eblock7705
-GetLowestEnemyBottomY_ctb7704: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_eblock8137
+GetLowestEnemyBottomY_ctb8136: ;Main true block ;keep 
 	
 ; // Row Y offsets: row 0 = 0, row 1 = MONSTER_ROW_OFFSET, row 2 = MONSTER_ROW_OFFSET*2
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta gleby_row_offset
-	jmp GetLowestEnemyBottomY_edblock7706
-GetLowestEnemyBottomY_eblock7705
+	jmp GetLowestEnemyBottomY_edblock8138
+GetLowestEnemyBottomY_eblock8137
 	; Binary clause Simplified: EQUALS
 	lda gleby_lowest_row
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne GetLowestEnemyBottomY_eblock7721
-GetLowestEnemyBottomY_ctb7720: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_eblock8153
+GetLowestEnemyBottomY_ctb8152: ;Main true block ;keep 
 	lda #$1a
 	; Calling storevariable on generic assign expression
 	sta gleby_row_offset
-	jmp GetLowestEnemyBottomY_edblock7722
-GetLowestEnemyBottomY_eblock7721
+	jmp GetLowestEnemyBottomY_edblock8154
+GetLowestEnemyBottomY_eblock8153
 	lda #$34
 	; Calling storevariable on generic assign expression
 	sta gleby_row_offset
-GetLowestEnemyBottomY_edblock7722
-GetLowestEnemyBottomY_edblock7706
+GetLowestEnemyBottomY_edblock8154
+GetLowestEnemyBottomY_edblock8138
 	
 ; // Check whether any 'bottom' enemy (odd index; bits 1,3,5 = mask $2A) is alive in this row.
 ; // Bottom enemies occupy sprite pixel rows 13-20 (bottom pixel offset = 20).
@@ -4271,15 +4815,15 @@ GetLowestEnemyBottomY_edblock7706
 	sta gleby_has_bottom_enemy
 	; Calling storevariable on generic assign expression
 	sta gleby_b
-GetLowestEnemyBottomY_while7727
-GetLowestEnemyBottomY_loopstart7731
+GetLowestEnemyBottomY_while8159
+GetLowestEnemyBottomY_loopstart8163
 	; Optimization: replacing a <= N with a <= N-1
 	; Binary clause Simplified: LESS
 	lda gleby_b
 	; Compare with pure num / var optimization
 	cmp #$4;keep
-	bcs GetLowestEnemyBottomY_edblock7730
-GetLowestEnemyBottomY_ctb7728: ;Main true block ;keep 
+	bcs GetLowestEnemyBottomY_edblock8162
+GetLowestEnemyBottomY_ctb8160: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -4302,34 +4846,32 @@ GetLowestEnemyBottomY_ctb7728: ;Main true block ;keep
 	and #$2a
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetLowestEnemyBottomY_edblock7744
-GetLowestEnemyBottomY_ctb7742: ;Main true block ;keep 
+	beq GetLowestEnemyBottomY_edblock8176
+GetLowestEnemyBottomY_ctb8174: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta gleby_has_bottom_enemy
-GetLowestEnemyBottomY_edblock7744
+GetLowestEnemyBottomY_edblock8176
 	; Test Inc dec D
 	inc gleby_b
-	jmp GetLowestEnemyBottomY_while7727
-GetLowestEnemyBottomY_edblock7730
-GetLowestEnemyBottomY_loopend7732
+	jmp GetLowestEnemyBottomY_while8159
+GetLowestEnemyBottomY_edblock8162
+GetLowestEnemyBottomY_loopend8164
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda gleby_has_bottom_enemy
 	; cmp #$00 ignored
-	beq GetLowestEnemyBottomY_eblock7749
-GetLowestEnemyBottomY_ctb7748: ;Main true block ;keep 
+	beq GetLowestEnemyBottomY_eblock8181
+GetLowestEnemyBottomY_ctb8180: ;Main true block ;keep 
 	lda #$14
 	; Calling storevariable on generic assign expression
 	sta gleby_bottom_in_sprite
-	jmp GetLowestEnemyBottomY_edblock7750
-GetLowestEnemyBottomY_eblock7749
+	jmp GetLowestEnemyBottomY_edblock8182
+GetLowestEnemyBottomY_eblock8181
 	lda #$7
 	; Calling storevariable on generic assign expression
 	sta gleby_bottom_in_sprite
-GetLowestEnemyBottomY_edblock7750
-	; 8 bit binop
-	; Add/sub where right value is constant number
+GetLowestEnemyBottomY_edblock8182
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; 8 bit binop
@@ -4337,9 +4879,6 @@ GetLowestEnemyBottomY_edblock7750
 	lda monster_base_y
 	clc
 	adc gleby_row_offset
-	 ; end add / sub var with constant
-	clc
-	adc monster_vertical_adjustment
 	 ; end add / sub var with constant
 	clc
 	adc gleby_bottom_in_sprite
@@ -4352,12 +4891,10 @@ end_procedure_GetLowestEnemyBottomY
 	; ***********  Defining procedure : UpdateTick
 	;    Procedure type : User-defined procedure
 should_move_enemy	dc.b	0
-rightmost_offset	dc.b	0
-leftmost_offset	dc.b	0
 right_edge	dc.b	0
 left_edge	dc.b	0
 prev_direction	dc.b	0
-UpdateTick_block7755
+UpdateTick_block8187
 UpdateTick
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -4366,142 +4903,22 @@ UpdateTick
 	clc
 	lda enemyMoveCounter
 	; cmp #$00 ignored
-	beq UpdateTick_localfailed7848
-	jmp UpdateTick_ctb7757
-UpdateTick_localfailed7848
-	jmp UpdateTick_eblock7758
-UpdateTick_ctb7757: ;Main true block ;keep 
+	beq UpdateTick_eblock8190
+UpdateTick_ctb8189: ;Main true block ;keep 
 	; Test Inc dec D
 	dec enemyMoveCounter
-	
-; // Calculate actual enemy formation edges based on remaining enemies
-	jsr GetRightmostEnemyOffset
-	; Calling storevariable on generic assign expression
-	sta rightmost_offset
-	jsr GetLeftmostEnemyOffset
-	; Calling storevariable on generic assign expression
-	sta leftmost_offset
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda monster_base_x
-	clc
-	adc rightmost_offset
-	 ; end add / sub var with constant
-	clc
-	adc #$a
-	 ; end add / sub var with constant
-	; Calling storevariable on generic assign expression
-	sta right_edge
-	
-; // +10 for double-width enemy (5 sprite pixels × 2)
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda monster_base_x
-	clc
-	adc leftmost_offset
-	 ; end add / sub var with constant
-	; Calling storevariable on generic assign expression
-	sta left_edge
-	
-; // Boundaries set so all enemy configurations bounce at the same visual offset from each wall (36px).
-; // Left: bounce when leftmost enemy visual edge <= 36 (i.e. left_edge <= 36).
-; // Right: symmetric restriction, 12px inward from original 254 = 242.
-; // No byte overflow risk: right boundary caps monster_base_x low enough that left_edge sum stays < 255.
-	lda enemy_direction
-	; Calling storevariable on generic assign expression
-	sta prev_direction
-	; Binary clause Simplified: GREATEREQUAL
-	lda right_edge
-	; Compare with pure num / var optimization
-	cmp #$f2;keep
-	bcc UpdateTick_eblock7852
-UpdateTick_ctb7851: ;Main true block ;keep 
-	lda #$0
-	; Calling storevariable on generic assign expression
-	sta enemy_direction
-	jmp UpdateTick_edblock7853
-UpdateTick_eblock7852
-	; Binary clause Simplified: LESS
-	lda left_edge
-	; Compare with pure num / var optimization
-	cmp #$25;keep
-	bcs UpdateTick_edblock7867
-UpdateTick_ctb7865: ;Main true block ;keep 
-	lda #$1
-	; Calling storevariable on generic assign expression
-	sta enemy_direction
-UpdateTick_edblock7867
-UpdateTick_edblock7853
-	; Binary clause Simplified: NOTEQUALS
-	lda prev_direction
-	; Compare with pure num / var optimization
-	cmp enemy_direction;keep
-	beq UpdateTick_edblock7873
-UpdateTick_ctb7871: ;Main true block ;keep 
-	; Binary clause Simplified: NOTEQUALS
-	clc
-	lda #$1
-	; cmp #$00 ignored
-	beq UpdateTick_eblock7902
-UpdateTick_ctb7901: ;Main true block ;keep 
-	; Binary clause Simplified: LESS
-	jsr GetLowestEnemyBottomY
-UpdateTick_binary_clause_temp_var7920 = $54
-	sta UpdateTick_binary_clause_temp_var7920
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda player_sprite_y
-	sec
-	sbc #$d
-	 ; end add / sub var with constant
-	sec
-	sbc #$0
-	 ; end add / sub var with constant
-UpdateTick_binary_clause_temp_2_var7921 = $56
-	sta UpdateTick_binary_clause_temp_2_var7921
-	lda UpdateTick_binary_clause_temp_var7920
-	cmp UpdateTick_binary_clause_temp_2_var7921;keep
-	bcs UpdateTick_edblock7918
-UpdateTick_ctb7916: ;Main true block ;keep 
-	
-; // If direction changed, drop the formation by MONSTER_DROP_AMOUNT pixels
-; // ENABLE_DROP_FLOOR: only drop if the lowest enemy's bottom pixel, after the drop,
-; // would still be at least 1 pixel above the player's top pixel.
-; // Safe byte check: lowest_bottom_y < player_sprite_y - MONSTER_DROP_AMOUNT - 1
-; // Adjust this to tune where the drops stop
-	; Optimizer: a = a +/- b
-	; Load16bitvariable : monster_vertical_adjustment
-	lda monster_vertical_adjustment
-	clc
-	adc #$d
-	sta monster_vertical_adjustment
-UpdateTick_edblock7918
-	jmp UpdateTick_edblock7903
-UpdateTick_eblock7902
-	; Optimizer: a = a +/- b
-	; Load16bitvariable : monster_vertical_adjustment
-	lda monster_vertical_adjustment
-	clc
-	adc #$d
-	sta monster_vertical_adjustment
-UpdateTick_edblock7903
-UpdateTick_edblock7873
 	; Binary clause Simplified: EQUALS
 	lda enemyMoveCounter
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne UpdateTick_edblock7927
-UpdateTick_ctb7925: ;Main true block ;keep 
+	bne UpdateTick_edblock8210
+UpdateTick_ctb8208: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta should_move_enemy
-UpdateTick_edblock7927
-	jmp UpdateTick_edblock7759
-UpdateTick_eblock7758
+UpdateTick_edblock8210
+	jmp UpdateTick_edblock8191
+UpdateTick_eblock8190
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #$48
@@ -4519,7 +4936,6 @@ UpdateTick_eblock7758
 	sta monster_animation_frame
 	
 ; // Update sprite pointers for row 0 - rows 1 and 2 are updated in raster interrupt
-; // Each row uses different sprite blocks: row 0 (3-10), row 1 (11-18), row 2 (19-26)
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta enemyRow
@@ -4528,25 +4944,132 @@ UpdateTick_eblock7758
 	lda sequential_clear_counter
 	; Compare with pure num / var optimization
 	cmp #$48;keep
-	bcc UpdateTick_edblock7934
-UpdateTick_ctb7932: ;Main true block ;keep 
+	bcc UpdateTick_edblock8217
+UpdateTick_ctb8215: ;Main true block ;keep 
 	
-; // Row 0 uses sprites based on row parameter
 ; // Clear enemies based on ENEMIES_TO_CLEAR constant
 	jsr ClearEnemyAtCounter
 	; Test Inc dec D
 	dec sequential_clear_counter
-UpdateTick_edblock7934
+UpdateTick_edblock8217
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta should_move_enemy
-UpdateTick_edblock7759
+UpdateTick_edblock8191
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda should_move_enemy
 	; cmp #$00 ignored
-	beq UpdateTick_edblock7940
-UpdateTick_ctb7938: ;Main true block ;keep 
+	beq UpdateTick_localfailed8381
+	jmp UpdateTick_ctb8221
+UpdateTick_localfailed8381
+	jmp UpdateTick_edblock8223
+UpdateTick_ctb8221: ;Main true block ;keep 
+	
+; // Read cached edge offsets — updated in ClearMonster, so O(1) cost here
+; // every tick regardless of enemy count.
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda monster_base_x
+	clc
+	adc cached_rightmost_offset
+	 ; end add / sub var with constant
+	clc
+	adc #$a
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta right_edge
+	
+; // +10 for double-width enemy
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda monster_base_x
+	clc
+	adc cached_leftmost_offset
+	 ; end add / sub var with constant
+	; Calling storevariable on generic assign expression
+	sta left_edge
+	lda enemy_direction
+	; Calling storevariable on generic assign expression
+	sta prev_direction
+	; Binary clause Simplified: GREATEREQUAL
+	lda right_edge
+	; Compare with pure num / var optimization
+	cmp #$f2;keep
+	bcc UpdateTick_eblock8385
+UpdateTick_ctb8384: ;Main true block ;keep 
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta enemy_direction
+	jmp UpdateTick_edblock8386
+UpdateTick_eblock8385
+	; Binary clause Simplified: LESS
+	lda left_edge
+	; Compare with pure num / var optimization
+	cmp #$25;keep
+	bcs UpdateTick_edblock8400
+UpdateTick_ctb8398: ;Main true block ;keep 
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta enemy_direction
+UpdateTick_edblock8400
+UpdateTick_edblock8386
+	; Binary clause Simplified: NOTEQUALS
+	lda prev_direction
+	; Compare with pure num / var optimization
+	cmp enemy_direction;keep
+	beq UpdateTick_eblock8405
+UpdateTick_ctb8404: ;Main true block ;keep 
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	lda #$1
+	; cmp #$00 ignored
+	beq UpdateTick_eblock8476
+UpdateTick_ctb8475: ;Main true block ;keep 
+	; Binary clause Simplified: LESS
+	jsr GetLowestEnemyBottomY
+UpdateTick_binary_clause_temp_var8494 = $54
+	sta UpdateTick_binary_clause_temp_var8494
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda player_sprite_y
+	sec
+	sbc #$6
+	 ; end add / sub var with constant
+	sec
+	sbc #$0
+	 ; end add / sub var with constant
+UpdateTick_binary_clause_temp_2_var8495 = $56
+	sta UpdateTick_binary_clause_temp_2_var8495
+	lda UpdateTick_binary_clause_temp_var8494
+	cmp UpdateTick_binary_clause_temp_2_var8495;keep
+	bcs UpdateTick_edblock8492
+UpdateTick_ctb8490: ;Main true block ;keep 
+	
+; // If direction changed, drop instead of moving horizontally this tick.
+; // This keeps movement flow clean: one tick = one action (drop OR move, never both).
+	; Optimizer: a = a +/- b
+	; Load16bitvariable : monster_base_y
+	lda monster_base_y
+	clc
+	adc #$6
+	sta monster_base_y
+UpdateTick_edblock8492
+	jmp UpdateTick_edblock8477
+UpdateTick_eblock8476
+	; Optimizer: a = a +/- b
+	; Load16bitvariable : monster_base_y
+	lda monster_base_y
+	clc
+	adc #$6
+	sta monster_base_y
+UpdateTick_edblock8477
+	jmp UpdateTick_edblock8406
+UpdateTick_eblock8405
 	; Binary clause Simplified: LESS
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -4556,63 +5079,74 @@ UpdateTick_ctb7938: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs UpdateTick_eblock7985
-UpdateTick_ctb7984: ;Main true block ;keep 
+	bcs UpdateTick_eblock8501
+UpdateTick_ctb8500: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda enemy_direction
 	; cmp #$00 ignored
-	beq UpdateTick_eblock8008
-UpdateTick_ctb8007: ;Main true block ;keep 
+	beq UpdateTick_eblock8524
+UpdateTick_ctb8523: ;Main true block ;keep 
 	
-; // At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed
-; // At slower speeds, move 1 pixel
+; // No direction change: move horizontally.
+; // At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed.
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : monster_base_x
 	lda monster_base_x
 	clc
 	adc #$2
 	sta monster_base_x
-	jmp UpdateTick_edblock8009
-UpdateTick_eblock8008
+	jmp UpdateTick_edblock8525
+UpdateTick_eblock8524
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : monster_base_x
 	lda monster_base_x
 	sec
 	sbc #$2
 	sta monster_base_x
-UpdateTick_edblock8009
-	jmp UpdateTick_edblock7986
-UpdateTick_eblock7985
+UpdateTick_edblock8525
+	jmp UpdateTick_edblock8502
+UpdateTick_eblock8501
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda enemy_direction
 	; cmp #$00 ignored
-	beq UpdateTick_eblock8017
-UpdateTick_ctb8016: ;Main true block ;keep 
+	beq UpdateTick_eblock8533
+UpdateTick_ctb8532: ;Main true block ;keep 
 	; Test Inc dec D
 	inc monster_base_x
-	jmp UpdateTick_edblock8018
-UpdateTick_eblock8017
+	jmp UpdateTick_edblock8534
+UpdateTick_eblock8533
 	; Test Inc dec D
 	dec monster_base_x
-UpdateTick_edblock8018
-UpdateTick_edblock7986
-UpdateTick_edblock7940
+UpdateTick_edblock8534
+UpdateTick_edblock8502
+UpdateTick_edblock8406
+UpdateTick_edblock8223
 	rts
 end_procedure_UpdateTick
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : MakeMonsters
 	;    Procedure type : User-defined procedure
 monster_sprite_color	dc.b	$03
-MakeMonsters_block8023
+MakeMonsters_block8539
 MakeMonsters
-	lda #$52
+	
+; //monster_base_y := 82;
+	lda #$66
 	; Calling storevariable on generic assign expression
 	sta monster_base_y
 	lda #$12
 	; Calling storevariable on generic assign expression
 	sta monster_base_x
+	
+; // Sync cached edges with the formation state after pre-clearing.
+	jsr GetRightmostEnemyOffset
+	; Calling storevariable on generic assign expression
+	sta cached_rightmost_offset
+	jsr GetLeftmostEnemyOffset
+	; Calling storevariable on generic assign expression
+	sta cached_leftmost_offset
 	lda monster_sprite_color
 	; Calling storevariable on generic assign expression
 	sta $D027+$0
@@ -4634,68 +5168,68 @@ MakeMonsters
 	sta $d015
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit8024
+MakeMonsters_shiftbit8540
 	cpx #0
-	beq MakeMonsters_shiftbitdone8025
+	beq MakeMonsters_shiftbitdone8541
 	asl
 	dex
-	jmp MakeMonsters_shiftbit8024
-MakeMonsters_shiftbitdone8025
-MakeMonsters_bitmask_var8026 = $54
-	sta MakeMonsters_bitmask_var8026
+	jmp MakeMonsters_shiftbit8540
+MakeMonsters_shiftbitdone8541
+MakeMonsters_bitmask_var8542 = $54
+	sta MakeMonsters_bitmask_var8542
 	lda $d015
-	ora MakeMonsters_bitmask_var8026
+	ora MakeMonsters_bitmask_var8542
 	sta $d015
 	; Toggle bit with constant
 	ora #%100
 	sta $d015
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit8027
+MakeMonsters_shiftbit8543
 	cpx #0
-	beq MakeMonsters_shiftbitdone8028
+	beq MakeMonsters_shiftbitdone8544
 	asl
 	dex
-	jmp MakeMonsters_shiftbit8027
-MakeMonsters_shiftbitdone8028
-MakeMonsters_bitmask_var8029 = $54
-	sta MakeMonsters_bitmask_var8029
+	jmp MakeMonsters_shiftbit8543
+MakeMonsters_shiftbitdone8544
+MakeMonsters_bitmask_var8545 = $54
+	sta MakeMonsters_bitmask_var8545
 	lda $d015
-	ora MakeMonsters_bitmask_var8029
+	ora MakeMonsters_bitmask_var8545
 	sta $d015
 	; Toggle bit with constant
 	ora #%1000
 	sta $d015
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit8030
+MakeMonsters_shiftbit8546
 	cpx #0
-	beq MakeMonsters_shiftbitdone8031
+	beq MakeMonsters_shiftbitdone8547
 	asl
 	dex
-	jmp MakeMonsters_shiftbit8030
-MakeMonsters_shiftbitdone8031
-MakeMonsters_bitmask_var8032 = $54
-	sta MakeMonsters_bitmask_var8032
+	jmp MakeMonsters_shiftbit8546
+MakeMonsters_shiftbitdone8547
+MakeMonsters_bitmask_var8548 = $54
+	sta MakeMonsters_bitmask_var8548
 	lda $d015
-	ora MakeMonsters_bitmask_var8032
+	ora MakeMonsters_bitmask_var8548
 	sta $d015
 	; Toggle bit with constant
 	ora #%10000
 	sta $d015
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit8033
+MakeMonsters_shiftbit8549
 	cpx #0
-	beq MakeMonsters_shiftbitdone8034
+	beq MakeMonsters_shiftbitdone8550
 	asl
 	dex
-	jmp MakeMonsters_shiftbit8033
-MakeMonsters_shiftbitdone8034
-MakeMonsters_bitmask_var8035 = $54
-	sta MakeMonsters_bitmask_var8035
+	jmp MakeMonsters_shiftbit8549
+MakeMonsters_shiftbitdone8550
+MakeMonsters_bitmask_var8551 = $54
+	sta MakeMonsters_bitmask_var8551
 	lda $d015
-	ora MakeMonsters_bitmask_var8035
+	ora MakeMonsters_bitmask_var8551
 	sta $d015
 	
 ; // Enable sprite stretching for wider monsters
@@ -4705,68 +5239,68 @@ MakeMonsters_bitmask_var8035 = $54
 	sta $d01d
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit8036
+MakeMonsters_shiftbit8552
 	cpx #0
-	beq MakeMonsters_shiftbitdone8037
+	beq MakeMonsters_shiftbitdone8553
 	asl
 	dex
-	jmp MakeMonsters_shiftbit8036
-MakeMonsters_shiftbitdone8037
-MakeMonsters_bitmask_var8038 = $54
-	sta MakeMonsters_bitmask_var8038
+	jmp MakeMonsters_shiftbit8552
+MakeMonsters_shiftbitdone8553
+MakeMonsters_bitmask_var8554 = $54
+	sta MakeMonsters_bitmask_var8554
 	lda $d01d
-	ora MakeMonsters_bitmask_var8038
+	ora MakeMonsters_bitmask_var8554
 	sta $d01d
 	; Toggle bit with constant
 	ora #%100
 	sta $d01d
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit8039
+MakeMonsters_shiftbit8555
 	cpx #0
-	beq MakeMonsters_shiftbitdone8040
+	beq MakeMonsters_shiftbitdone8556
 	asl
 	dex
-	jmp MakeMonsters_shiftbit8039
-MakeMonsters_shiftbitdone8040
-MakeMonsters_bitmask_var8041 = $54
-	sta MakeMonsters_bitmask_var8041
+	jmp MakeMonsters_shiftbit8555
+MakeMonsters_shiftbitdone8556
+MakeMonsters_bitmask_var8557 = $54
+	sta MakeMonsters_bitmask_var8557
 	lda $d01d
-	ora MakeMonsters_bitmask_var8041
+	ora MakeMonsters_bitmask_var8557
 	sta $d01d
 	; Toggle bit with constant
 	ora #%1000
 	sta $d01d
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit8042
+MakeMonsters_shiftbit8558
 	cpx #0
-	beq MakeMonsters_shiftbitdone8043
+	beq MakeMonsters_shiftbitdone8559
 	asl
 	dex
-	jmp MakeMonsters_shiftbit8042
-MakeMonsters_shiftbitdone8043
-MakeMonsters_bitmask_var8044 = $54
-	sta MakeMonsters_bitmask_var8044
+	jmp MakeMonsters_shiftbit8558
+MakeMonsters_shiftbitdone8559
+MakeMonsters_bitmask_var8560 = $54
+	sta MakeMonsters_bitmask_var8560
 	lda $d01d
-	ora MakeMonsters_bitmask_var8044
+	ora MakeMonsters_bitmask_var8560
 	sta $d01d
 	; Toggle bit with constant
 	ora #%10000
 	sta $d01d
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit8045
+MakeMonsters_shiftbit8561
 	cpx #0
-	beq MakeMonsters_shiftbitdone8046
+	beq MakeMonsters_shiftbitdone8562
 	asl
 	dex
-	jmp MakeMonsters_shiftbit8045
-MakeMonsters_shiftbitdone8046
-MakeMonsters_bitmask_var8047 = $54
-	sta MakeMonsters_bitmask_var8047
+	jmp MakeMonsters_shiftbit8561
+MakeMonsters_shiftbitdone8562
+MakeMonsters_bitmask_var8563 = $54
+	sta MakeMonsters_bitmask_var8563
 	lda $d01d
-	ora MakeMonsters_bitmask_var8047
+	ora MakeMonsters_bitmask_var8563
 	sta $d01d
 	rts
 end_procedure_MakeMonsters
@@ -4777,6 +5311,8 @@ end_procedure_MakeMonsters
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : MainRasterChain
 	;    Procedure type : User-defined procedure
+mc_row_target	dc.b	0
+MainRasterChain_block8564
 MainRasterChain
 	; StartIRQ
 	pha
@@ -4786,15 +5322,113 @@ MainRasterChain
 	pha
 	asl $d019
 	; Binary clause Simplified: EQUALS
-	lda #$1
-	; Compare with pure num / var optimization
-	cmp #$1;keep
-	bne MainRasterChain_edblock8052
-MainRasterChain_ctb8050: ;Main true block ;keep 
+	clc
+	lda #$0
+	; cmp #$00 ignored
+	bne MainRasterChain_eblock8567
+MainRasterChain_ctb8566: ;Main true block ;keep 
+	
+; // main-context playback (disabled)		
+	jsr $1003
+	jmp MainRasterChain_edblock8568
+MainRasterChain_eblock8567
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta $d020
-MainRasterChain_edblock8052
+MainRasterChain_edblock8568
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta row
+	jsr RowHasMonsters
+	; cmp #$00 ignored
+	beq MainRasterChain_eblock8575
+MainRasterChain_ctb8574: ;Main true block ;keep 
+	
+; // Schedule the next raster IRQ FIRST, before any heavy game logic.
+; // Reason: CheckBulletCollision (on a kill frame) calls ClearMonster which runs two
+; // full edge scans, and UpdateTick may call GetLowestEnemyBottomY on a drop tick.
+; // If these run BEFORE the RasterIRQ call, the VIC-II latch can be written after the
+; // target scanline has already passed, causing Row1/2/3 to fire a full frame late.
+; // Clamping to [40, 222] guards against byte underflow (monster_base_y < 13) and
+; // byte overflow (40 + monster_base_y > 255), and keeps targets below player IRQ at 223.
+; //mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
+	; RasterIRQ : Hook a procedure
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda monster_base_y
+	sec
+	sbc #$21
+	 ; end add / sub var with constant
+	sta $d012
+	lda #<MainRasterRow1
+	sta $fffe
+	lda #>MainRasterRow1
+	sta $ffff
+	jmp MainRasterChain_edblock8576
+MainRasterChain_eblock8575
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta row
+	jsr RowHasMonsters
+	; cmp #$00 ignored
+	beq MainRasterChain_eblock8607
+MainRasterChain_ctb8606: ;Main true block ;keep 
+	
+; // There is room between 33 and 13 for tuning if needed.
+; //mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
+	; RasterIRQ : Hook a procedure
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda #$d
+	clc
+	adc monster_base_y
+	 ; end add / sub var with constant
+	sta $d012
+	lda #<MainRasterRow2
+	sta $fffe
+	lda #>MainRasterRow2
+	sta $ffff
+	jmp MainRasterChain_edblock8608
+MainRasterChain_eblock8607
+	; Binary clause Simplified: NOTEQUALS
+	clc
+	lda #$2
+	; Calling storevariable on generic assign expression
+	sta row
+	jsr RowHasMonsters
+	; cmp #$00 ignored
+	beq MainRasterChain_eblock8623
+MainRasterChain_ctb8622: ;Main true block ;keep 
+	
+; //mc_row_target := Helpers::Clamp(40 + monster_base_y, 40, 222);
+	; RasterIRQ : Hook a procedure
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda #$28
+	clc
+	adc monster_base_y
+	 ; end add / sub var with constant
+	sta $d012
+	lda #<MainRasterRow3
+	sta $fffe
+	lda #>MainRasterRow3
+	sta $ffff
+	jmp MainRasterChain_edblock8624
+MainRasterChain_eblock8623
+	; RasterIRQ : Hook a procedure
+	lda #$df
+	sta $d012
+	lda #<MainRasterPlayer
+	sta $fffe
+	lda #>MainRasterPlayer
+	sta $ffff
+MainRasterChain_edblock8624
+MainRasterChain_edblock8608
+MainRasterChain_edblock8576
 	jsr ShowBullet
 	
 ; //border_debug_color := peek(^$D01E, 0);
@@ -4804,6 +5438,12 @@ MainRasterChain_edblock8052
 ; //asm(" lda $D01E");
 ; //asm(" lda $D01F");
 	jsr UpdatePlayerBullet
+	
+; // Update enemy shot movement/animation
+	jsr UpdateEnemyShot
+	
+; // Show enemy shot sprite if active
+	jsr ShowEnemyShot
 	
 ; // Lightweight joystick update only
 ; //Memory::Fill(#joystickup,0,5);
@@ -4818,36 +5458,47 @@ MainRasterChain_edblock8052
 	lda joystickbutton
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterChain_eblock8057
-MainRasterChain_ctb8056: ;Main true block ;keep 
+	bne MainRasterChain_eblock8631
+MainRasterChain_ctb8630: ;Main true block ;keep 
 	
 ; //inc(border_debug_color);
 	; Binary clause Simplified: EQUALS
 	clc
 	lda previous_fire_state
 	; cmp #$00 ignored
-	bne MainRasterChain_edblock8072
-MainRasterChain_localsuccess8074: ;keep
+	bne MainRasterChain_edblock8646
+MainRasterChain_localsuccess8648: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda player_bullet_active
 	; cmp #$00 ignored
-	bne MainRasterChain_edblock8072
-MainRasterChain_ctb8070: ;Main true block ;keep 
+	bne MainRasterChain_edblock8646
+MainRasterChain_ctb8644: ;Main true block ;keep 
 	
-; // Check fire button with debounce (only fire on button press, not hold)	
+; // Check fire button with debounce (only fire on button press, not hold)    
 	jsr FirePlayerBullet
-MainRasterChain_edblock8072
+MainRasterChain_edblock8646
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta previous_fire_state
-	jmp MainRasterChain_edblock8058
-MainRasterChain_eblock8057
+	jmp MainRasterChain_edblock8632
+MainRasterChain_eblock8631
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta previous_fire_state
-MainRasterChain_edblock8058
+MainRasterChain_edblock8632
+	; Binary clause Simplified: EQUALS
+	lda player_bullet_active
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne MainRasterChain_edblock8654
+MainRasterChain_ctb8652: ;Main true block ;keep 
+	
+; // Check collisions AFTER all sprite rows have been displayed
+; // Only check when bullet is actively moving (not exploding)
+	jsr CheckBulletCollision
+MainRasterChain_edblock8654
 	;if player_bullet_active <> 0 then
 ; //	begin	
 ; //		
@@ -4859,96 +5510,62 @@ MainRasterChain_edblock8058
 ; //		Score := Score - 10000;
 ; //		Score2 += 1;
 ; //	end;
-; // Heavy game logic - done here at top of frame
+; // Heavy game logic - UpdateTick may change monster_base_y (drop), but the Row
+; // handlers always use the global monster_base_y when they fire, so sprites track
+; // the updated position correctly even though the latch was written with the old value.
 	jsr UpdateTick
 	; Binary clause Simplified: EQUALS
-	lda player_bullet_active
+	clc
+	lda es_shot_sequence_active
+	; cmp #$00 ignored
+	bne MainRasterChain_edblock8660
+MainRasterChain_ctb8658: ;Main true block ;keep 
+	; Binary clause Simplified: EQUALS
+	clc
+	; Load Byte array
+	; CAST type NADA
+	lda es_shot_active +$0 ; array with const index optimization 
+	; cmp #$00 ignored
+	bne MainRasterChain_edblock8756
+MainRasterChain_ctb8754: ;Main true block ;keep 
+	; Binary clause Simplified: EQUALS
+	clc
+	; Load Byte array
+	; CAST type NADA
+	lda es_shot_active +$1 ; array with const index optimization 
+	; cmp #$00 ignored
+	bne MainRasterChain_edblock8804
+MainRasterChain_ctb8802: ;Main true block ;keep 
+	; Binary clause Simplified: EQUALS
+	clc
+	; Load Byte array
+	; CAST type NADA
+	lda es_shot_active +$2 ; array with const index optimization 
+	; cmp #$00 ignored
+	bne MainRasterChain_edblock8828
+MainRasterChain_ctb8826: ;Main true block ;keep 
+	; Binary clause Simplified: GREATEREQUAL
+	; 8 bit binop
+	; Add/sub where right value is constant number
+	lda #$48
+	sec
+	sbc numberOfEnemies
+	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterChain_edblock8080
-MainRasterChain_ctb8078: ;Main true block ;keep 
+	bcc MainRasterChain_edblock8840
+MainRasterChain_ctb8838: ;Main true block ;keep 
 	
-; // Check collisions AFTER all sprite rows have been displayed
-; // Only check when bullet is actively moving (not exploding)
-	jsr CheckBulletCollision
-MainRasterChain_edblock8080
-	; Binary clause Simplified: NOTEQUALS
-	clc
-	lda #$0
+; // If no enemy shot active and enemies remain, start a staggered sequence
+	lda #$32
 	; Calling storevariable on generic assign expression
-	sta row
-	jsr RowHasMonsters
-	; cmp #$00 ignored
-	beq MainRasterChain_eblock8085
-MainRasterChain_ctb8084: ;Main true block ;keep 
-	; RasterIRQ : Hook a procedure
-	lda #$51
-	sta $d012
-	lda #<MainRasterRow1
-	sta $fffe
-	lda #>MainRasterRow1
-	sta $ffff
-	jmp MainRasterChain_edblock8086
-MainRasterChain_eblock8085
-	; Binary clause Simplified: NOTEQUALS
-	clc
-	lda #$1
-	; Calling storevariable on generic assign expression
-	sta row
-	jsr RowHasMonsters
-	; cmp #$00 ignored
-	beq MainRasterChain_eblock8117
-MainRasterChain_ctb8116: ;Main true block ;keep 
-	; RasterIRQ : Hook a procedure
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda #$60
-	clc
-	adc monster_vertical_adjustment
-	 ; end add / sub var with constant
-	sta $d012
-	lda #<MainRasterRow2
-	sta $fffe
-	lda #>MainRasterRow2
-	sta $ffff
-	jmp MainRasterChain_edblock8118
-MainRasterChain_eblock8117
-	; Binary clause Simplified: NOTEQUALS
-	clc
-	lda #$2
-	; Calling storevariable on generic assign expression
-	sta row
-	jsr RowHasMonsters
-	; cmp #$00 ignored
-	beq MainRasterChain_eblock8133
-MainRasterChain_ctb8132: ;Main true block ;keep 
-	; RasterIRQ : Hook a procedure
-	; 8 bit binop
-	; Add/sub where right value is constant number
-	lda #$7a
-	clc
-	adc monster_vertical_adjustment
-	 ; end add / sub var with constant
-	sta $d012
-	lda #<MainRasterRow3
-	sta $fffe
-	lda #>MainRasterRow3
-	sta $ffff
-	jmp MainRasterChain_edblock8134
-MainRasterChain_eblock8133
-	; RasterIRQ : Hook a procedure
-	lda #$e0
-	sta $d012
-	lda #<MainRasterPlayer
-	sta $fffe
-	lda #>MainRasterPlayer
-	sta $ffff
-MainRasterChain_edblock8134
-MainRasterChain_edblock8118
-MainRasterChain_edblock8086
-	
-; // Play music here - called each frame from raster IRQ to advance SID playback
-; //call(sidfile_1_play);
+	sta centerX
+	jsr StartEnemyShotSequence
+MainRasterChain_edblock8840
+MainRasterChain_edblock8828
+MainRasterChain_edblock8804
+MainRasterChain_edblock8756
+MainRasterChain_edblock8660
 	; CloseIRQ
 	pla
 	tay
@@ -4970,16 +5587,6 @@ MainRasterRow1
 	tya
 	pha
 	asl $d019
-	; Binary clause Simplified: EQUALS
-	lda #$1
-	; Compare with pure num / var optimization
-	cmp #$1;keep
-	bne MainRasterRow1_edblock8143
-MainRasterRow1_ctb8141: ;Main true block ;keep 
-	lda #$2
-	; Calling storevariable on generic assign expression
-	sta $d020
-MainRasterRow1_edblock8143
 	
 ; // Prepare sprites for row 1
 	; Binary clause Simplified: NOTEQUALS
@@ -4989,8 +5596,8 @@ MainRasterRow1_edblock8143
 	sta row
 	jsr RowHasMonsters
 	; cmp #$00 ignored
-	beq MainRasterRow1_edblock8149
-MainRasterRow1_ctb8147: ;Main true block ;keep 
+	beq MainRasterRow1_edblock8847
+MainRasterRow1_ctb8845: ;Main true block ;keep 
 	
 ; // Update first row of monsters only if there are monsters in that row
 	lda #$0
@@ -5001,7 +5608,7 @@ MainRasterRow1_ctb8147: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta enemyRow
 	jsr AnimateMonsters
-MainRasterRow1_edblock8149
+MainRasterRow1_edblock8847
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda #$1
@@ -5009,24 +5616,24 @@ MainRasterRow1_edblock8149
 	sta row
 	jsr RowHasMonsters
 	; cmp #$00 ignored
-	beq MainRasterRow1_eblock8154
-MainRasterRow1_ctb8153: ;Main true block ;keep 
+	beq MainRasterRow1_eblock8852
+MainRasterRow1_ctb8851: ;Main true block ;keep 
 	
 ; // Choose next raster handler based on which subsequent rows still have monsters
 	; RasterIRQ : Hook a procedure
 	; 8 bit binop
 	; Add/sub where right value is constant number
-	lda #$60
+	lda #$d
 	clc
-	adc monster_vertical_adjustment
+	adc monster_base_y
 	 ; end add / sub var with constant
 	sta $d012
 	lda #<MainRasterRow2
 	sta $fffe
 	lda #>MainRasterRow2
 	sta $ffff
-	jmp MainRasterRow1_edblock8155
-MainRasterRow1_eblock8154
+	jmp MainRasterRow1_edblock8853
+MainRasterRow1_eblock8852
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda #$2
@@ -5034,31 +5641,41 @@ MainRasterRow1_eblock8154
 	sta row
 	jsr RowHasMonsters
 	; cmp #$00 ignored
-	beq MainRasterRow1_eblock8170
-MainRasterRow1_ctb8169: ;Main true block ;keep 
+	beq MainRasterRow1_eblock8868
+MainRasterRow1_ctb8867: ;Main true block ;keep 
 	; RasterIRQ : Hook a procedure
 	; 8 bit binop
 	; Add/sub where right value is constant number
-	lda #$7a
+	lda #$28
 	clc
-	adc monster_vertical_adjustment
+	adc monster_base_y
 	 ; end add / sub var with constant
 	sta $d012
 	lda #<MainRasterRow3
 	sta $fffe
 	lda #>MainRasterRow3
 	sta $ffff
-	jmp MainRasterRow1_edblock8171
-MainRasterRow1_eblock8170
+	jmp MainRasterRow1_edblock8869
+MainRasterRow1_eblock8868
 	; RasterIRQ : Hook a procedure
-	lda #$e0
+	lda #$df
 	sta $d012
 	lda #<MainRasterPlayer
 	sta $fffe
 	lda #>MainRasterPlayer
 	sta $ffff
-MainRasterRow1_edblock8171
-MainRasterRow1_edblock8155
+MainRasterRow1_edblock8869
+MainRasterRow1_edblock8853
+	; Binary clause Simplified: EQUALS
+	lda #$0
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne MainRasterRow1_edblock8877
+MainRasterRow1_ctb8875: ;Main true block ;keep 
+	lda #$2
+	; Calling storevariable on generic assign expression
+	sta $d020
+MainRasterRow1_edblock8877
 	; CloseIRQ
 	pla
 	tay
@@ -5078,16 +5695,6 @@ MainRasterRow2
 	tya
 	pha
 	asl $d019
-	; Binary clause Simplified: EQUALS
-	lda #$1
-	; Compare with pure num / var optimization
-	cmp #$1;keep
-	bne MainRasterRow2_edblock8180
-MainRasterRow2_ctb8178: ;Main true block ;keep 
-	lda #$6
-	; Calling storevariable on generic assign expression
-	sta $d020
-MainRasterRow2_edblock8180
 	
 ; // Prepare sprites for row 2
 	; Binary clause Simplified: NOTEQUALS
@@ -5097,8 +5704,8 @@ MainRasterRow2_edblock8180
 	sta row
 	jsr RowHasMonsters
 	; cmp #$00 ignored
-	beq MainRasterRow2_edblock8186
-MainRasterRow2_ctb8184: ;Main true block ;keep 
+	beq MainRasterRow2_edblock8884
+MainRasterRow2_ctb8882: ;Main true block ;keep 
 	
 ; //ShowBullet();
 ; //border_debug_color := peek(^$D01E, 0);
@@ -5118,7 +5725,7 @@ MainRasterRow2_ctb8184: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta enemyRow
 	jsr AnimateMonsters
-MainRasterRow2_edblock8186
+MainRasterRow2_edblock8884
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda #$2
@@ -5126,32 +5733,42 @@ MainRasterRow2_edblock8186
 	sta row
 	jsr RowHasMonsters
 	; cmp #$00 ignored
-	beq MainRasterRow2_eblock8191
-MainRasterRow2_ctb8190: ;Main true block ;keep 
+	beq MainRasterRow2_eblock8889
+MainRasterRow2_ctb8888: ;Main true block ;keep 
 	
 ; // If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	; RasterIRQ : Hook a procedure
 	; 8 bit binop
 	; Add/sub where right value is constant number
-	lda #$7a
+	lda #$28
 	clc
-	adc monster_vertical_adjustment
+	adc monster_base_y
 	 ; end add / sub var with constant
 	sta $d012
 	lda #<MainRasterRow3
 	sta $fffe
 	lda #>MainRasterRow3
 	sta $ffff
-	jmp MainRasterRow2_edblock8192
-MainRasterRow2_eblock8191
+	jmp MainRasterRow2_edblock8890
+MainRasterRow2_eblock8889
 	; RasterIRQ : Hook a procedure
-	lda #$e0
+	lda #$df
 	sta $d012
 	lda #<MainRasterPlayer
 	sta $fffe
 	lda #>MainRasterPlayer
 	sta $ffff
-MainRasterRow2_edblock8192
+MainRasterRow2_edblock8890
+	; Binary clause Simplified: EQUALS
+	lda #$0
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne MainRasterRow2_edblock8898
+MainRasterRow2_ctb8896: ;Main true block ;keep 
+	lda #$6
+	; Calling storevariable on generic assign expression
+	sta $d020
+MainRasterRow2_edblock8898
 	; CloseIRQ
 	pla
 	tay
@@ -5164,19 +5781,8 @@ end_procedure_MainRasterRow2
 	; ***********  Defining procedure : MainRasterRow3
 	;    Procedure type : User-defined procedure
 MainRasterRow3
-	; Binary clause Simplified: EQUALS
-	lda #$1
-	; Compare with pure num / var optimization
-	cmp #$1;keep
-	bne MainRasterRow3_edblock8201
-MainRasterRow3_ctb8199: ;Main true block ;keep 
 	
 ; //BorderDebug();
-	lda #$5
-	; Calling storevariable on generic assign expression
-	sta $d020
-MainRasterRow3_edblock8201
-	
 ; //ShowBullet();
 	; StartIRQ
 	pha
@@ -5194,8 +5800,8 @@ MainRasterRow3_edblock8201
 	sta row
 	jsr RowHasMonsters
 	; cmp #$00 ignored
-	beq MainRasterRow3_edblock8207
-MainRasterRow3_ctb8205: ;Main true block ;keep 
+	beq MainRasterRow3_edblock8905
+MainRasterRow3_ctb8903: ;Main true block ;keep 
 	;if player_bullet_active <> 0 then
 ; //	begin
 ; //		
@@ -5210,16 +5816,26 @@ MainRasterRow3_ctb8205: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta enemyRow
 	jsr AnimateMonsters
-MainRasterRow3_edblock8207
+MainRasterRow3_edblock8905
 	
-; //RasterIRQ(MainRasterJoystick(), 155+monster_vertical_adjustment, @useKernal);
+; //RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
 	; RasterIRQ : Hook a procedure
-	lda #$e0
+	lda #$df
 	sta $d012
 	lda #<MainRasterPlayer
 	sta $fffe
 	lda #>MainRasterPlayer
 	sta $ffff
+	; Binary clause Simplified: EQUALS
+	lda #$0
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne MainRasterRow3_edblock8911
+MainRasterRow3_ctb8909: ;Main true block ;keep 
+	lda #$5
+	; Calling storevariable on generic assign expression
+	sta $d020
+MainRasterRow3_edblock8911
 	; CloseIRQ
 	pla
 	tay
@@ -5234,15 +5850,15 @@ end_procedure_MainRasterRow3
 MainRasterPlayer
 	jsr UpdateSprite
 	; Binary clause Simplified: EQUALS
-	lda #$1
+	lda #$0
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterPlayer_edblock8214
-MainRasterPlayer_ctb8212: ;Main true block ;keep 
+	bne MainRasterPlayer_edblock8918
+MainRasterPlayer_ctb8916: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta $d020
-MainRasterPlayer_edblock8214
+MainRasterPlayer_edblock8918
 	; StartIRQ
 	pha
 	txa
@@ -5270,11 +5886,11 @@ MainRasterPlayer_edblock8214
 	lda player_sprite_x
 	ldx #0
 	sta $D000,x
-MainRasterPlayer_spritepos8217
+MainRasterPlayer_spritepos8921
 	lda $D010
 	and #%11111110
 	sta $D010
-MainRasterPlayer_spriteposcontinue8218
+MainRasterPlayer_spriteposcontinue8922
 	inx
 	txa
 	tay
@@ -5284,28 +5900,7 @@ MainRasterPlayer_spriteposcontinue8218
 ; // Player position
 ; //togglebit(sprite_bitmask, useSprite, 1);  
 ; // Ensure sprite is enabled for player
-	; RasterIRQ : Hook a procedure
-	; Integer constant assigning
-	; Load16bitvariable : #$107
-	lda #$07
-	sta $d012
-	lda #<MainRasterStarfield
-	sta $fffe
-	lda #>MainRasterStarfield
-	sta $ffff
-	; CloseIRQ
-	pla
-	tay
-	pla
-	tax
-	pla
-	rti
-end_procedure_MainRasterPlayer
-	; NodeProcedureDecl -1
-	; ***********  Defining procedure : MainRasterStarfield
-	;    Procedure type : User-defined procedure
-MainRasterStarfield
-	
+; //RasterIRQ(MainRasterStarfield(),253,@useKernal);
 ; //border_debug_color := peek($D01E, 0);
 ; //SCREEN_BG_COL := border_debug_color;
 ; //DisplayScore();
@@ -5323,8 +5918,14 @@ MainRasterStarfield
 	sta $fffe
 	lda #>MainRasterChain
 	sta $ffff
+	; CloseIRQ
+	pla
+	tay
+	pla
+	tax
+	pla
 	rti
-end_procedure_MainRasterStarfield
+end_procedure_MainRasterPlayer
 block1
 main_block_begin_
 	
@@ -5419,35 +6020,35 @@ main_block_begin_
 main_block_end_
 	; End of program
 	; Ending memory block at $5810
-DisplayText_stringassignstr6771		dc.b	" "
+DisplayText_stringassignstr7203		dc.b	" "
 	dc.b	0
-DisplayText_stringassignstr6773		dc.b	"  SCORE(1)"
+DisplayText_stringassignstr7205		dc.b	"  SCORE(1)"
 	dc.b	0
-DisplayText_stringassignstr6775		dc.b	"  HI-SCORE"
+DisplayText_stringassignstr7207		dc.b	"  HI-SCORE"
 	dc.b	0
-DisplayText_stringassignstr6777		dc.b	"      1740"
+DisplayText_stringassignstr7209		dc.b	"      1740"
 	dc.b	0
-DisplayText_stringassignstr6779		dc.b	"  SCORE(2)"
+DisplayText_stringassignstr7211		dc.b	"  SCORE(2)"
 	dc.b	0
-DisplayText_stringassignstr6781		dc.b	"      1740"
+DisplayText_stringassignstr7213		dc.b	"      1740"
 	dc.b	0
-DisplayText_stringassignstr6783		dc.b	"lmn"
+DisplayText_stringassignstr7215		dc.b	"lmn"
 	dc.b	0
-DisplayText_stringassignstr6785		dc.b	"opq"
+DisplayText_stringassignstr7217		dc.b	"opq"
 	dc.b	0
-DisplayText_stringassignstr6787		dc.b	"rst"
+DisplayText_stringassignstr7219		dc.b	"rst"
 	dc.b	0
-DisplayText_stringassignstr6789		dc.b	"uvw"
+DisplayText_stringassignstr7221		dc.b	"uvw"
 	dc.b	0
-DisplayText_stringassignstr6791		dc.b	"xyz"
+DisplayText_stringassignstr7223		dc.b	"xyz"
 	dc.b	0
-DisplayText_stringassignstr6793		dc.b	"!#¤"
+DisplayText_stringassignstr7225		dc.b	"!#¤"
 	dc.b	0
-DisplayText_stringassignstr6795		dc.b	"¤%&"
+DisplayText_stringassignstr7227		dc.b	"¤%&"
 	dc.b	0
-DisplayText_stringassignstr6797		dc.b	"/+*"
+DisplayText_stringassignstr7229		dc.b	"/+*"
 	dc.b	0
-DisplayText_stringassignstr6799		dc.b	"ooooooooooooooooooooooooooooo"
+DisplayText_stringassignstr7231		dc.b	"ooooooooooooooooooooooooooooo"
 	dc.b	0
 EndBlock5810:
 

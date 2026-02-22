@@ -163,7 +163,7 @@ var
 	const ES_SHOT_SPRITE3:byte = 7;
 	es_shot_sprite_num : array[3] of byte = (6, 5, 7); // matches SPRITE1/2/3 order
 
-	const ES_SHOT_ANIM_START:byte = 5; // image indices 5..8
+	const ES_SHOT_ANIM_START:byte = 13; // image indices 5..8
 	const ES_SHOT_ANIM_FRAMES:byte = 4;
 	const ES_SHOT_MOVE_FRAMES:byte = 3;   // every Nth frame an extra pixel is added to movement
 	const ES_SHOT_ANIM_HOLD_FRAMES:byte = 3; // frames each animation image is shown before advancing
