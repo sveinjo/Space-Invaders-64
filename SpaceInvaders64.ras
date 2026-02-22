@@ -51,6 +51,18 @@ var
 	
 	const MONSTER_START_Y : byte = 102 ; // Initial monster base Y (was 71 base + 41 adjustment)
 
+	// UFO constants
+	const UFO_HW_SPRITE : byte = 1;   // Hardware sprite index — shared with monsterSprite1 via raster mux
+	const UFO_SPRITE_IMG : byte = 16; // Sprite image index in the sprite binary
+	const UFO_Y : byte = 44;          // Fixed Y near top of screen (must be < monster_base_y - 33)
+	const UFO_X_MIN : byte = 24;      // Left edge of 29-char (232-pixel) play field
+	const UFO_X_MAX : byte = 230;     // Right edge — sprite body (+24 px) lands at ~254, still in byte range
+
+	// UFO state
+	ufo_x : byte = UFO_X_MIN;           // Current X position
+	ufo_direction : byte = 1;           // 1 = moving right, 0 = moving left
+	ufo_move_skip_counter : byte = 0;   // Counts 0-2; move is skipped when the counter resets (every 3rd frame)
+
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
 	//pos_x : byte = PLAYER_MIN_X;
@@ -189,6 +201,49 @@ var
 	//Procedure DisplayScore();
 	//Procedure DebugBorder();
 
+
+// ---------------------------------------------------------------------------
+// UFO procedures — sprite 2 is set here (top of frame, raster 0 context)
+// and later repurposed by MainRasterRow1/2/3 for enemy sprites.
+// ---------------------------------------------------------------------------
+
+procedure ShowUFO();
+begin
+	SetSpriteLoc(UFO_HW_SPRITE, @spriteLoc/64 + UFO_SPRITE_IMG, useBank);
+	SpritePos(ufo_x, UFO_Y, UFO_HW_SPRITE);
+	togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 0);
+	
+end;
+
+procedure UpdateUFO();
+begin
+	// Advance skip counter; every 3rd frame the move is skipped.
+	ufo_move_skip_counter := ufo_move_skip_counter + 1;
+	if ufo_move_skip_counter >= 3 then
+	begin
+		ufo_move_skip_counter := 0;
+		// Skip movement this frame (counter rolled over).
+	end
+	else
+	begin
+		if ufo_direction <> 0 then
+		begin
+			// Moving right — bounce at right edge
+			if ufo_x >= UFO_X_MAX then
+				ufo_direction := 0
+			else
+				inc(ufo_x);
+		end
+		else
+		begin
+			// Moving left — bounce at left edge
+			if ufo_x <= UFO_X_MIN then
+				ufo_direction := 1
+			else
+				dec(ufo_x);
+		end;
+	end;
+end;
 
 procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 var
@@ -377,8 +432,8 @@ end;
 procedure MakeSprites();
 begin	
 	// Set common sprite multicolor registers
-	sprite_multicolor_reg1:=green;
-	sprite_multicolor_reg2:=white;
+	//sprite_multicolor_reg1:=green;
+	//sprite_multicolor_reg2:=white;
 	// Set sprite "0" individual color value 
 	sprite_color[useSprite]:=light_blue;
 	// Turn on sprite 0 (or @useSprite)
@@ -390,6 +445,10 @@ begin
 	togglebit(sprite_bitmask,ES_SHOT_SPRITE1,1);
 	togglebit(sprite_bitmask,ES_SHOT_SPRITE2,1);
 	togglebit(sprite_bitmask,ES_SHOT_SPRITE3,1);
+	// UFO uses hardware sprite 2 (shared with monsterSprite2 via raster mux).
+	// The sprite is already enabled by MakeMonsters via monsterSprite2, but set
+	// its color here so it is distinct at the top of the screen.
+	//sprite_color[UFO_HW_SPRITE] := light_red;
 end;
 
 
@@ -1225,6 +1284,12 @@ begin
 	else 
 		SCREEN_BG_COL := BLACK;
 
+	// Position and animate the UFO BEFORE scheduling Row1, so sprite 2
+	// registers hold the UFO values while the VIC-II scans through UFO_Y.
+	// Row1/2/3 interrupts will repurpose sprite 2 for enemy blocks later.
+	ShowUFO();
+	UpdateUFO();
+
 	// Schedule the next raster IRQ FIRST, before any heavy game logic.
 	// Reason: CheckBulletCollision (on a kill frame) calls ClearMonster which runs two
 	// full edge scans, and UpdateTick may call GetLowestEnemyBottomY on a drop tick.
@@ -1235,7 +1300,7 @@ begin
 	if RowHasMonsters(0) <> 0 then
 	begin
 		//mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
-		RasterIRQ(MainRasterRow1(), monster_base_y - 33, @useKernal); // There is room between 33 and 13 for tuning if needed.
+		RasterIRQ(MainRasterRow1(), monster_base_y - 23, @useKernal); // There is room between 33 and 13 for tuning if needed.
 	end
 	else if RowHasMonsters(1) <> 0 then
 	begin
@@ -1335,7 +1400,8 @@ end;
 interrupt MainRasterRow1();
 begin	
 
-	StartIRQ(@useKernal);		
+	StartIRQ(@useKernal);	
+	togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 1);	
 	// Update first row of monsters only if there are monsters in that row
 	if RowHasMonsters(0) <> 0 then
 	begin
