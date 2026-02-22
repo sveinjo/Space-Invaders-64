@@ -1376,7 +1376,13 @@ begin
 	// handlers always use the global monster_base_y when they fire, so sprites track
 	// the updated position correctly even though the latch was written with the old value.
 	UpdateTick();
-	
+
+	// Re-assert the UFO sprite pointer after UpdateTick, because UpdateTick calls
+	// AnimateMonsters(0) on enemy-move frames, which overwrites the monsterSprite1
+	// (= UFO_HW_SPRITE) image pointer with the enemy animation frame. Without this,
+	// the VIC-II would read the enemy image instead of the UFO when it scans Y=UFO_Y.
+	ShowUFO();
+
 	// If no enemy shot active and enemies remain, start a staggered sequence
 	if es_shot_sequence_active = 0 then
 	begin
