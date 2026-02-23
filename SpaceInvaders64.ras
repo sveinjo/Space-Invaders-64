@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 1;
+	const DEBUG_ENABLE : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -62,6 +62,20 @@ var
 	ufo_x : byte = UFO_X_MIN;           // Current X position
 	ufo_direction : byte = 1;           // 1 = moving right, 0 = moving left
 	ufo_move_skip_counter : byte = 0;   // Counts 0-2; move is skipped when the counter resets (every 3rd frame)
+
+	// UFO bullets (3 staggered bullets fired in sequence)
+	ufo_bullet_active : array[3] of byte = (0, 0, 0);       // 0=inactive, 1=moving, 2=exploding
+	ufo_bullet_x : array[3] of byte = (0, 0, 0);           // Fixed X position (set when fired)
+	ufo_bullet_y : array[3] of byte = (0, 0, 0);           // Current Y position
+	ufo_bullet_anim_index : array[3] of byte = (0, 0, 0);  // Current animation frame (0-3)
+	ufo_bullet_move_tick : array[3] of byte = (0, 0, 0);   // Accumulator for movement speed
+	ufo_bullet_anim_tick : array[3] of byte = (0, 0, 0);   // Accumulator for animation speed
+	ufo_bullet_explode_counter : array[3] of byte = (0, 0, 0); // Frames remaining in explosion
+	ufo_bullet_sprite : array[3] of byte = (6, 5, 7);      // Hardware sprite indices
+	ufo_bullet_anim_start : array[3] of byte = (13, 9, 5); // Animation frame start offsets
+
+	ufo_bullet_stagger_counter : byte = 0;  // Countdown to fire next bullet
+	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
 
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
@@ -179,6 +193,7 @@ var
 	const ES_SHOT_ANIM_HOLD_FRAMES:byte = 3; // frames each animation image is shown before advancing
 	const ES_SHOT_EXPLODE_DURATION:byte = 10; // frames enemy-shot explosion stays on screen
 	const ES_SHOT_STAGGER_FRAMES:byte = 50; // ~1 second at 50Hz
+	const UFO_BULLET_STAGGER_FRAMES:byte = 50; // frames between UFO bullet fires
 	interrupt MainRasterRow2();
 	interrupt MainRasterRow3();
 	interrupt MainRasterJoystick();
@@ -240,6 +255,99 @@ begin
 			else
 				dec(ufo_x);
 		end;
+	end;
+end;
+
+procedure FireUFOBullet(bullet_index: byte);
+begin
+	ufo_bullet_active[bullet_index] := 1;
+	ufo_bullet_x[bullet_index] := ufo_x;    // Fire from current UFO position
+	ufo_bullet_y[bullet_index] := UFO_Y + 8; // Start just below UFO
+	ufo_bullet_anim_index[bullet_index] := 0;
+	ufo_bullet_move_tick[bullet_index] := 0;
+	ufo_bullet_anim_tick[bullet_index] := 0;
+end;
+
+procedure ShowUFOBullet();
+var
+	sub_i : byte;
+	ub_sprite_index : byte;
+	ub_sprite : byte;
+begin
+	sub_i := 0;
+	while sub_i <= 2 do
+	begin
+		if ufo_bullet_active[sub_i] <> 0 then
+		begin
+			ub_sprite := ufo_bullet_sprite[sub_i];
+			if ufo_bullet_active[sub_i] = 1 then
+				ub_sprite_index := ufo_bullet_anim_start[sub_i] + ufo_bullet_anim_index[sub_i]
+			else
+				ub_sprite_index := 4;  // Explosion frame
+
+			SetSpriteLoc(ub_sprite, @spriteLoc/64 + ub_sprite_index - 1, useBank);
+			SpritePos(ufo_bullet_x[sub_i], ufo_bullet_y[sub_i], ub_sprite);
+		end;
+		inc(sub_i);
+	end;
+end;
+
+procedure UpdateUFOBullet();
+var
+	ub_i : byte;
+	ub_move_fired : byte;
+	ub_anim_fired : byte;
+begin
+	ub_i := 0;
+	while ub_i <= 2 do
+	begin
+		if ufo_bullet_active[ub_i] <> 0 then
+		begin
+			// Movement tick: fires every ES_SHOT_MOVE_FRAMES frames (3)
+			ub_move_fired := 0;
+			inc(ufo_bullet_move_tick[ub_i]);
+			if ufo_bullet_move_tick[ub_i] >= ES_SHOT_MOVE_FRAMES then
+			begin
+				ufo_bullet_move_tick[ub_i] := 0;
+				ub_move_fired := 1;
+			end;
+
+			// Animation tick: fires every ES_SHOT_ANIM_HOLD_FRAMES frames (3)
+			ub_anim_fired := 0;
+			inc(ufo_bullet_anim_tick[ub_i]);
+			if ufo_bullet_anim_tick[ub_i] >= ES_SHOT_ANIM_HOLD_FRAMES then
+			begin
+				ufo_bullet_anim_tick[ub_i] := 0;
+				ub_anim_fired := 1;
+			end;
+
+			if ufo_bullet_active[ub_i] = 1 then
+			begin
+				// 1px every frame; +1 bonus pixel on movement tick
+				ufo_bullet_y[ub_i] := ufo_bullet_y[ub_i] + 1;
+				if ub_move_fired <> 0 then
+					ufo_bullet_y[ub_i] := ufo_bullet_y[ub_i] + 1;
+
+				// Animation advances on its own tick
+				if ub_anim_fired <> 0 then
+					ufo_bullet_anim_index[ub_i] := (ufo_bullet_anim_index[ub_i] + 1) & (ES_SHOT_ANIM_FRAMES - 1);
+
+				// Check if hit bottom of screen
+				if ufo_bullet_y[ub_i] >= (249 - SPRITE_HEIGHT) then
+				begin
+					ufo_bullet_active[ub_i] := 2;
+					ufo_bullet_explode_counter[ub_i] := 0;
+				end;
+			end
+			else if ufo_bullet_active[ub_i] = 2 then
+			begin
+				// Explosion frame
+				inc(ufo_bullet_explode_counter[ub_i]);
+				if ufo_bullet_explode_counter[ub_i] >= ES_SHOT_EXPLODE_DURATION then
+					ufo_bullet_active[ub_i] := 0;
+			end;
+		end;
+		inc(ub_i);
 	end;
 end;
 
@@ -644,142 +752,6 @@ begin
 	end;
 end;
 
-procedure StartEnemyShotSequence(centerX: byte);
-var
-	i: byte;
-begin
-	es_shot_sequence_active := 1;
-	es_shot_next_to_fire := 0;
-	es_shot_stagger_counter := 0; // fire first immediately
-
-	// compute X positions (-20, 0, +20) clamped to allowed range
-	if centerX > 20 + PLAYER_MIN_X then
-		es_shot_x[0] := centerX + 20
-	else
-		es_shot_x[0] := PLAYER_MIN_X;
-
-	es_shot_x[1] := centerX;
-
-	if centerX + 20 < PLAYER_MAX_X then
-		es_shot_x[2] := centerX + 40
-	else
-		es_shot_x[2] := PLAYER_MAX_X;
-
-	// reset per-shot state
-	i := 0;
-	while i <= 2 do
-	begin
-		es_shot_active[i] := 0;
-		es_shot_y[i] := 0;
-		es_shot_anim_index[i] := 0;
-		inc(i);
-	end;
-end;
-
-procedure ShowEnemyShot();
-var
-	se_i: byte;
-	es_sprite_frame_index: byte;
-	spr: byte;
-begin
-	se_i := 0;
-	while se_i <= 2 do
-	begin
-		if es_shot_active[se_i] <> 0 then
-		begin
-			if es_shot_active[se_i] = 1 then
-				es_sprite_frame_index := ES_SHOT_ANIM_START + es_shot_anim_index[se_i]
-			else
-				es_sprite_frame_index := 4; // explosion graphic
-
-			// Use lookup array — avoids if/else chain for hardware sprite index
-			spr := es_shot_sprite_num[se_i];
-			SetSpriteLoc(spr, @spriteLoc/64 + es_sprite_frame_index - 1, useBank);
-			// State 2 (exploding): draw at fixed bottom-of-screen y.
-			if es_shot_active[se_i] = 2 then
-				SpritePos(es_shot_x[se_i], 249 - SPRITE_HEIGHT, spr)
-			else
-				SpritePos(es_shot_x[se_i], es_shot_y[se_i], spr);
-		end;
-		inc(se_i);
-	end;
-end;
-
-procedure UpdateEnemyShot();
-var
-	ue_i: byte;
-	ue_tick_fired: byte;
-	ue_anim_tick_fired: byte;
-begin
-	// Movement tick: fires every ES_SHOT_MOVE_FRAMES frames.
-	// Shots always move 1px per frame; on tick frames they get 1 bonus px.
-	ue_tick_fired := 0;
-	inc(es_move_tick);
-	if es_move_tick >= ES_SHOT_MOVE_FRAMES then
-	begin
-		es_move_tick := 0;
-		ue_tick_fired := 1;
-	end;
-
-	// Animation tick: fires every ES_SHOT_ANIM_HOLD_FRAMES frames.
-	ue_anim_tick_fired := 0;
-	inc(es_anim_tick);
-	if es_anim_tick >= ES_SHOT_ANIM_HOLD_FRAMES then
-	begin
-		es_anim_tick := 0;
-		ue_anim_tick_fired := 1;
-	end;
-
-	// Handle staggered firing sequence
-	if es_shot_sequence_active <> 0 then
-	begin
-		if es_shot_stagger_counter = 0 then
-		begin
-			ue_i := es_shot_next_to_fire;
-			es_shot_y[ue_i] := 0;
-			es_shot_anim_index[ue_i] := 0;
-			es_shot_active[ue_i] := 1;
-			inc(es_shot_next_to_fire);
-			if es_shot_next_to_fire > 2 then
-				es_shot_sequence_active := 0
-			else
-				es_shot_stagger_counter := ES_SHOT_STAGGER_FRAMES;
-		end
-		else
-			dec(es_shot_stagger_counter);
-	end;
-
-	// Update each active shot. Movement and animation only advance on tick.
-	ue_i := 0;
-	while ue_i <= 2 do
-	begin
-		if es_shot_active[ue_i] = 1 then
-		begin
-			// 1px every frame; +1 bonus pixel on tick frame
-			es_shot_y[ue_i] := es_shot_y[ue_i] + 1;
-			if ue_tick_fired <> 0 then
-				es_shot_y[ue_i] := es_shot_y[ue_i] + 1;
-			// Animation advances on its own hold timer
-			if ue_anim_tick_fired <> 0 then
-				es_shot_anim_index[ue_i] := (es_shot_anim_index[ue_i] + 1) & (ES_SHOT_ANIM_FRAMES - 1);
-			// Hit bottom: switch to exploding, reset the per-shot explosion counter
-			if es_shot_y[ue_i] >= (249 - SPRITE_HEIGHT) then
-			begin
-				es_shot_active[ue_i] := 2;
-				es_explode_counter[ue_i] := 0;
-			end;
-		end
-		else if es_shot_active[ue_i] = 2 then
-		begin
-			// Per-shot counter advances independently for each explosion.
-			es_explode_counter[ue_i] := es_explode_counter[ue_i] + 1;
-			if es_explode_counter[ue_i] >= ES_SHOT_EXPLODE_DURATION then
-				es_shot_active[ue_i] := 0;
-			// Restarting is handled by MainRasterChain when all slots read 0.
-		end;
-		inc(ue_i);
-	end;
-end;
 
 procedure CheckBulletCollision();
 var
@@ -1267,8 +1239,15 @@ begin
 	togglebit(SPRITE_STRETCH_X,monsterSprite1,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite2,1);
 	togglebit(SPRITE_STRETCH_X,monsterSprite3,1);
-	togglebit(SPRITE_STRETCH_X,monsterSprite4,1);	
-		
+	togglebit(SPRITE_STRETCH_X,monsterSprite4,1);
+
+	// Enable UFO bullet sprites
+	sprite_color[ES_SHOT_SPRITE1]:=cyan;
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE1,1);
+	sprite_color[ES_SHOT_SPRITE2]:=cyan;
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE2,1);
+	sprite_color[ES_SHOT_SPRITE3]:=cyan;
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE3,1);
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -1285,11 +1264,25 @@ begin
 	else 
 		SCREEN_BG_COL := BLACK;
 
-	// Position and animate the UFO BEFORE scheduling Row1, so sprite 2
+	// Position and animate the UFO BEFORE scheduling Row1, so sprite 1
 	// registers hold the UFO values while the VIC-II scans through UFO_Y.
-	// Row1/2/3 interrupts will repurpose sprite 2 for enemy blocks later.
+	// Row1/2/3 interrupts will repurpose sprite 1 for enemy blocks later.
 	ShowUFO();
 	UpdateUFO();
+	ShowUFOBullet();
+	UpdateUFOBullet();
+
+	// Staggered UFO bullet firing: fire next bullet after stagger frame countdown
+	if ufo_bullet_stagger_counter = 0 then
+	begin
+		FireUFOBullet(ufo_bullet_next_to_fire);
+		inc(ufo_bullet_next_to_fire);
+		if ufo_bullet_next_to_fire > 2 then
+			ufo_bullet_next_to_fire := 0;
+		ufo_bullet_stagger_counter := UFO_BULLET_STAGGER_FRAMES;
+	end
+	else
+		dec(ufo_bullet_stagger_counter);
 
 	// Schedule the next raster IRQ FIRST, before any heavy game logic.
 	// Reason: CheckBulletCollision (on a kill frame) calls ClearMonster which runs two
@@ -1329,10 +1322,10 @@ begin
 	UpdatePlayerBullet();
 	
 	// Update enemy shot movement/animation
-	UpdateEnemyShot();
+	//UpdateEnemyShot();
 	
 	// Show enemy shot sprite if active
-	ShowEnemyShot();
+	//ShowEnemyShot();
 
 	
 	// Lightweight joystick update only
@@ -1379,7 +1372,7 @@ begin
 	//UpdateTick();
 
 	// If no enemy shot active and enemies remain, start a staggered sequence
-	if es_shot_sequence_active = 0 then
+	/*if es_shot_sequence_active = 0 then
 	begin
 		if es_shot_active[0] = 0 then
 		begin
@@ -1392,7 +1385,7 @@ begin
 				end;
 			end;
 		end;
-	end;
+	end;*/
 
 	CloseIRQ();
 end;
