@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 0;
+	const DEBUG_ENABLE : byte = 1;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -155,10 +155,8 @@ var
 	es_move_tick : byte = 0;
 	// Single shared animation tick — controls when anim frame advances.
 	es_anim_tick : byte = 0;
-	// Scalar explosion frame counter. Only one shot can be exploding at a time
-	// (50-frame stagger vs ~170-frame travel), so a single scalar is safe and
-	// avoids the TRSE array-write-with-variable-index bug.
-	es_explode_counter : byte = 0;
+	// Per-shot explosion counter to track individual explosion duration
+	es_explode_counter : array[3] of byte = (0, 0, 0);
 
 	// Sequence/stagger scheduler
 	es_shot_sequence_active : byte = 0; // 0 = idle, 1 = firing sequence active
@@ -646,7 +644,7 @@ begin
 	end;
 end;
 
-/*procedure StartEnemyShotSequence(centerX: byte);
+procedure StartEnemyShotSequence(centerX: byte);
 var
 	i: byte;
 begin
@@ -764,24 +762,24 @@ begin
 			// Animation advances on its own hold timer
 			if ue_anim_tick_fired <> 0 then
 				es_shot_anim_index[ue_i] := (es_shot_anim_index[ue_i] + 1) & (ES_SHOT_ANIM_FRAMES - 1);
-			// Hit bottom: switch to exploding, reset the scalar explosion counter
+			// Hit bottom: switch to exploding, reset the per-shot explosion counter
 			if es_shot_y[ue_i] >= (249 - SPRITE_HEIGHT) then
 			begin
 				es_shot_active[ue_i] := 2;
-				es_explode_counter := 0;
+				es_explode_counter[ue_i] := 0;
 			end;
 		end
 		else if es_shot_active[ue_i] = 2 then
 		begin
-			// Scalar counter: no array index involved, always advances correctly.
-			es_explode_counter := es_explode_counter + 1;
-			if es_explode_counter >= ES_SHOT_EXPLODE_DURATION then
+			// Per-shot counter advances independently for each explosion.
+			es_explode_counter[ue_i] := es_explode_counter[ue_i] + 1;
+			if es_explode_counter[ue_i] >= ES_SHOT_EXPLODE_DURATION then
 				es_shot_active[ue_i] := 0;
 			// Restarting is handled by MainRasterChain when all slots read 0.
 		end;
 		inc(ue_i);
 	end;
-end;*/
+end;
 
 procedure CheckBulletCollision();
 var
@@ -1164,7 +1162,7 @@ var
 begin
 	enemy_count_diff := INITIAL_INVADER_COUNT - numberOfEnemies;
 	should_move_enemy := 0;
-	
+
 	if enemyMoveCounter <> 0 then
 	begin
 		dec(enemyMoveCounter);
@@ -1178,37 +1176,37 @@ begin
 	end
 	else begin
 		enemyMoveCounter := enemy_count_diff;
-				
+
 		monster_animation_frame := monster_animation_frame xor 1;
 		// Note: AnimateMonsters is NOT called here. All three rows are handled
 		// exclusively in their respective raster IRQs (Row1/2/3), which fire
 		// after the beam has passed UFO_Y but before each enemy row is scanned.
 		// This keeps sprite 1's image pointer owned solely by ShowUFO() until
 		// Row1 takes over, eliminating the UFO flash.
-		
+
 		// Clear enemies based on ENEMIES_TO_CLEAR constant
 		if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
 		begin
 			ClearEnemyAtCounter();
 			dec(sequential_clear_counter);
 		end;
-		
+
 		should_move_enemy := 1;
 	end;
-	
+
 	if should_move_enemy <> 0 then
 	begin
 		// Read cached edge offsets — updated in ClearMonster, so O(1) cost here
 		// every tick regardless of enemy count.
 		right_edge := monster_base_x + cached_rightmost_offset + 10;  // +10 for double-width enemy
 		left_edge := monster_base_x + cached_leftmost_offset;
-
+	
 		prev_direction := enemy_direction;
 		if right_edge >= 242 then
 			enemy_direction := 0
 		else if left_edge <= 36 then
 			enemy_direction := 1;
-
+	
 		// If direction changed, drop instead of moving horizontally this tick.
 		// This keeps movement flow clean: one tick = one action (drop OR move, never both).
 		if prev_direction <> enemy_direction then
@@ -1216,20 +1214,18 @@ begin
 			if ((ENABLE_DROP_FLOOR = 0) or (GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT)) then
 				monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
 		end
-		else
-		begin
+		else begin
 			// No direction change: move horizontally.
 			// At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed.
 			if enemy_count_diff <= 2 then
 			begin
-				if (enemy_direction <> 0) then
+				if enemy_direction <> 0 then
 					monster_base_x := monster_base_x + 2
 				else
 					monster_base_x := monster_base_x - 2;
 			end
-			else
-			begin
-				if (enemy_direction <> 0) then
+			else begin
+				if enemy_direction <> 0 then
 					inc(monster_base_x)
 				else
 					dec(monster_base_x);
@@ -1237,6 +1233,7 @@ begin
 		end;
 	end;
 end;
+
 
 
 
@@ -1332,10 +1329,10 @@ begin
 	UpdatePlayerBullet();
 	
 	// Update enemy shot movement/animation
-	//UpdateEnemyShot();
+	UpdateEnemyShot();
 	
 	// Show enemy shot sprite if active
-	//ShowEnemyShot();
+	ShowEnemyShot();
 
 	
 	// Lightweight joystick update only
@@ -1379,10 +1376,10 @@ begin
 	// Heavy game logic - UpdateTick may change monster_base_y (drop), but the Row
 	// handlers always use the global monster_base_y when they fire, so sprites track
 	// the updated position correctly even though the latch was written with the old value.
-	UpdateTick();
+	//UpdateTick();
 
 	// If no enemy shot active and enemies remain, start a staggered sequence
-	/*if es_shot_sequence_active = 0 then
+	if es_shot_sequence_active = 0 then
 	begin
 		if es_shot_active[0] = 0 then
 		begin
@@ -1395,7 +1392,7 @@ begin
 				end;
 			end;
 		end;
-	end;*/
+	end;
 
 	CloseIRQ();
 end;
@@ -1511,6 +1508,7 @@ begin
 	StartIRQ(@useKernal);	
 	//border_debug_color := peek($D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
+	UpdateTick();
 		
 
 	
