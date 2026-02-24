@@ -30,6 +30,7 @@ Tools: TRSE (“Turbo Rascal Syntax error, “;” expected but “BEGIN”)
 
 Music: Courier by Uctumi
 
-Tools: [!TRSE (“Turbo Rascal Syntax error, “;” expected but “BEGIN”)](https://lemonspawn.com/turbo-rascal-syntax-error-expected-but-begin/)
-Music: Courier by [!Uctumi](https://open.spotify.com/artist/4DWK9ew5GjRfRffSGlozMW?si=vXTqV4JSRgC8FY1yqCnU5w)
+Tools: [TRSE (“Turbo Rascal Syntax error, “;” expected but “BEGIN”)](https://lemonspawn.com/turbo-rascal-syntax-error-expected-but-begin/)
+
+Music: Courier by [Uctumi](https://open.spotify.com/artist/4DWK9ew5GjRfRffSGlozMW?si=vXTqV4JSRgC8FY1yqCnU5w)
 
