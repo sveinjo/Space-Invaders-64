@@ -1,5 +1,8 @@
 # Space-Invaders-64
+
 Space Invaders for Commodore 64
+
+<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/WY0rsY6sZow?si=_Uw2qxVGRf3zE9Mu&amp;controls=0" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 Space Invaders on the original arcade hardware moved objects by directly manipulating pixels. That works, but it’s computationally expensive — and the arcade CPU was twice as fast as the one in a C64. Not exactly a good approach for a port.
 
@@ -16,6 +19,7 @@ Here’s how I’m setting it up:
 The video above is an early alpha/demo. To the sharp-eyed among you: yes, it actually runs smoother than the original arcade version.
 
 Right now I’m stress-testing the engine - pushing sprites, timing, and every moving part to make sure it holds up under load. Once the performance foundation is solid, I’ll start building and fine-tuning the core game logic.
+
 First make it run. Then make it fun. 🚀
 
 Tools: TRSE (“Turbo Rascal Syntax error, “;” expected but “BEGIN”)
