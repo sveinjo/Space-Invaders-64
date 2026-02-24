@@ -2,11 +2,7 @@
 
 Space Invaders for Commodore 64
 
-<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/WY0rsY6sZow?si=_Uw2qxVGRf3zE9Mu&amp;controls=0" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-
-[![Video Thumbnail](https://img.youtube.com/vi/WY0rsY6sZow/0.jpg)](https://www.youtube.com)
-
-https://www.youtube.com/watch?v=WY0rsY6sZow
+[![Video Thumbnail](https://img.youtube.com/vi/WY0rsY6sZow/0.jpg)](https://www.youtube.com/watch?v=WY0rsY6sZow)
 
 Space Invaders on the original arcade hardware moved objects by directly manipulating pixels. That works, but it’s computationally expensive — and the arcade CPU was twice as fast as the one in a C64. Not exactly a good approach for a port.
 
