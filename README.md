@@ -26,9 +26,6 @@ Right now I’m stress-testing the engine - pushing sprites, timing, and every m
 
 First make it run. Then make it fun. 🚀
 
-Tools: TRSE (“Turbo Rascal Syntax error, “;” expected but “BEGIN”)
-
-Music: Courier by Uctumi
 
 Tools: [TRSE (“Turbo Rascal Syntax error, “;” expected but “BEGIN”)](https://lemonspawn.com/turbo-rascal-syntax-error-expected-but-begin/)
 
