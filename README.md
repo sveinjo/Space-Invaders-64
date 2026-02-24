@@ -1,47 +1,22 @@
 # Space-Invaders-64
 Space Invaders for Commodore 64
 
-Sprite List:
+Space Invaders on the original arcade hardware moved objects by directly manipulating pixels. That works, but it’s computationally expensive — and the arcade CPU was twice as fast as the one in a C64. Not exactly a good approach for a port.
 
-1 Base
-2 Player explosion 1-2
-1 Bullet (4 pixels line, moves 4 pixels per frame)
-1 Explosion Enemy (stays for 16 frames)
-12 Enemy bullet 1-3 *4 (4 frames per bullet)
-1 Ufo
-4 Ufo Explosion
-1 Enemy bullet Hit explosion
+So I went with one of the C64’s superpowers: hardware sprites.
 
-22 Total sprite slots needed
+These are small graphical objects the system can move around cheaply and efficiently. The C64 only gives us 8 hardware sprites, but through the dark and slightly glitchy arts of sprite multiplexing - exploiting the way the raster beam draws the screen - I can trick it into displaying all 61 moving objects using just those 8 sprites.
 
-# Arcade
-13 (left) and 11 (right) pixels buffer besides shield for player movement -> 12 pixels each for symmettry
-181 pixels wide movespace for player
+Here’s how I’m setting it up:
+•	Sprite 0: Player ship + player bullet (they never overlap, so they can share).
+•	Sprites 1–4: Enemy clusters, dynamically multiplexed into position with dark raster interrupt magic.
+•	Sprite 1 also moonlights as the UFO, sharing time with an enemy cluster that doesn’t need it on that particular raster pass.
+•	Sprites 5–7: Enemy bullets - dedicated sprites so they can spawn and fly wherever the action requires.
 
-# C64
-PLAYER_MIN_X = 19 Intial player pixel + (4 x 8) - 12 = 39
-PLAYER_MAX_X = 238 Intial player pixel - (4 x 8) + 12 = 218
-179 pixels wide movespace for player 
+The video above is an early alpha/demo. To the sharp-eyed among you: yes, it actually runs smoother than the original arcade version.
 
-29 char wide playarea, 4 char edge outside symmetrical shields
-7 char free
+Right now I’m stress-testing the engine - pushing sprites, timing, and every moving part to make sure it holds up under load. Once the performance foundation is solid, I’ll start building and fine-tuning the core game logic.
+First make it run. Then make it fun. 🚀
 
-Initial starting position is 11 drops above player.
-
-8 + 5 = 13 * 11 = 143
-226 - 143 = 83 - 13 = 70
-
-8 + 5 = 13 / 2 = 6.5 * 11 = 66 + (8 * 5 + 4 * 5) = 126
-
-226 - 143 = 83
-
-Top invader = 144 + 8 pixels above player base (or 11 + 8 characters)
-It will drop 19 times, and then it's game over.
-
-If we drop 19 * 6 pixels = 114, that should make start position be: 226 - 114 = 112
-
-Now drops 17
-
---
-
-Avarage score of invaders = 12
+Tools: TRSE (“Turbo Rascal Syntax error, “;” expected but “BEGIN”)
+Music: Courier by Uctumi
