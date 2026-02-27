@@ -99,58 +99,42 @@ var
 	StarfieldPtr4 : pointer of integer;
  	StaticStarPtr : pointer of integer;
 
-	StaticStarBlink : byte;					// Flag used to toggle the static blinking stars on and off.
-
-	// One screen row of 40 PETSCII characters.
-	StarfieldRow : array[40] of byte = (058,092,073,064,091,062,093,081,066,094,
+	// Starting PETSCII character for each of the 29 columns used (0-28).
+	StarfieldRow : array[29] of byte = (058,092,073,064,091,062,093,081,066,094,
 									   086,059,079,087,080,071,076,067,082,095,
-									   100,078,099,060,075,063,084,065,083,096,
-									   068,088,074,061,090,098,085,101,097,077);
+									   100,078,099,060,075,063,084,065,083);
 
-	StarColour1 : byte = 6; // 14 (Light Blue)
-	StarColour2 : byte = 4; // 10 (Pink)
-	StarColour3 : byte = 12; // 12 (Grey Medium)
-	StarColour4 : byte = 15; // 15 (Grey Light)
-	StarColour5 : byte = 14; // 13 (Green Light)
-	StarColour6 : byte = 11; // 11 (Grey Dark)
+	// Star colour constants (C64 colour indices).
+	const StarColour1 : byte = 6;   // Blue
+	const StarColour2 : byte = 4;   // Purple
+	const StarColour3 : byte = 12;  // Grey Medium
+	const StarColour4 : byte = 15;  // Grey Light
+	const StarColour5 : byte = 14;  // Light Blue
+	const StarColour6 : byte = 11;  // Grey Dark
+
+	// The colour values corresponding to the 20 character columns, using StarColour constants.
+	// Pattern: 1,2,3,4,1,5,3,6,2,1, 1,2,1,4,1,5,3,6,2,3
+	StarfieldColours : array[20] of byte = (6,4,12,15,6,14,12,11,4,6,
+										   6,4,6,15,6,14,12,11,4,12);
 	
-	// The colour values corresponding to the characters.
-	StarfieldColours : array[20] of byte = (14,10,12,15,14,13,12,11,10,14,
-										   14,10,14,15,14,13,12,11,10,12); 
-
-	//StarfieldColours : array[20] of byte = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-	
-
 // ---------------------------------------------------------------------------------------------------------------------------------
-// Fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
+// Blanks the character set in RAM.
 // ---------------------------------------------------------------------------------------------------------------------------------
-procedure CreateStarScreen();
+Procedure ClearCharacterSet();
 var
-	currentchar : byte;
-	colourindex : byte;
-	//offset : integer;
-	col : byte;
-	row : byte;
-	saddr : array[25] of integer;
-	caddr : array[25] of integer;		
-
+	charsetptr : pointer of integer;
+	counter : integer;
+	
 begin
-	clearscreen( $20, ^$0400 );
-	
-	//DefineScreen();
-    SetCharsetLocation(CHARSETLOC);
- 	CopyCharsetFromRom(CHARSETLOC);
-	
-	//StarField::CreateStarScreen();
-	
-	// -- Comment this line out to see the effect of the character set being overwritten.
-	//ClearCharacterSet();
-	  
-	//StarField::StarfieldPtr := #STARFIELD_STAR1INIT;
-	//StarField::StarfieldPtr2 := #STARFIELD_STAR2INIT;
-	//StarField::StarfieldPtr3 := #STARFIELD_STAR3INIT;
-	//StarField::StarfieldPtr4 := #STARFIELD_STAR4INIT;
-	
+	charsetptr := #CharSetLoc;
+	for counter := 0 to 2047 do begin
+		charsetptr[0] := 0;
+		inc(charsetptr);		
+	end;
+end;
+
+Procedure changeStarColors();
+begin
 	StarfieldColours[0] := StarColour1;
 	StarfieldColours[1] := StarColour2;
 	StarfieldColours[2] := StarColour3;
@@ -171,10 +155,36 @@ begin
 	StarfieldColours[17] := StarColour6;
 	StarfieldColours[18] := StarColour2;
 	StarfieldColours[19] := StarColour3;
+end;
 
-	CreateAddressTable( #saddr, $0400, 40, 25 );   // $0400 screen address, 40 characters per column, 25 rows
-   	CreateAddressTable( #caddr, $D800, 40, 25 );   // $D800 color address, 40 characters per column, 25 rows
 
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
+// ---------------------------------------------------------------------------------------------------------------------------------
+procedure CreateStarScreen();
+var
+	currentchar : byte;
+	colourindex : byte;
+	col : byte;
+	row : byte;
+	saddr : array[18] of integer;
+	caddr : array[18] of integer;		
+
+begin
+	clearscreen( $20, ^$0400 );
+
+    SetCharsetLocation(CHARSETLOC);
+ 	CopyCharsetFromRom(CHARSETLOC);
+ 	
+ 	//StarField::CreateStarScreen();
+	
+	// -- Comment this line out to see the effect of the character set being overwritten.
+	//ClearCharacterSet();
+	
+	CreateAddressTable( #saddr, $0400, 40, 18 );   // $0400 screen address, 40 chars/row, 18 rows used
+   	CreateAddressTable( #caddr, $D800, 40, 18 );   // $D800 color address, 40 chars/row, 18 rows used
+
+	colourindex := 0;
 	col := 0;	
 	while col <= 28 do begin
 	
@@ -222,22 +232,6 @@ begin
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
-// Blanks the character set in RAM.
-// ---------------------------------------------------------------------------------------------------------------------------------
-Procedure ClearCharacterSet();
-var
-	charsetptr : pointer of integer;
-	counter : integer;
-	
-begin
-	charsetptr := #CharSetLoc;
-	for counter := 0 to 2048 do begin
-		charsetptr[0] := 0;
-		inc(charsetptr);		
-	end;
-end;
-
-// ---------------------------------------------------------------------------------------------------------------------------------
 // Update the starfield by redefining bytes in the character set once per frame.
 // ---------------------------------------------------------------------------------------------------------------------------------
 Procedure DoStarfield();
@@ -248,11 +242,10 @@ begin
 	if (RasterCount & 1) = 1 then begin
 		StarfieldPtr[0] := 0;
 		Inc(StarfieldPtr);
-		StarfieldPtr[0] := StarfieldPtr[0] | Star1Shape;
 		if StarfieldPtr = #Star1Limit then begin
 			StarfieldPtr := #Star1Reset;
 		end;
-		
+		StarfieldPtr[0] := StarfieldPtr[0] | Star1Shape;
 	end;
 
 	// -- Star 2 updates every frame.
@@ -260,30 +253,29 @@ begin
 	Inc(StarfieldPtr2);
 	if StarfieldPtr2 = #Star2Limit then begin
 		StarfieldPtr2 := #Star2Reset;
-	end;	
+	end;
 	StarfieldPtr2[0] := StarfieldPtr2[0] | Star2Shape;
 
 	// -- Star 3 updates every other frame.
 	if (RasterCount & 1) = 1 then begin
 		StarfieldPtr3[0] := 0;
 		Inc(StarfieldPtr3);
-		StarfieldPtr3[0] := StarfieldPtr3[0] | Star3Shape;
 		if StarfieldPtr3 = #Star3Limit then begin
 			StarfieldPtr3 := #Star3Reset;
 		end;
+		StarfieldPtr3[0] := StarfieldPtr3[0] | Star3Shape;
 	end;
 
-	// -- Star 4 updates two pixels down every frame.
+	// -- Star 4 updates two bytes down every frame (fastest layer).
 	StarfieldPtr4[0] := 0;
 	Inc(StarfieldPtr4);
 	Inc(StarfieldPtr4);
-	StarfieldPtr4[0] := StarfieldPtr4[0] | Star4Shape;
-	
 	if StarfieldPtr4 = #Star4Limit then begin
 		StarfieldPtr4 := #Star4Reset;
 	end;
+	StarfieldPtr4[0] := StarfieldPtr4[0] | Star4Shape;
 	
-	// -- Two static blinking stars.
+	// -- Two static blinking stars, visible when RasterCount < 230.
 	StaticStarPtr := #StaticStar1;
 	if RasterCount < 230 then begin
 		StaticStarPtr[0] := StaticStarPtr[0] | StarBShape;
@@ -291,16 +283,14 @@ begin
 	else begin
 		StaticStarPtr[0] := 0;
 	end;
-	
-	StaticStarBlink := RasterCount | $80;
-	
+
 	StaticStarPtr := #StaticStar2;
 	if RasterCount < 230 then begin
 		StaticStarPtr[0] := StaticStarPtr[0] | StarBShape;
-		end
-		else begin
-			StaticStarPtr[0] := 0;
-		end;	
-		
+	end
+	else begin
+		StaticStarPtr[0] := 0;
+	end;
+
 	end;
 end.
