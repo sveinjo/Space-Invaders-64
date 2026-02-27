@@ -19,7 +19,7 @@ var
 	
 	
 	// Game constants
-	const INITIAL_INVADER_COUNT : byte = 72; // Arcade has 55
+	const INITIAL_INVADER_COUNT : byte = 71; // Arcade has 55
 	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
 	const MONSTER_SPACING : byte = 54;
 	const MONSTER_ROW_OFFSET : byte = 26;
@@ -718,7 +718,7 @@ begin
 			//if player_bullet_active = 1 then
 			//begin
 			if player_bullet_color_toggle = 0 then
-				bullet_color := light_blue
+				bullet_color := white
 			else
 				bullet_color := cyan;
 				
