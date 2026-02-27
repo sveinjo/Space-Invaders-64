@@ -88,6 +88,7 @@ var
 	player_bullet_y : byte;
 	explosion_frame_counter : byte = 0;  // Counts frames for explosion animation
 	previous_fire_state : byte = 0;  // Track previous fire button state for debounce
+	player_bullet_color_toggle : byte = 0;  // Alternates 0/1 each frame to toggle bullet color white<->cyan
 	const BULLET_SPEED : byte = 4;  // Pixels per frame
 	//const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
 	const EXPLOSION_DURATION : byte = 16;  // Frames to show explosion
@@ -680,6 +681,8 @@ begin
 	if (joystickleft) then
 		player_joystick_direction := 0;*/
 		
+	sprite_color[0] := cyan;
+	
 	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
 	//showBullet();
 	//animateMonsters();
@@ -697,6 +700,7 @@ end;
 procedure ShowBullet();
 var
 	bullet_sprite_index : byte;
+	bullet_color : byte;
 begin
 	// Only display bullet/explosion if the sprite box fits entirely above the player raster line.
 	// The VIC-II triggers sprite DMA at the TOP of the sprite box (player_bullet_y), not at the
@@ -707,18 +711,38 @@ begin
 	// explosion is still visually correct even when the box top is well above the enemy.
 	if player_bullet_active <> 0 then
 	begin
-		//if player_bullet_y <= 224 - SPRITE_HEIGHT then
-		//begin
-			// Select sprite based on bullet state: 1=normal bullet, 2=explosion
-			if player_bullet_active = 2 then
-				bullet_sprite_index := 2  // Explosion sprite
+		// Select sprite based on bullet state: 1=normal bullet, 2=explosion
+		if player_bullet_active = 2 then
+		begin
+			// Alternate enemy color each frame while exploding
+			//if player_bullet_active = 1 then
+			//begin
+			if player_bullet_color_toggle = 0 then
+				bullet_color := light_blue
 			else
-				bullet_sprite_index := 1;  // Normal bullet sprite
-			
-			SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
-			SpritePos(player_bullet_x, player_bullet_y, useSprite);
-		//end;
-		// else: sprite box would overlap raster 224 - leave sprite 0 as player
+				bullet_color := cyan;
+				
+			sprite_color[1] := bullet_color;
+			sprite_color[2] := bullet_color;
+			sprite_color[3] := bullet_color;
+			sprite_color[4] := bullet_color;
+			//sprite_color[0] := bullet_color;
+			if player_bullet_color_toggle = 0 then
+			begin
+				player_bullet_color_toggle := 1;
+				//dec(monster_base_y);					
+			end	else
+			begin
+				player_bullet_color_toggle := 0;
+				//inc(monster_base_y);					
+			end;
+	
+			bullet_sprite_index := 2  // Explosion sprite
+		end	else
+			bullet_sprite_index := 1;  // Normal bullet sprite
+		
+		SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
+		SpritePos(player_bullet_x, player_bullet_y, useSprite);		
 	end;
 end;
 
@@ -1134,6 +1158,8 @@ var
 begin
 	enemy_count_diff := INITIAL_INVADER_COUNT - numberOfEnemies;
 	should_move_enemy := 0;
+	
+			
 
 	if enemyMoveCounter <> 0 then
 	begin
@@ -1258,6 +1284,8 @@ interrupt MainRasterChain();
 var
 	mc_row_target : byte;
 begin
+	
+			
 	ShowBullet();
 	StartIRQ(@useKernal);	
 	if DEBUG_ENABLE = 0 then
@@ -1529,6 +1557,8 @@ begin
 	StarField::DoStarfield();    
 	preventirq();  
 	poke(^$D019, 0, 0);  
+	
+		
 	
 	RasterIRQ(MainRasterChain(), 0, @useKernal);	
 	CloseIRQ();
