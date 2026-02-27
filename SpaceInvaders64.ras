@@ -1556,9 +1556,7 @@ begin
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();    
 	preventirq();  
-	poke(^$D019, 0, 0);  
-	
-		
+	//poke(^$D019, 0, 0);  		
 	
 	RasterIRQ(MainRasterChain(), 0, @useKernal);	
 	CloseIRQ();
@@ -1605,10 +1603,7 @@ begin
 	
 	StarField::CreateStarScreen();
 	
-	StarField::StarfieldPtr := #STARFIELD_STAR1INIT;
-	StarField::StarfieldPtr2 := #STARFIELD_STAR2INIT;
-	StarField::StarfieldPtr3 := #STARFIELD_STAR3INIT;
-	StarField::StarfieldPtr4 := #STARFIELD_STAR4INIT;
+	
 	
 	// IO area visible at $D000-$DFFF, RAM visible at $A000-$BFFF (NO BASIC) and RAM visible at $E000-$FFFF (NO KERNAL). 
 	// This is the typical memory configuration for demo/game development. 

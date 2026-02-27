@@ -214,6 +214,11 @@ begin
 		
 		inc(col);		
 	end;	
+	
+	StarfieldPtr := #STAR1INIT;
+	StarfieldPtr2 := #STAR2INIT;
+	StarfieldPtr3 := #STAR3INIT;
+	StarfieldPtr4 := #STAR4INIT;
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
