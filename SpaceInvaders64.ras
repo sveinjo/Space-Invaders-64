@@ -1,4 +1,4 @@
-﻿program SpaceInvaders64;
+program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -1281,21 +1281,30 @@ begin
 	
 	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
 	Screen::PrintString("      1740",29,23,#Screen::screen0);
-	Screen::PrintString("¤¤¤",4,18,#Screen::screen0);
-	Screen::PrintString("mno",4,19,#Screen::screen0);
-	Screen::PrintString("pqr",4,20,#Screen::screen0);
+
+	//Screen::PrintString("¤¤¤",4,18,#Screen::screen0);
+	//Screen::PrintString("lmn",4,19,#Screen::screen0);
+	//Screen::PrintString("opq",4,20,#Screen::screen0);
 	
-	// Shield block 1: screen row 19 col 4 → $0400 + 19*40 + 4 = $06FC; chars 108-113 ('l'-'q')
-	//PlaceShieldBlock($06FC, 108);
+	//Screen::PrintString("rst",10,19,#Screen::screen0);
+	//Screen::PrintString("uvw",10,20,#Screen::screen0);
 	
-	Screen::PrintString("rst",10,19,#Screen::screen0);
-	Screen::PrintString("uvw",10,20,#Screen::screen0);
+	//Screen::PrintString("xyz",16,19,#Screen::screen0);
+	//Screen::PrintString("!#¤",16,20,#Screen::screen0);
 	
-	Screen::PrintString("xyz",16,19,#Screen::screen0);
-	Screen::PrintString("!#¤",16,20,#Screen::screen0);
+	//Screen::PrintString("¤%&",22,19,#Screen::screen0);
+	//Screen::PrintString("/+*",22,20,#Screen::screen0);
 	
-	Screen::PrintString("¤%&",22,19,#Screen::screen0);
-	Screen::PrintString("/+*",22,20,#Screen::screen0);
+	// Place all 4 shield blocks (2 rows each, 3 chars wide), reusing chars 109-114 for all.
+	// (Arc-correct: all shields start identical. Later enhancement: per-shield erosion.)
+	// Shield 1: row 19 col 4
+	PlaceShieldBlock($06FC, 109);
+	// Shield 2: row 19 col 10
+	PlaceShieldBlock($0702, 109);
+	// Shield 3: row 19 col 16
+	PlaceShieldBlock($0708, 109);
+	// Shield 4: row 19 col 22
+	PlaceShieldBlock($070E, 109);
 	
 	//Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
 
@@ -1309,14 +1318,16 @@ end;
 //   (the correct TRSE idiom — poke with an integer addr generates bad asm).
 // ---------------------------------------------------------------------------
 procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
+var
+	wsr_ptr : pointer of byte;
 begin
-	// poke with a plain integer variable compiles correctly (single-byte write).
-	// Advance wsr_addr between pokes to avoid the ,x addressing bug from inline expressions.
-	poke(wsr_addr, wsr_c0, 0);
-	wsr_addr := wsr_addr + 1;
-	poke(wsr_addr, wsr_c1, 0);
-	wsr_addr := wsr_addr + 1;
-	poke(wsr_addr, wsr_c2, 0);
+	// Use pointer dereference (the starfield pattern).
+	wsr_ptr := wsr_addr;
+	wsr_ptr[0] := wsr_c0;
+	inc(wsr_ptr);
+	wsr_ptr[0] := wsr_c1;
+	inc(wsr_ptr);
+	wsr_ptr[0] := wsr_c2;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1336,11 +1347,11 @@ procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
 var
 	psb_addr : integer;
 begin
-	// Top row
-	//WriteShieldRow(psb_base_addr, psb_char_base, psb_char_base + 1, psb_char_base + 2);
+	// Top row (3 chars at psb_base_addr)
+	WriteShieldRow(psb_base_addr, psb_char_base, psb_char_base + 1, psb_char_base + 2);
 	// Bottom row: one screen row lower = +40 bytes
 	psb_addr := psb_base_addr + 40;
-	//WriteShieldRow(psb_addr, psb_char_base + 3, psb_char_base + 4, psb_char_base + 5);
+	WriteShieldRow(psb_addr, psb_char_base + 3, psb_char_base + 4, psb_char_base + 5);
 end;
 
 procedure ClearEnemyAtCounter();
