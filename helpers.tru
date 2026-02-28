@@ -106,22 +106,48 @@ var
 //  4.  ALIEN SHOT SYSTEM — THREE SHOT TYPES
 // ============================================================================
 //
-//  The arcade fires up to 3 alien shots simultaneously, each a different type:
+//  The arcade fires up to 3 alien shots simultaneously, each a different type.
+//  Our C64 version maps these to sprite animation frames and hardware sprite
+//  slots as follows:
 //
-//  ---- Rolling Shot ----
+//  ┌────────────────┬────────────┬────────────────┬──────────────────────────┐
+//  │ Shot Type      │ Slot Index │ HW Sprite      │ Anim Frames (1-based)    │
+//  ├────────────────┼────────────┼────────────────┼──────────────────────────┤
+//  │ Plunger        │     0      │      6         │  13, 14, 15, 16          │
+//  │ Rolling/Teflon │     1      │      5         │   9, 10, 11, 12          │
+//  │ Squiggly       │     2      │      7         │   5,  6,  7,  8          │
+//  └────────────────┴────────────┴────────────────┴──────────────────────────┘
+//
+//  Arrays:  ufo_bullet_anim_start[3] = (13, 9, 5)   // first frame per slot
+//           ufo_bullet_sprite[3]     = ( 6, 5, 7)   // HW sprite per slot
+//
+//  ---- Plunger Shot (slot 0, anim 13-16) ----
+//  Fires from a PREDETERMINED column sequence (table below).
+//  Steps through the table sequentially; wraps after 16 entries.
+//  Finds the lowest alive alien in the selected column.
+//  Animation: staircase / diagonal stripe pattern.
+//  CAN be destroyed by the player's bullet (mutual destruction).
+//
+//  ---- Rolling Shot / "Teflon" Shot (slot 1, anim 9-12) ----
 //  ALWAYS targets the player's current X column.
 //  Finds the lowest alive alien in that column and fires from it.
 //  This is the "aimed" shot — the one that chases you.
 //  Animation: cross/plus pattern that rotates.
+//  CANNOT be destroyed by the player's bullet — it passes through.
+//  This is the "Teflon" shot referenced in competitive play guides.
 //
-//  ---- Plunger Shot ----
-//  Fires from a PREDETERMINED column sequence (table below).
-//  Steps through the table sequentially; wraps after 16 entries.
-//  Finds the lowest alive alien in the selected column.
+//  In the arcade ROM the Rolling shot's collision handler ($0644) skips
+//  the player-bullet vs. alien-shot collision test that the Plunger
+//  ($0617) and Squiggly ($05E9) handlers perform.  The result is that
+//  the player's bullet has no effect on the Rolling shot: it simply
+//  passes through.  The Rolling shot CAN still be blocked by shields
+//  (shield erosion applies to all shot types equally).
 //
-//  ---- Squiggly Shot ----
+//  ---- Squiggly Shot (slot 2, anim 5-8) ----
 //  Same mechanism as Plunger but uses a DIFFERENT column table.
 //  The Squiggly shot is suppressed while the saucer is on screen.
+//  Animation: zigzag / sine-wave pattern.
+//  CAN be destroyed by the player's bullet (mutual destruction).
 //
 //  All three shot types share the same speed: 1 pixel per frame (4 px/step,
 //  with steps every 4 frames). Each has 4 animation frames that cycle.

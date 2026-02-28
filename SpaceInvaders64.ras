@@ -67,6 +67,12 @@ var
 	ufo_move_skip_counter : byte = 0;   // Counts 0-2; move is skipped when the counter resets (every 3rd frame)
 
 	// UFO bullets (3 staggered bullets fired in sequence)
+	// Slot 0 = Plunger (anim 13-16, HW sprite 6) — column-table targeting, destroyable
+	// Slot 1 = Rolling / "Teflon" (anim 9-12, HW sprite 5) — aimed at player X, indestructible
+	// Slot 2 = Squiggly (anim 5-8, HW sprite 7) — column-table targeting, destroyable
+	const SHOT_SLOT_PLUNGER  : byte = 0;
+	const SHOT_SLOT_ROLLING  : byte = 1; // "Teflon" — passes through player bullet
+	const SHOT_SLOT_SQUIGGLY : byte = 2;
 	ufo_bullet_active : array[3] of byte = (0, 0, 0);       // 0=inactive, 1=moving, 2=exploding
 	ufo_bullet_x : array[3] of byte = (0, 0, 0);           // Fixed X position (set when fired)
 	ufo_bullet_y : array[3] of byte = (0, 0, 0);           // Current Y position
@@ -74,8 +80,8 @@ var
 	ufo_bullet_move_tick : array[3] of byte = (0, 0, 0);   // Accumulator for movement speed
 	ufo_bullet_anim_tick : array[3] of byte = (0, 0, 0);   // Accumulator for animation speed
 	ufo_bullet_explode_counter : array[3] of byte = (0, 0, 0); // Frames remaining in explosion
-	ufo_bullet_sprite : array[3] of byte = (6, 5, 7);      // Hardware sprite indices
-	ufo_bullet_anim_start : array[3] of byte = (13, 9, 5); // Animation frame start offsets
+	ufo_bullet_sprite : array[3] of byte = (6, 5, 7);      // HW sprite: Plunger=6, Rolling=5, Squiggly=7
+	ufo_bullet_anim_start : array[3] of byte = (13, 9, 5); // First frame: Plunger=13, Rolling=9, Squiggly=5
 
 	ufo_bullet_stagger_counter : byte = 0;  // Countdown to fire next bullet
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
@@ -198,14 +204,28 @@ var
 	const ES_SHOT_EXPLODE_DURATION:byte = 10; // frames enemy-shot explosion stays on screen
 	const ES_SHOT_STAGGER_FRAMES:byte = 50; // ~1 second at 50Hz
 	const UFO_BULLET_STAGGER_FRAMES:byte = 50; // frames between UFO bullet fires
+
+	
+	// ---------------------------------------------------------------------------
+	// Shot-vs-Shot collision: check if the player bullet overlaps any enemy bullet.
+	// Plunger (slot 0) and Squiggly (slot 2) are destroyed on contact (mutual kill).
+	// Rolling / Teflon (slot 1) is immune — the player bullet passes through it.
+	// ---------------------------------------------------------------------------
+	// Collision box: sprites overlap when their X positions are within
+	// SHOT_COLLISION_X_RANGE pixels and Y positions within SHOT_COLLISION_Y_RANGE.
+	// Both bullets show explosion frame 4 for ES_SHOT_EXPLODE_DURATION frames.
+	// ---------------------------------------------------------------------------
+	const SHOT_COLLISION_X_RANGE : byte = 8;  // horizontal overlap tolerance (pixels)
+	const SHOT_COLLISION_Y_RANGE : byte = 12; // vertical overlap tolerance (pixels)
+	
+	// Declarations (commented out where no longer needed)
+	
+	interrupt MainRasterRow1();
 	interrupt MainRasterRow2();
 	interrupt MainRasterRow3();
 	interrupt MainRasterJoystick();
 	interrupt MainRasterPlayer();
-	interrupt MainRasterStarfield();
-	
-	// Declarations (commented out where no longer needed)
-	interrupt MainRasterRow1();
+	//interrupt MainRasterStarfield();
 	function GetRightmostEnemyOffset() : byte;
 	function GetLeftmostEnemyOffset() : byte;
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
@@ -352,6 +372,63 @@ begin
 			end;
 		end;
 		inc(ub_i);
+	end;
+end;
+
+
+
+procedure CheckShotVsShotCollision();
+var
+	sc_i : byte;
+	sc_dx : byte;
+	sc_dy : byte;
+	sc_hit : byte;
+begin
+	// Only check when the player bullet is actively moving (state 1)
+	if player_bullet_active <> 1 then
+		sc_hit := 0   // nothing to do but we need a statement here
+	else
+	begin
+		sc_i := 0;
+		while sc_i <= 2 do
+		begin
+			// Only test against actively moving enemy bullets (state 1)
+			if ufo_bullet_active[sc_i] = 1 then
+			begin
+				// Compute absolute X distance
+				if player_bullet_x >= ufo_bullet_x[sc_i] then
+					sc_dx := player_bullet_x - ufo_bullet_x[sc_i]
+				else
+					sc_dx := ufo_bullet_x[sc_i] - player_bullet_x;
+
+				// Compute absolute Y distance
+				if player_bullet_y >= ufo_bullet_y[sc_i] then
+					sc_dy := player_bullet_y - ufo_bullet_y[sc_i]
+				else
+					sc_dy := ufo_bullet_y[sc_i] - player_bullet_y;
+
+				if sc_dx < SHOT_COLLISION_X_RANGE then
+				begin
+					if sc_dy < SHOT_COLLISION_Y_RANGE then
+					begin
+						// Hit detected!
+						// Rolling / Teflon shot (slot 1) is immune — skip it
+						if sc_i <> SHOT_SLOT_ROLLING then
+						begin
+							// Destroy the enemy bullet (enter explosion state)
+							ufo_bullet_active[sc_i] := 2;
+							ufo_bullet_explode_counter[sc_i] := 0;
+
+							// Destroy the player bullet (enter explosion state)
+							player_bullet_active := 2;
+							explosion_frame_counter := 0;
+						end;
+						// For SHOT_SLOT_ROLLING: do nothing — both bullets keep going
+					end;
+				end;
+			end;
+			inc(sc_i);
+		end;
 	end;
 end;
 
@@ -1393,7 +1470,11 @@ begin
 	// Only check when bullet is actively moving (not exploding)
 	if player_bullet_active = 1 then
 		CheckBulletCollision();
-	
+
+	// Check player bullet vs enemy bullets (shot-vs-shot collision)
+	// Must run after both UpdatePlayerBullet and UpdateUFOBullet so positions are current.
+	// Rolling/Teflon shot (slot 1) is immune; Plunger and Squiggly are destroyable.
+	CheckShotVsShotCollision();
 
 	
 	/*if player_bullet_active <> 0 then
