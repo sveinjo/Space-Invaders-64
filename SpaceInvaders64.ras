@@ -89,6 +89,8 @@ var
 
 	ufo_bullet_stagger_counter : byte = 0;  // Countdown to fire next bullet
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
+	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
+	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
 
 	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
@@ -206,8 +208,21 @@ var
 	const ES_SHOT_MOVE_FRAMES:byte = 3;   // every Nth frame an extra pixel is added to movement
 	const ES_SHOT_ANIM_HOLD_FRAMES:byte = 3; // frames each animation image is shown before advancing
 	const ES_SHOT_EXPLODE_DURATION:byte = 4; // frames enemy-shot explosion stays on screen
-	const ES_SHOT_STAGGER_FRAMES:byte = 50; // ~1 second at 50Hz
-	const UFO_BULLET_STAGGER_FRAMES:byte = 50; // frames between UFO bullet fires
+	const ES_SHOT_STAGGER_FRAMES:byte = 1; // ~1 second at 50Hz
+	const UFO_BULLET_STAGGER_FRAMES:byte = 1; // frames between UFO bullet fires
+
+	// ---------------------------------------------------------------------------
+	// Enemy-shot spawn position tuning.
+	// Shots spawn from the base of the lowest alive alien in the selected column.
+	//   ES_SHOT_SPAWN_X_ADJ : horizontal offset from the left edge of the enemy
+	//     cell (6 = center of the 12 px enemy pixel area).  Increase to move
+	//     spawns rightward, decrease to move them leftward.
+	//   ES_SHOT_SPAWN_Y_ADJ : added to the calculated bottom-of-alien Y before
+	//     the shot is placed.  0 = spawn at the exact bottom of the VIC sprite
+	//     box.  Positive = spawn further down (more gap before bullet appears).
+	// ---------------------------------------------------------------------------
+	const ES_SHOT_SPAWN_X_ADJ : byte = -6;  // col center: left-edge + 6 px
+	const ES_SHOT_SPAWN_Y_ADJ : byte = -17;  // 0 = flush with bottom of sprite box
 
 	
 	// ---------------------------------------------------------------------------
@@ -245,6 +260,8 @@ var
 	//interrupt MainRasterStarfield();
 	function GetRightmostEnemyOffset() : byte;
 	function GetLeftmostEnemyOffset() : byte;
+	procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
+	procedure TickEnemyShotFiring();
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 	//procedure AnimateMonsters(enemyRow: byte);
 	//procedure UpdateMonsters(rowOffset: byte);
@@ -307,6 +324,150 @@ begin
 	ufo_bullet_anim_index[bullet_index] := 0;
 	ufo_bullet_move_tick[bullet_index] := 0;
 	ufo_bullet_anim_tick[bullet_index] := 0;
+end;
+
+// ---------------------------------------------------------------------------
+// SpawnShotFromColumn
+//   Fires enemy-shot slot `spawn_slot` from the LOWEST alive alien in the
+//   given global column index (0-11, left to right).
+//
+//   Formation geometry:
+//     12 columns total — 4 block-columns * 3 enemy-columns per block.
+//     Column pitch = 18 px (MONSTER_SPACING / 3 = 54/3 = 18).
+//     spawn_col 0-11  →  block_col = spawn_col/3,  enemy_col = spawn_col mod 3
+//     Screen X = monster_base_x + block_col*MONSTER_SPACING + enemy_col*18 + ES_SHOT_SPAWN_X_ADJ
+//     Screen Y = monster_base_y + form_row*MONSTER_ROW_OFFSET + sub_row*14 + SPRITE_HEIGHT + ES_SHOT_SPAWN_Y_ADJ
+//
+//   Scan order: form_row 2→0 (bottom→top), sub_row 1→0 within each block row.
+//   Stops at the first (lowest) alive alien found and activates the shot slot.
+//   If no alive alien exists in the column the slot is left untouched.
+// ---------------------------------------------------------------------------
+procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
+var
+	spawn_block_col    : byte;
+	spawn_enemy_col    : byte;
+	spawn_block_index  : byte;
+	spawn_enemy_index  : byte;
+	spawn_enemy_mask   : byte;
+	spawn_form_row     : byte;
+	spawn_sub_row      : byte;
+	spawn_found_flag   : byte;
+	spawn_x_calc       : byte;
+	spawn_y_calc       : byte;
+begin
+	spawn_block_col  := spawn_col / 3;
+	spawn_enemy_col  := spawn_col - spawn_block_col * 3;
+	spawn_found_flag := 0;
+	spawn_form_row   := 2;  // start at bottom formation row
+
+	// Scan downward (form_row 2→0).  TRSE has no 'exit': use found_flag + countdown trick.
+	// When the counter reaches 0 it is set to 255 (> 2) to break on the next while check.
+	while (spawn_form_row <= 2 and spawn_found_flag = 0) do
+	begin
+		spawn_sub_row := 1;  // bottom sub-row within block first
+		while (spawn_sub_row <= 1 and spawn_found_flag = 0) do
+		begin
+			spawn_block_index := spawn_form_row * 4 + spawn_block_col;
+			spawn_enemy_index := spawn_enemy_col * 2 + spawn_sub_row;
+			spawn_enemy_mask  := 1 << spawn_enemy_index;
+			if (block_enemies[spawn_block_index] & spawn_enemy_mask) <> 0 then
+			begin
+				// Compute screen position.
+				// X: block left-edge offset + per-column offset + centering adjustment.
+				spawn_x_calc := spawn_block_col * MONSTER_SPACING
+				              + spawn_enemy_col * 18
+				              + ES_SHOT_SPAWN_X_ADJ;
+				spawn_x_calc := monster_base_x + spawn_x_calc;
+				// Y: formation row offset + sub-row offset + sprite height + fine-tune.
+				spawn_y_calc := spawn_form_row * MONSTER_ROW_OFFSET
+				              + spawn_sub_row * 14
+				              + SPRITE_HEIGHT
+				              + ES_SHOT_SPAWN_Y_ADJ;
+				spawn_y_calc := monster_base_y + spawn_y_calc;
+
+				ufo_bullet_x[spawn_slot]          := spawn_x_calc;
+				ufo_bullet_y[spawn_slot]          := spawn_y_calc;
+				ufo_bullet_active[spawn_slot]     := 1;
+				ufo_bullet_anim_index[spawn_slot] := 0;
+				ufo_bullet_move_tick[spawn_slot]  := 0;
+				ufo_bullet_anim_tick[spawn_slot]  := 0;
+				spawn_found_flag := 1;
+			end;
+			// Count sub_row downward: 1→0 then break (set to 255 > 1)
+			if spawn_sub_row = 0 then
+				spawn_sub_row := 255
+			else
+				dec(spawn_sub_row);
+		end;
+		// Count form_row downward: 2→1→0 then break (set to 255 > 2)
+		if spawn_form_row = 0 then
+			spawn_form_row := 255
+		else
+			dec(spawn_form_row);
+	end;
+end;
+
+// ---------------------------------------------------------------------------
+// TickEnemyShotFiring
+//   Called every frame.  Manages the stagger timer and selects the correct
+//   column for each shot type, then calls SpawnShotFromColumn.
+//
+//   Slot routing (matches arcade shot types):
+//     SHOT_SLOT_PLUNGER  (0) — predefined column table (arcade_plunger_columns)
+//     SHOT_SLOT_ROLLING  (1) — tracks player X: fires from the column directly
+//                               above the player's current position
+//     SHOT_SLOT_SQUIGGLY (2) — predefined column table (arcade_squiggly_columns)
+//
+//   Only fires a slot if it is currently inactive (active = 0).  If the slot
+//   is still in flight the stagger counter still resets so timing is preserved.
+// ---------------------------------------------------------------------------
+procedure TickEnemyShotFiring();
+var
+	tef_fire_col       : byte;
+	tef_player_rel_x   : byte;
+begin
+	if ufo_bullet_stagger_counter = 0 then
+	begin
+		if ufo_bullet_active[ufo_bullet_next_to_fire] = 0 then
+		begin
+			if ufo_bullet_next_to_fire = SHOT_SLOT_PLUNGER then
+			begin
+				// Plunger: predefined column sequence, arcade-accurate.
+				// Arcade table is 1-indexed (1-11); subtract 1 for our 0-based columns.
+				tef_fire_col := Helpers::GetPlungerFireColumn(es_plunger_step) - 1;
+				inc(es_plunger_step);
+				if es_plunger_step >= 16 then es_plunger_step := 0;
+			end
+			else if ufo_bullet_next_to_fire = SHOT_SLOT_ROLLING then
+			begin
+				// Rolling/Teflon: target the column directly above the player.
+				// Column = (player_x - formation_left) / 18, clamped to 0-11.
+				if player_sprite_x >= monster_base_x then
+				begin
+					tef_player_rel_x := player_sprite_x - monster_base_x;
+					tef_fire_col := tef_player_rel_x / 18;
+					if tef_fire_col > 11 then tef_fire_col := 11;
+				end
+				else
+					tef_fire_col := 0;
+			end
+			else
+			begin
+				// Squiggly: predefined column sequence, arcade-accurate.
+				tef_fire_col := Helpers::GetSquigglyFireColumn(es_squiggly_step) - 1;
+				inc(es_squiggly_step);
+				if es_squiggly_step >= 16 then es_squiggly_step := 0;
+			end;
+			SpawnShotFromColumn(tef_fire_col, ufo_bullet_next_to_fire);
+		end;
+		// Advance to next slot (cycles 0→1→2→0)
+		inc(ufo_bullet_next_to_fire);
+		if ufo_bullet_next_to_fire > 2 then
+			ufo_bullet_next_to_fire := 0;
+		ufo_bullet_stagger_counter := UFO_BULLET_STAGGER_FRAMES;
+	end
+	else
+		dec(ufo_bullet_stagger_counter);
 end;
 
 procedure ShowUFOBullet();
@@ -1429,17 +1590,8 @@ begin
 	ShowUFOBullet();
 	UpdateUFOBullet();
 
-	// Staggered UFO bullet firing: fire next bullet after stagger frame countdown
-	if ufo_bullet_stagger_counter = 0 then
-	begin
-		FireUFOBullet(ufo_bullet_next_to_fire);
-		inc(ufo_bullet_next_to_fire);
-		if ufo_bullet_next_to_fire > 2 then
-			ufo_bullet_next_to_fire := 0;
-		ufo_bullet_stagger_counter := UFO_BULLET_STAGGER_FRAMES;
-	end
-	else
-		dec(ufo_bullet_stagger_counter);
+	// Fire enemy shots from alien positions (column-table / player-tracking logic)
+	TickEnemyShotFiring();
 
 	// Schedule the next raster IRQ FIRST, before any heavy game logic.
 	// Reason: CheckBulletCollision (on a kill frame) calls ClearMonster which runs two
