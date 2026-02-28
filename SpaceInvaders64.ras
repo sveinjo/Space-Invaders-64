@@ -66,9 +66,14 @@ var
 	const UFO_X_MAX : byte = 230;     // Right edge — sprite body (+24 px) lands at ~254, still in byte range
 
 	// UFO state
+	const UFO_SPAWN_TIMER_RESET : integer = 1536; // ~25.6 s at 60 Hz (arcade: $0600 frames)
+	const UFO_MIN_ALIVE_TO_SPAWN : byte = 8;      // Arcade: suppressed when fewer than 8 aliens alive
 	ufo_x : byte = UFO_X_MIN;           // Current X position
 	ufo_direction : byte = 1;           // 1 = moving right, 0 = moving left
 	ufo_move_skip_counter : byte = 0;   // Counts 0-2; move is skipped when the counter resets (every 3rd frame)
+	ufo_active : byte = 0;              // 0 = not on screen, 1 = crossing screen
+	ufo_spawn_timer : integer = 1536;   // Frames until next spawn attempt
+	player_shot_count : byte = 0;       // Player shots fired; parity determines saucer entry direction
 
 	// UFO bullets (3 staggered bullets fired in sequence)
 	// Slot 0 = Plunger (anim 13-16, HW sprite 6) — column-table targeting, destroyable
@@ -280,38 +285,78 @@ var
 
 procedure ShowUFO();
 begin
-	SetSpriteLoc(UFO_HW_SPRITE, @spriteLoc/64 + UFO_SPRITE_IMG, useBank);
-	SpritePos(ufo_x, UFO_Y, UFO_HW_SPRITE);
-	togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 0);
-	
+	if ufo_active <> 0 then
+	begin
+		SetSpriteLoc(UFO_HW_SPRITE, @spriteLoc/64 + UFO_SPRITE_IMG, useBank);
+		SpritePos(ufo_x, UFO_Y, UFO_HW_SPRITE);
+		togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 0);
+	end
+	else
+		SpritePos(0, 255, UFO_HW_SPRITE);  // Off-screen when inactive
 end;
 
 procedure UpdateUFO();
+var
+	ufo_aliens_alive : byte;
 begin
-	// Advance skip counter; every 3rd frame the move is skipped.
-	ufo_move_skip_counter := ufo_move_skip_counter + 1;
-	if ufo_move_skip_counter >= 3 then
+	if ufo_active = 1 then
 	begin
-		ufo_move_skip_counter := 0;
-		// Skip movement this frame (counter rolled over).
+		// Active: move across screen; exit (deactivate) when edge reached.
+		ufo_move_skip_counter := ufo_move_skip_counter + 1;
+		if ufo_move_skip_counter >= 3 then
+			ufo_move_skip_counter := 0
+		else
+		begin
+			if ufo_direction <> 0 then
+			begin
+				// Moving right — exit at right edge
+				if ufo_x >= UFO_X_MAX then
+				begin
+					ufo_active := 0;
+					ufo_spawn_timer := UFO_SPAWN_TIMER_RESET;
+				end
+				else
+					inc(ufo_x);
+			end
+			else
+			begin
+				// Moving left — exit at left edge
+				if ufo_x <= UFO_X_MIN then
+				begin
+					ufo_active := 0;
+					ufo_spawn_timer := UFO_SPAWN_TIMER_RESET;
+				end
+				else
+					dec(ufo_x);
+			end;
+		end;
 	end
 	else
 	begin
-		if ufo_direction <> 0 then
+		// Inactive: count down spawn timer.
+		ufo_spawn_timer := ufo_spawn_timer - 1;
+		if ufo_spawn_timer <= 0 then
 		begin
-			// Moving right — bounce at right edge
-			if ufo_x >= UFO_X_MAX then
-				ufo_direction := 0
-			else
-				inc(ufo_x);
-		end
-		else
-		begin
-			// Moving left — bounce at left edge
-			if ufo_x <= UFO_X_MIN then
-				ufo_direction := 1
-			else
-				dec(ufo_x);
+			ufo_spawn_timer := UFO_SPAWN_TIMER_RESET;  // Reset whether or not we spawn
+			ufo_aliens_alive := INITIAL_INVADER_COUNT - numberOfEnemies;
+			if ufo_aliens_alive >= UFO_MIN_ALIVE_TO_SPAWN then
+			begin
+				// Direction determined by player shot count parity (arcade rule)
+				if (player_shot_count & 1) = 0 then
+				begin
+					// Even shots → enters from left, moves right
+					ufo_x := UFO_X_MIN;
+					ufo_direction := 1;
+				end
+				else
+				begin
+					// Odd shots → enters from right, moves left
+					ufo_x := UFO_X_MAX;
+					ufo_direction := 0;
+				end;
+				ufo_move_skip_counter := 0;
+				ufo_active := 1;
+			end;
 		end;
 	end;
 end;
@@ -974,6 +1019,7 @@ end;
 
 procedure FirePlayerBullet();
 begin
+	inc(player_shot_count);
 	player_bullet_active := 1;
 	player_bullet_x := player_sprite_x;  // Same X as player
 	player_bullet_y := player_sprite_y - SPRITE_HEIGHT;  // One sprite height above player
