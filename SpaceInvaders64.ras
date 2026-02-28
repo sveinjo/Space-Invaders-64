@@ -1,4 +1,4 @@
-program SpaceInvaders64;
+﻿program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -281,6 +281,10 @@ var
 	procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
 	procedure TickEnemyShotFiring();
 	procedure CopyShieldSprites();
+	procedure PaintShield1();
+	procedure PaintShield2();
+	procedure PaintShield3();
+	procedure PaintShield4();
 	procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
 	procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
 	procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
@@ -1295,79 +1299,105 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// PaintShieldChars
-//   Redefines all 24 shield charset glyphs (4 shields × 6 chars each) from
-//   the 4 independent sprite copies (sprites 18-21).
-//   Each sprite is 3 bytes/row × 21 rows. Rows 0-7 → top 3 chars, 8-15 → bottom 3.
-//   Call regularly in the raster chain to reflect erosion updates.
+// PaintShield1
+//   Redefines shield 1 charset glyphs (chars 109-114) from sprite 18.
+//   Call after eroding shield 1 sprite data to update the display.
 // ---------------------------------------------------------------------------
-procedure PaintShieldChars();
+procedure PaintShield1();
 var
-	psc_src : integer;
-	psc_dst : integer;
+	ps1_src : integer;
+	ps1_dst : integer;
 begin
-	// === Shield 1 (chars 109-114 from sprite 18) ===
-	psc_src := SHIELD1_SRC;
-	psc_dst := SHIELD1_DST;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 109: col 0, rows 0-7
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 110: col 1, rows 0-7
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 111: col 2, rows 0-7
-	psc_src := psc_src + 22; psc_dst := psc_dst + 8;    // jump to row-band 1 (+22)
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 112: col 0, rows 8-15
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 113: col 1, rows 8-15
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 114: col 2, rows 8-15
+	ps1_src := SHIELD1_SRC;
+	ps1_dst := SHIELD1_DST;
+	CopyShieldGlyph(ps1_src, ps1_dst);                   // char 109: col 0, rows 0-7
+	ps1_src := ps1_src + 1;  ps1_dst := ps1_dst + 8;
+	CopyShieldGlyph(ps1_src, ps1_dst);                   // char 110: col 1, rows 0-7
+	ps1_src := ps1_src + 1;  ps1_dst := ps1_dst + 8;
+	CopyShieldGlyph(ps1_src, ps1_dst);                   // char 111: col 2, rows 0-7
+	ps1_src := ps1_src + 22; ps1_dst := ps1_dst + 8;    // jump to row-band 1 (+22)
+	CopyShieldGlyph(ps1_src, ps1_dst);                   // char 112: col 0, rows 8-15
+	ps1_src := ps1_src + 1;  ps1_dst := ps1_dst + 8;
+	CopyShieldGlyph(ps1_src, ps1_dst);                   // char 113: col 1, rows 8-15
+	ps1_src := ps1_src + 1;  ps1_dst := ps1_dst + 8;
+	CopyShieldGlyph(ps1_src, ps1_dst);                   // char 114: col 2, rows 8-15
+end;
 
-	// === Shield 2 (chars 115-120 from sprite 19) ===
-	psc_src := SHIELD2_SRC;
-	psc_dst := SHIELD2_DST;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 115
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 116
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 117
-	psc_src := psc_src + 22; psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 118
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 119
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 120
+// ---------------------------------------------------------------------------
+// PaintShield2
+//   Redefines shield 2 charset glyphs (chars 115-120) from sprite 19.
+// ---------------------------------------------------------------------------
+procedure PaintShield2();
+var
+	ps2_src : integer;
+	ps2_dst : integer;
+begin
+	ps2_src := SHIELD2_SRC;
+	ps2_dst := SHIELD2_DST;
+	CopyShieldGlyph(ps2_src, ps2_dst);                   // char 115
+	ps2_src := ps2_src + 1;  ps2_dst := ps2_dst + 8;
+	CopyShieldGlyph(ps2_src, ps2_dst);                   // char 116
+	ps2_src := ps2_src + 1;  ps2_dst := ps2_dst + 8;
+	CopyShieldGlyph(ps2_src, ps2_dst);                   // char 117
+	ps2_src := ps2_src + 22; ps2_dst := ps2_dst + 8;
+	CopyShieldGlyph(ps2_src, ps2_dst);                   // char 118
+	ps2_src := ps2_src + 1;  ps2_dst := ps2_dst + 8;
+	CopyShieldGlyph(ps2_src, ps2_dst);                   // char 119
+	ps2_src := ps2_src + 1;  ps2_dst := ps2_dst + 8;
+	CopyShieldGlyph(ps2_src, ps2_dst);                   // char 120
+end;
 
-	// === Shield 3 (chars 121-126 from sprite 20) ===
-	psc_src := SHIELD3_SRC;
-	psc_dst := SHIELD3_DST;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 121
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 122
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 123
-	psc_src := psc_src + 22; psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 124
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 125
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 126
+// ---------------------------------------------------------------------------
+// PaintShield3
+//   Redefines shield 3 charset glyphs (chars 121-126) from sprite 20.
+// ---------------------------------------------------------------------------
+procedure PaintShield3();
+var
+	ps3_src : integer;
+	ps3_dst : integer;
+begin
+	ps3_src := SHIELD3_SRC;
+	ps3_dst := SHIELD3_DST;
+	CopyShieldGlyph(ps3_src, ps3_dst);                   // char 121
+	ps3_src := ps3_src + 1;  ps3_dst := ps3_dst + 8;
+	CopyShieldGlyph(ps3_src, ps3_dst);                   // char 122
+	ps3_src := ps3_src + 1;  ps3_dst := ps3_dst + 8;
+	CopyShieldGlyph(ps3_src, ps3_dst);                   // char 123
+	ps3_src := ps3_src + 22; ps3_dst := ps3_dst + 8;
+	CopyShieldGlyph(ps3_src, ps3_dst);                   // char 124
+	ps3_src := ps3_src + 1;  ps3_dst := ps3_dst + 8;
+	CopyShieldGlyph(ps3_src, ps3_dst);                   // char 125
+	ps3_src := ps3_src + 1;  ps3_dst := ps3_dst + 8;
+	CopyShieldGlyph(ps3_src, ps3_dst);                   // char 126
+end;
 
-	// === Shield 4 (chars 127-132 from sprite 21) ===
-	psc_src := SHIELD4_SRC;
-	psc_dst := SHIELD4_DST;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 127
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 128
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 129
-	psc_src := psc_src + 22; psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 130
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 131
-	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
-	CopyShieldGlyph(psc_src, psc_dst);                   // char 132
+// ---------------------------------------------------------------------------
+// PaintShield4
+//   Redefines shield 4 charset glyphs (chars 127-132) from sprite 21.
+// ---------------------------------------------------------------------------
+procedure PaintShield4();
+var
+	ps4_src : integer;
+	ps4_dst : integer;
+begin
+	ps4_src := SHIELD4_SRC;
+	ps4_dst := SHIELD4_DST;
+	CopyShieldGlyph(ps4_src, ps4_dst);                   // char 127
+	ps4_src := ps4_src + 1;  ps4_dst := ps4_dst + 8;
+	CopyShieldGlyph(ps4_src, ps4_dst);                   // char 128
+	ps4_src := ps4_src + 1;  ps4_dst := ps4_dst + 8;
+	CopyShieldGlyph(ps4_src, ps4_dst);                   // char 129
+	ps4_src := ps4_src + 22; ps4_dst := ps4_dst + 8;
+	CopyShieldGlyph(ps4_src, ps4_dst);                   // char 130
+	ps4_src := ps4_src + 1;  ps4_dst := ps4_dst + 8;
+	CopyShieldGlyph(ps4_src, ps4_dst);                   // char 131
+	ps4_src := ps4_src + 1;  ps4_dst := ps4_dst + 8;
+	CopyShieldGlyph(ps4_src, ps4_dst);                   // char 132
 end;
 
 Procedure DisplayText();
+var
+	test_ptr : pointer of byte;
 begin	
 	//moveto(29,1,hi(screen_char_loc));
 	Screen::PrintString(" ",29,0,#Screen::screen0);
@@ -1403,28 +1433,27 @@ begin
 	// Shield 4: row 19 col 22, chars 127-132 (from sprite 21)
 	PlaceShieldBlock($070E, 127);
 
-	// Copy pristine shield sprite to working copies, then paint all glyphs once.
+	// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
 	CopyShieldSprites();
 	
 	// === TEST EROSION: Remove a chunk from shield 1 to verify dynamic repaint ===
-	// Zero out 3 bytes at sprite row 4 (middle of shield) to create a visible gap.
-	// Shield 1 sprite is at SHIELD1_SRC ($2480). Each row = 3 bytes.
-	// Row 4 offset = 4 * 3 = 12 bytes from base.
+	// Zero out bytes in sprite 18 using a pointer (poke causes compiler errors).
+	test_ptr := #SHIELD1_SRC;
+	test_ptr := test_ptr + 12;  // row 4 offset (4 * 3)
+	test_ptr[0] := 0; inc(test_ptr);  // col 0
+	test_ptr[0] := 0; inc(test_ptr);  // col 1
+	test_ptr[0] := 0; inc(test_ptr);  // col 2
+	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 0
+	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 1
+	test_ptr[0] := 0;                 // row 5 col 2
 	
-	//poke($2480 + 12, 0, 0);  // col 0 of row 4
-	//poke($2480 + 13, 0, 0);  // col 1 of row 4
-	//poke($2480 + 14, 0, 0);  // col 2 of row 4
+	// Paint all 4 shields once after test erosion
+	PaintShield1();
+	PaintShield2();
+	PaintShield3();
+	PaintShield4();
 	
-	// Row 5 for a 2-row gap:
-	//poke($2480 + 15, 0, 0);  // col 0 of row 5
-	//poke($2480 + 16, 0, 0);  // col 1 of row 5
-	//poke($2480 + 17, 0, 0);  // col 2 of row 5
-	
-	PaintShieldChars();
-	
-	//Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
-
-	PaintShieldChars();
+	//Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
 
 // ---------------------------------------------------------------------------
@@ -1859,7 +1888,7 @@ begin
 		
 	StartIRQ(@useKernal);	
 	ShowBullet();
-	PaintShieldChars();  // Repaint shield glyphs to reflect any sprite erosion    
+	// Shield repainting: now on-demand only (call PaintShield1-4 after erosion hit)
 	if DEBUG_ENABLE = 0 then
 		call(sidfile_1_play) // main-context playback (disabled)		
 	else 
