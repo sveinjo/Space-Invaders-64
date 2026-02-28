@@ -125,10 +125,12 @@ var
 	const BULLET_SPEED : byte = 4;  // Pixels per frame
 	//const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
 	const EXPLOSION_DURATION : byte = 16;  // Frames to show explosion
-	const SHIELD_Y_MIN : byte = 190;  // Shield area Y range (lower boundary estimation)
+	const SHIELD_Y_MIN : byte = 152 + 17;  // 135
+	const SHIELD_Y_MAX : byte = 167 + 17;  // 150
 	
-	// Shield collision tracking
+	// Shield collision tracking (per-frame state to prevent retriggering)
 	shield_collision_hit : byte = 0;    // 1-4 = shield 1-4 hit, 0 = no collision
+	shield_hit_was_active : array[4] of byte = (0, 0, 0, 0);  // Track if each shield already hit this frame
 	// --- Hitbox / explosion tuning ---
 	// Explosion sprite X alignment: subtracted from block_x + col*18 (increase = moves left)
 	const EXPLOSION_X_OFFSET : byte = 6;
@@ -1045,19 +1047,24 @@ end;
 
 procedure FirePlayerBullet();
 begin
+	peek(^$D01F, 0);
 	inc(player_shot_count);
 	player_bullet_active := 1;
 	player_bullet_x := player_sprite_x;  // Same X as player
 	player_bullet_y := player_sprite_y - SPRITE_HEIGHT;  // One sprite height above player
 	//player_bullet_y := player_sprite_y - 30;  // One sprite height above player
+	// Reset shield hit tracking for this new bullet
+	shield_hit_was_active[0] := 0;
+	shield_hit_was_active[1] := 0;
+	shield_hit_was_active[2] := 0;
+	shield_hit_was_active[3] := 0;
 end;
 
 procedure ShowBullet();
 var
 	bullet_sprite_index : byte;
 	bullet_color : byte;
-begin
-	peek(^$D01F, 0);
+begin	
 	
 	// Only display bullet/explosion if the sprite box fits entirely above the player raster line.
 	// The VIC-II triggers sprite DMA at the TOP of the sprite box (player_bullet_y), not at the
@@ -1261,77 +1268,95 @@ end;
 
 // ---------------------------------------------------------------------------
 // CheckShieldCollision
-//   Detects player bullet collision with shields using sprite-to-background
-//   collision register. When hit, erodes the shield sprite using XOR logic
-//   and triggers repaint of the affected shield.
-//   Call regularly when bullet is in the lower screen area.
+//   Detects player bullet collision with shields using AABB bounding boxes
+//   and sprite data verification. Avoids unreliable hardware collision register.
+//   When hit, erodes the shield sprite using XOR logic and triggers repaint.
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
 var
-	csc_collision_reg : byte;
 	csc_shield_idx : byte;
+	csc_shield_x : integer;    // Shield screen X position (char columns * 8)
+	csc_shield_hit : byte;
 	csc_xor_dst : integer;
 	csc_xor_ptr : pointer of byte;
 	csc_row : byte;
-	csc_check_enable : byte;
-begin	
-	csc_check_enable := 1;
-	
-	// Only check if bullet is in shield area (Y >= SHIELD_Y_MIN)
-	if player_bullet_y < SHIELD_Y_MIN then
-		csc_check_enable := 0;
-	
-	if csc_check_enable <> 0 then
-	begin
-		// Read sprite-to-background collision register ($D01F)
-		// Bit 0 = sprite 0 collision (player bullet)
-		csc_collision_reg := peek(^$D01F, 0);
-		if (csc_collision_reg) = 0 then
-			csc_check_enable := 0;  // No collision
-	end;
-	
-	if csc_check_enable <> 0 then
-	begin
-		// Collision detected! Determine which shield based on bullet X
-		// Shield positions roughly at X: 24, 84, 140, 196
-		if player_bullet_x < 54 then
-			csc_shield_idx := 0
-		else if player_bullet_x < 110 then
-			csc_shield_idx := 1
-		else if player_bullet_x < 166 then
-			csc_shield_idx := 2
-		else
+	csc_sprite_byte : byte;
+begin
+	// Only check if bullet is active (moving or exploding from shield hit)
+	// and in shield area (Y range)
+	if player_bullet_active <> 0 then
+		if player_bullet_y >= SHIELD_Y_MIN then
+			if player_bullet_y <= SHIELD_Y_MAX then
+			begin
+		// Check each shield (char columns: 4, 10, 16, 22 → screen pixels ~32, 80, 128, 176)
+		// Shields are 3 chars wide (24 pixels)
+		csc_shield_hit := 0;
+		csc_shield_idx := 0;
+		
+		// Shield 1: column 4 (~32px), width 24 → [32+24-11, 56+24-11) = [45, 69)
+		if (player_bullet_x >= 45 and player_bullet_x < 69) then
+			csc_shield_hit := 1
+		// Shield 2: column 10 (~80px) → [80+24-11, 104+24-11) = [93, 117)
+		else if (player_bullet_x >= 93 and player_bullet_x < 117) then
+		begin
+			csc_shield_hit := 2;
+			csc_shield_idx := 1;
+		end
+		// Shield 3: column 16 (~128px) → [128+24-11, 152+24-11) = [141, 165)
+		else if (player_bullet_x >= 141 and player_bullet_x < 165) then
+		begin
+			csc_shield_hit := 3;
+			csc_shield_idx := 2;
+		end
+		// Shield 4: column 22 (~176px) → [176+24-11, 200+24-11) = [189, 213)
+		else if (player_bullet_x >= 189 and player_bullet_x < 213) then
+		begin
+			csc_shield_hit := 4;
 			csc_shield_idx := 3;
+		end;
 		
-		// Select shield sprite to erode
-		if csc_shield_idx = 0 then
-			csc_xor_dst := SHIELD1_SRC
-		else if csc_shield_idx = 1 then
-			csc_xor_dst := SHIELD2_SRC
-		else if csc_shield_idx = 2 then
-			csc_xor_dst := SHIELD3_SRC
-		else
-			csc_xor_dst := SHIELD4_SRC;
-		
-		// Calculate erosion row based on bullet Y
-		csc_row := (player_bullet_y - SHIELD_Y_MIN) / 3;
-		if csc_row > 20 then csc_row := 20;
-		
-		// Apply XOR erosion: flip bits in 3 consecutive bytes (1 sprite row)
-		csc_xor_ptr := csc_xor_dst + csc_row * 3;
-		csc_xor_ptr[0] := csc_xor_ptr[0] xor $FF;
-		inc(csc_xor_ptr);
-		csc_xor_ptr[0] := csc_xor_ptr[0] xor $FF;
-		inc(csc_xor_ptr);
-		csc_xor_ptr[0] := csc_xor_ptr[0] xor $FF;
-		
-		// Mark which shield was hit for repaint
-		shield_collision_hit := csc_shield_idx + 1;
-		
-		// Display explosion
-		player_bullet_x := player_bullet_x - EXPLOSION_X_OFFSET;
-		player_bullet_active := 2;
-		explosion_frame_counter := 0;
+		// If bounding box hit and not already active, verify against actual sprite data
+		if (csc_shield_hit <> 0 and shield_hit_was_active[csc_shield_idx] = 0) then
+		begin
+			// Calculate which row of the shield sprite to check
+			csc_row := (player_bullet_y - SHIELD_Y_MIN) / 3;
+			if csc_row > 18 then csc_row := 18;  // Shield is ~21 rows tall
+			
+			// Select shield sprite and read the byte at the hit location
+			if csc_shield_idx = 0 then
+				csc_xor_dst := SHIELD1_SRC
+			else if csc_shield_idx = 1 then
+				csc_xor_dst := SHIELD2_SRC
+			else if csc_shield_idx = 2 then
+				csc_xor_dst := SHIELD3_SRC
+			else
+				csc_xor_dst := SHIELD4_SRC;
+			
+			// Check the sprite byte at this row to confirm a lit pixel exists
+			csc_sprite_byte := peek(csc_xor_dst + csc_row * 3, 0);  // Read first byte of the row
+			
+			// If sprite byte nonzero, collision confirmed
+			if csc_sprite_byte <> 0 then
+			begin
+				// COLLISION CONFIRMED: Erode the shield
+				// Apply XOR erosion: flip bits in 3 consecutive bytes (1 sprite row)
+				csc_xor_ptr := csc_xor_dst + csc_row * 3;
+				csc_xor_ptr[0] := csc_xor_ptr[0] xor $FF;
+				inc(csc_xor_ptr);
+				csc_xor_ptr[0] := csc_xor_ptr[0] xor $FF;
+				inc(csc_xor_ptr);
+				csc_xor_ptr[0] := csc_xor_ptr[0] xor $FF;
+				
+				// Mark which shield was hit and prevent re-triggering this frame
+				shield_collision_hit := csc_shield_hit;
+				shield_hit_was_active[csc_shield_idx] := 1;
+				
+				// Display explosion
+				player_bullet_x := player_bullet_x - EXPLOSION_X_OFFSET;
+				player_bullet_active := 2;
+				explosion_frame_counter := 0;
+			end;
+		end;
 	end;
 end;
 //   Copies the pristine shield sprite (17 at $2440) to sprites 18-21.
@@ -1968,6 +1993,8 @@ begin
 		
 	StartIRQ(@useKernal);	
 	ShowBullet();
+	peek(^$D01F, 0);
+	CheckShieldCollision();
 	// Shield repainting: now on-demand only (call PaintShield1-4 after erosion hit)
 	if DEBUG_ENABLE = 0 then
 		call(sidfile_1_play) // main-context playback (disabled)		
@@ -2185,8 +2212,7 @@ begin
 	//BorderDebug();
 
 	//ShowBullet();
-	peek(^$D01F, 0);
-	CheckShieldCollision();
+	
 
 	StartIRQ(@useKernal);
 	
