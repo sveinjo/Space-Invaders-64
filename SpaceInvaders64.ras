@@ -125,8 +125,8 @@ var
 	const BULLET_SPEED : byte = 4;  // Pixels per frame
 	//const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
 	const EXPLOSION_DURATION : byte = 16;  // Frames to show explosion
-	const SHIELD_Y_MIN : byte = 152 + 17;  // 135
-	const SHIELD_Y_MAX : byte = 167 + 17;  // 150
+	const SHIELD_Y_MIN : byte = 152 + 17 + 16;  // 135
+	const SHIELD_Y_MAX : byte = 167 + 17 + 16;  // 150
 	
 	// Shield collision tracking (per-frame state to prevent retriggering)
 	shield_collision_hit : byte = 0;    // 1-4 = shield 1-4 hit, 0 = no collision
