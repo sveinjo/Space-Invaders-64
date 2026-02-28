@@ -139,6 +139,15 @@ var
 	// Value = sprite row of the BOTTOM of the next erase zone (starts at 15 = bottom of top 16 pixel rows).
 	// 255 = this column is fully eroded (bullet passes through).
 	shield_col_top : array[12] of byte = (15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15);
+	
+	// Pending shield erosion state (for deferred/split processing)
+	pending_shield_erosion : byte = 0;  // 1 = erosion work pending, 0 = none
+	pending_shield_idx : byte = 0;      // Which shield (0-3)
+	pending_byte_col : byte = 0;        // Which byte column (0-2)
+	pending_col_idx : byte = 0;         // Precomputed shield_idx * 3 + byte_col
+	pending_erase_top : byte = 0;       // Erosion depth to start from
+	shield_erosion_frame_skip : byte = 0;  // Alternates 0/1 to defer erosion to every other frame
+	
 	// --- Hitbox / explosion tuning ---
 	// Explosion sprite X alignment: subtracted from block_x + col*18 (increase = moves left)
 	const EXPLOSION_X_OFFSET : byte = 6;
@@ -1275,14 +1284,12 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// CheckShieldCollision - OPTIMIZED
-//   Per-column depth-tracked shield erosion using lookup tables:
-//   1. X/Y bounding box → which shield (0-3) using lookup table.
-//   2. Map bullet X to sprite byte column (0-2) using bit shift.
-//   3. Look up shield_col_top[shield_idx*3 + byte_col]:
-//        255 → this column already fully eroded, bullet passes through.
-//        0-20 → erase 4 rows upward from that row, then advance erosion depth.
-//   4. Stop the bullet (state 3) and schedule a shield repaint.
+// CheckShieldCollision - DETECTION PHASE ONLY (fast)
+//   Just detects collision and queues erosion work for later application.
+//   1. X/Y bounding box → which shield (0-3)
+//   2. Map bullet X to sprite byte column (0-2) using bit shift
+//   3. Look up shield_col_top to see if column is eroded
+//   4. Queue erosion work if needed
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
 var
@@ -1291,13 +1298,6 @@ var
 	csc_byte_col : byte;
 	csc_col_idx : byte;
 	csc_erase_top : byte;
-	csc_shield_row : byte;
-	csc_expl_row : byte;
-	csc_shield_addr : integer;
-	csc_expl_addr : integer;
-	csc_shield_base : integer;
-	csc_shield_ptr : pointer of byte;
-	csc_expl_ptr : pointer of byte;
 begin
 
 	if player_bullet_active = 1 then
@@ -1333,9 +1333,6 @@ begin
 				// If found a shield (csc_shield_idx < 4)
 				if csc_shield_idx < 4 then
 				begin
-					// Get shield base address from lookup table
-					csc_shield_base := SHIELD_BASE[csc_shield_idx];
-
 					// Which byte column (0-2) is the bullet in? Use bit shift for speed
 					csc_byte_col := (csc_px_offset >> 3);  // Divide by 8 using bit shift
 
@@ -1346,74 +1343,107 @@ begin
 					// 255 = this column is already fully tunnelled through.
 					if csc_erase_top <> 255 then
 					begin
-						// Erase 4 rows of the bullet's byte column upward from csc_erase_top.
-						// UNROLLED: Erase rows directly instead of loop for speed
-						csc_shield_row := csc_erase_top;
-						csc_expl_row := 20;
-
-						// Row 1
-						csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
-						csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
-						csc_expl_ptr := csc_expl_addr;
-						csc_shield_ptr := csc_shield_addr;
-						csc_shield_ptr[0] := csc_shield_ptr[0] & (csc_expl_ptr[0] xor $FF);
-						csc_shield_ptr[0] := 0;
-
-						if csc_shield_row > 0 then
-						begin
-							dec(csc_shield_row);
-							if csc_expl_row > 0 then dec(csc_expl_row);
-
-							// Row 2
-							csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
-							csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
-							csc_expl_ptr := csc_expl_addr;
-							csc_shield_ptr := csc_shield_addr;
-							csc_shield_ptr[0] := csc_shield_ptr[0] & (csc_expl_ptr[0] xor $FF);
-							csc_shield_ptr[0] := 0;
-
-							if csc_shield_row > 0 then
-							begin
-								dec(csc_shield_row);
-								if csc_expl_row > 0 then dec(csc_expl_row);
-
-								// Row 3
-								csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
-								csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
-								csc_expl_ptr := csc_expl_addr;
-								csc_shield_ptr := csc_shield_addr;
-								csc_shield_ptr[0] := csc_shield_ptr[0] & (csc_expl_ptr[0] xor $FF);
-								csc_shield_ptr[0] := 0;
-
-								if csc_shield_row > 0 then
-								begin
-									dec(csc_shield_row);
-									if csc_expl_row > 0 then dec(csc_expl_row);
-
-									// Row 4
-									csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
-									csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
-									csc_expl_ptr := csc_expl_addr;
-									csc_shield_ptr := csc_shield_addr;
-									csc_shield_ptr[0] := csc_shield_ptr[0] & (csc_expl_ptr[0] xor $FF);
-									csc_shield_ptr[0] := 0;
-								end;
-							end;
-						end;
-
-						// Advance the depth: next shot starts 4 rows higher.
-						// Replace 4x dec() with single subtraction
-						if csc_erase_top < 4 then
-							shield_col_top[csc_col_idx] := 255  // fully tunnelled
-						else
-							shield_col_top[csc_col_idx] := csc_erase_top - 4;
-
+						// Queue erosion work for deferred processing
+						pending_shield_erosion := 1;
+						pending_shield_idx := csc_shield_idx;
+						pending_byte_col := csc_byte_col;
+						pending_col_idx := csc_col_idx;
+						pending_erase_top := csc_erase_top;
+						
+						// Set immediate flags
 						shield_collision_hit := csc_shield_idx + 1;  // 1-4 for display
 						player_bullet_active := 3;
 						explosion_frame_counter := 0;
 					end;
 				end;
 			end;
+end;
+
+// ---------------------------------------------------------------------------
+// ApplyShieldErosion - EROSION PHASE (can be deferred/split)
+//   Applies the queued shield erosion work.
+//   Run this on alternating frames or scanlines to spread CPU load.
+// ---------------------------------------------------------------------------
+procedure ApplyShieldErosion();
+var
+	ase_shield_base : integer;
+	ase_shield_row : byte;
+	ase_expl_row : byte;
+	ase_shield_addr : integer;
+	ase_expl_addr : integer;
+	ase_shield_ptr : pointer of byte;
+	ase_expl_ptr : pointer of byte;
+begin
+	if pending_shield_erosion = 1 then
+	begin
+		// Get shield base address from lookup table
+		ase_shield_base := SHIELD_BASE[pending_shield_idx];
+
+		// Erase 4 rows of the bullet's byte column upward from pending_erase_top.
+		// UNROLLED: Erase rows directly instead of loop for speed
+		ase_shield_row := pending_erase_top;
+		ase_expl_row := 20;
+
+		// Row 1
+		ase_expl_addr := $20C0 + ase_expl_row * 3 + pending_byte_col;
+		ase_shield_addr := ase_shield_base + ase_shield_row * 3 + pending_byte_col;
+		ase_expl_ptr := ase_expl_addr;
+		ase_shield_ptr := ase_shield_addr;
+		ase_shield_ptr[0] := ase_shield_ptr[0] & (ase_expl_ptr[0] xor $FF);
+		ase_shield_ptr[0] := 0;
+
+		if ase_shield_row > 0 then
+		begin
+			dec(ase_shield_row);
+			if ase_expl_row > 0 then dec(ase_expl_row);
+
+			// Row 2
+			ase_expl_addr := $20C0 + ase_expl_row * 3 + pending_byte_col;
+			ase_shield_addr := ase_shield_base + ase_shield_row * 3 + pending_byte_col;
+			ase_expl_ptr := ase_expl_addr;
+			ase_shield_ptr := ase_shield_addr;
+			ase_shield_ptr[0] := ase_shield_ptr[0] & (ase_expl_ptr[0] xor $FF);
+			ase_shield_ptr[0] := 0;
+
+			if ase_shield_row > 0 then
+			begin
+				dec(ase_shield_row);
+				if ase_expl_row > 0 then dec(ase_expl_row);
+
+				// Row 3
+				ase_expl_addr := $20C0 + ase_expl_row * 3 + pending_byte_col;
+				ase_shield_addr := ase_shield_base + ase_shield_row * 3 + pending_byte_col;
+				ase_expl_ptr := ase_expl_addr;
+				ase_shield_ptr := ase_shield_addr;
+				ase_shield_ptr[0] := ase_shield_ptr[0] & (ase_expl_ptr[0] xor $FF);
+				ase_shield_ptr[0] := 0;
+
+				if ase_shield_row > 0 then
+				begin
+					dec(ase_shield_row);
+					if ase_expl_row > 0 then dec(ase_expl_row);
+
+					// Row 4
+					ase_expl_addr := $20C0 + ase_expl_row * 3 + pending_byte_col;
+					ase_shield_addr := ase_shield_base + ase_shield_row * 3 + pending_byte_col;
+					ase_expl_ptr := ase_expl_addr;
+					ase_shield_ptr := ase_shield_addr;
+					ase_shield_ptr[0] := ase_shield_ptr[0] & (ase_expl_ptr[0] xor $FF);
+					ase_shield_ptr[0] := 0;
+				end;
+			end;
+		end;
+
+		// Advance the depth: next shot starts 4 rows higher.
+		// Replace 4x dec() with single subtraction
+		if pending_erase_top < 4 then
+			shield_col_top[pending_col_idx] := 255  // fully tunnelled
+		else
+			shield_col_top[pending_col_idx] := pending_erase_top - 4;
+
+		// Clear pending flag
+		pending_shield_erosion := 0;
+	end;
 end;
 //   Copies the pristine shield sprite (17 at $2440) to sprites 18-21.
 //   Each shield gets its own sprite data that can be eroded independently.
@@ -2057,6 +2087,12 @@ begin
 	
 	ShowBullet();
 	CheckShieldCollision();
+	
+	// Apply erosion work on alternating frames to spread CPU load
+	if shield_erosion_frame_skip = 0 then
+		ApplyShieldErosion();
+	shield_erosion_frame_skip := 1 - shield_erosion_frame_skip;  // Toggle 0<->1
+	
 	//peek(^$D01F, 0);
 	
 	// Shield repainting: now on-demand only (call PaintShield1-4 after erosion hit)
