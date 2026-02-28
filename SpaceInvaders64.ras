@@ -94,12 +94,18 @@ var
 
 	ufo_bullet_stagger_counter : byte = 0;  // Countdown to fire next bullet
 
-	// Shield charset redefinition: sprite 17 ($2000+17*64=$2440), charset chars 109-114 at $3368.
-	// Chars start at 109 (not 108) to leave an 8-byte gap above Star2Limit/Star4Limit ($3360).
-	// Star pointers do 2-byte writes when clearing; a one-glyph gap prevents them reaching our data.
-	// Using integer constants so they can be assigned directly to integer variables.
-	const SHIELD_SRC_BASE : integer = $2440; // sprite 17 data start
-	const SHIELD_DST_BASE : integer = $3368; // char 109 glyph start ($3000 + 109*8)
+	// Shield erosion system: 4 independent sprite copies (18-21) → 4 charset glyph ranges.
+	// Sprite 17 ($2440) is the pristine template, copied to 18-21 at startup.
+	// Each shield gets 6 chars (3 wide × 2 tall). Char 109+ leaves gap above $3360 (star limit).
+	const SHIELD_TEMPLATE_SRC : integer = $2440; // sprite 17 (pristine, never modified)
+	const SHIELD1_SRC : integer = $2480; // sprite 18
+	const SHIELD2_SRC : integer = $24C0; // sprite 19
+	const SHIELD3_SRC : integer = $2500; // sprite 20
+	const SHIELD4_SRC : integer = $2540; // sprite 21
+	const SHIELD1_DST : integer = $3368; // char 109 ($3000+109*8)
+	const SHIELD2_DST : integer = $3398; // char 115 ($3000+115*8)
+	const SHIELD3_DST : integer = $33C8; // char 121 ($3000+121*8)
+	const SHIELD4_DST : integer = $33F8; // char 127 ($3000+127*8)
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
 	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
@@ -274,6 +280,7 @@ var
 	function GetLeftmostEnemyOffset() : byte;
 	procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
 	procedure TickEnemyShotFiring();
+	procedure CopyShieldSprites();
 	procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
 	procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
 	procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
@@ -1242,31 +1249,122 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// CopyShieldSprites
+//   Copies the pristine shield sprite (17 at $2440) to sprites 18-21.
+//   Each shield gets its own sprite data that can be eroded independently.
+//   Call once at startup before PaintShieldChars.
+// ---------------------------------------------------------------------------
+procedure CopyShieldSprites();
+var
+	css_i : byte;
+	css_src_ptr : pointer of byte;
+	css_dst_ptr : pointer of byte;
+begin
+	// Copy sprite 17 → sprite 18 (shield 1)
+	css_src_ptr := #SHIELD_TEMPLATE_SRC;
+	css_dst_ptr := #SHIELD1_SRC;
+	css_i := 0;
+	while css_i < 64 do begin
+		css_dst_ptr[0] := css_src_ptr[0];
+		inc(css_src_ptr); inc(css_dst_ptr); inc(css_i);
+	end;
+	// Copy sprite 17 → sprite 19 (shield 2)
+	css_src_ptr := #SHIELD_TEMPLATE_SRC;
+	css_dst_ptr := #SHIELD2_SRC;
+	css_i := 0;
+	while css_i < 64 do begin
+		css_dst_ptr[0] := css_src_ptr[0];
+		inc(css_src_ptr); inc(css_dst_ptr); inc(css_i);
+	end;
+	// Copy sprite 17 → sprite 20 (shield 3)
+	css_src_ptr := #SHIELD_TEMPLATE_SRC;
+	css_dst_ptr := #SHIELD3_SRC;
+	css_i := 0;
+	while css_i < 64 do begin
+		css_dst_ptr[0] := css_src_ptr[0];
+		inc(css_src_ptr); inc(css_dst_ptr); inc(css_i);
+	end;
+	// Copy sprite 17 → sprite 21 (shield 4)
+	css_src_ptr := #SHIELD_TEMPLATE_SRC;
+	css_dst_ptr := #SHIELD4_SRC;
+	css_i := 0;
+	while css_i < 64 do begin
+		css_dst_ptr[0] := css_src_ptr[0];
+		inc(css_src_ptr); inc(css_dst_ptr); inc(css_i);
+	end;
+end;
+
+// ---------------------------------------------------------------------------
 // PaintShieldChars
-//   Redefines charset glyphs 109-114 with pixel data from sprite 17.
-//   Sprite 17 is 3 bytes/row x 21 rows.  We use rows 0-7 for the top
-//   shield chars (109-111) and rows 8-15 for the bottom (112-114).
-//   src offsets from SHIELD_SRC_BASE: col0=+0, col1=+1, col2=+2;
-//   row-band 1 starts at +24 (8 rows x 3 bytes).
+//   Redefines all 24 shield charset glyphs (4 shields × 6 chars each) from
+//   the 4 independent sprite copies (sprites 18-21).
+//   Each sprite is 3 bytes/row × 21 rows. Rows 0-7 → top 3 chars, 8-15 → bottom 3.
+//   Call regularly in the raster chain to reflect erosion updates.
 // ---------------------------------------------------------------------------
 procedure PaintShieldChars();
 var
 	psc_src : integer;
 	psc_dst : integer;
 begin
-	psc_src := SHIELD_SRC_BASE;
-	psc_dst := SHIELD_DST_BASE;
+	// === Shield 1 (chars 109-114 from sprite 18) ===
+	psc_src := SHIELD1_SRC;
+	psc_dst := SHIELD1_DST;
 	CopyShieldGlyph(psc_src, psc_dst);                   // char 109: col 0, rows 0-7
 	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
 	CopyShieldGlyph(psc_src, psc_dst);                   // char 110: col 1, rows 0-7
 	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
 	CopyShieldGlyph(psc_src, psc_dst);                   // char 111: col 2, rows 0-7
-	psc_src := psc_src + 22; psc_dst := psc_dst + 8;    // jump to row-band 1 (+22 = skip rest of band 0)
+	psc_src := psc_src + 22; psc_dst := psc_dst + 8;    // jump to row-band 1 (+22)
 	CopyShieldGlyph(psc_src, psc_dst);                   // char 112: col 0, rows 8-15
 	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
 	CopyShieldGlyph(psc_src, psc_dst);                   // char 113: col 1, rows 8-15
 	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
 	CopyShieldGlyph(psc_src, psc_dst);                   // char 114: col 2, rows 8-15
+
+	// === Shield 2 (chars 115-120 from sprite 19) ===
+	psc_src := SHIELD2_SRC;
+	psc_dst := SHIELD2_DST;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 115
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 116
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 117
+	psc_src := psc_src + 22; psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 118
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 119
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 120
+
+	// === Shield 3 (chars 121-126 from sprite 20) ===
+	psc_src := SHIELD3_SRC;
+	psc_dst := SHIELD3_DST;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 121
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 122
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 123
+	psc_src := psc_src + 22; psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 124
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 125
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 126
+
+	// === Shield 4 (chars 127-132 from sprite 21) ===
+	psc_src := SHIELD4_SRC;
+	psc_dst := SHIELD4_DST;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 127
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 128
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 129
+	psc_src := psc_src + 22; psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 130
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 131
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 132
 end;
 
 Procedure DisplayText();
@@ -1295,16 +1393,34 @@ begin
 	//Screen::PrintString("¤%&",22,19,#Screen::screen0);
 	//Screen::PrintString("/+*",22,20,#Screen::screen0);
 	
-	// Place all 4 shield blocks (2 rows each, 3 chars wide), reusing chars 109-114 for all.
-	// (Arc-correct: all shields start identical. Later enhancement: per-shield erosion.)
-	// Shield 1: row 19 col 4
+	// Place all 4 shield blocks using independent charset glyph ranges for erosion.
+	// Shield 1: row 19 col 4,  chars 109-114 (from sprite 18)
 	PlaceShieldBlock($06FC, 109);
-	// Shield 2: row 19 col 10
-	PlaceShieldBlock($0702, 109);
-	// Shield 3: row 19 col 16
-	PlaceShieldBlock($0708, 109);
-	// Shield 4: row 19 col 22
-	PlaceShieldBlock($070E, 109);
+	// Shield 2: row 19 col 10, chars 115-120 (from sprite 19)
+	PlaceShieldBlock($0702, 115);
+	// Shield 3: row 19 col 16, chars 121-126 (from sprite 20)
+	PlaceShieldBlock($0708, 121);
+	// Shield 4: row 19 col 22, chars 127-132 (from sprite 21)
+	PlaceShieldBlock($070E, 127);
+
+	// Copy pristine shield sprite to working copies, then paint all glyphs once.
+	CopyShieldSprites();
+	
+	// === TEST EROSION: Remove a chunk from shield 1 to verify dynamic repaint ===
+	// Zero out 3 bytes at sprite row 4 (middle of shield) to create a visible gap.
+	// Shield 1 sprite is at SHIELD1_SRC ($2480). Each row = 3 bytes.
+	// Row 4 offset = 4 * 3 = 12 bytes from base.
+	
+	//poke($2480 + 12, 0, 0);  // col 0 of row 4
+	//poke($2480 + 13, 0, 0);  // col 1 of row 4
+	//poke($2480 + 14, 0, 0);  // col 2 of row 4
+	
+	// Row 5 for a 2-row gap:
+	//poke($2480 + 15, 0, 0);  // col 0 of row 5
+	//poke($2480 + 16, 0, 0);  // col 1 of row 5
+	//poke($2480 + 17, 0, 0);  // col 2 of row 5
+	
+	PaintShieldChars();
 	
 	//Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
 
@@ -1740,10 +1856,10 @@ interrupt MainRasterChain();
 var
 	mc_row_target : byte;
 begin
-	
-			
-	ShowBullet();
+		
 	StartIRQ(@useKernal);	
+	ShowBullet();
+	PaintShieldChars();  // Repaint shield glyphs to reflect any sprite erosion    
 	if DEBUG_ENABLE = 0 then
 		call(sidfile_1_play) // main-context playback (disabled)		
 	else 
@@ -2005,7 +2121,7 @@ begin
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
 	inc(StarField_RasterCount);
-	StarField::DoStarfield();    
+	StarField::DoStarfield();	
 	preventirq();  
 	//poke(^$D019, 0, 0);  
 	
@@ -2022,7 +2138,7 @@ begin
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
 	inc(StarField_RasterCount);
-	StarField::DoStarfield();    
+	StarField::DoStarfield();	
 	preventirq();  
 	poke(^$D019, 0, 0);  
 	
