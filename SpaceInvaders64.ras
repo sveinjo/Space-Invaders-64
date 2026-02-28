@@ -1,4 +1,4 @@
-program SpaceInvaders64;
+﻿program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -132,9 +132,9 @@ var
 	shield_collision_hit : byte = 0;    // 1-4 = shield 1-4 hit this frame, 0 = no collision
 	// Per-column erosion depth: 4 shields x 3 byte columns.
 	// Index = shield_idx*3 + byte_col (0-2).
-	// Value = sprite row of the BOTTOM of the next erase zone (starts at 20 = bottom of sprite).
+	// Value = sprite row of the BOTTOM of the next erase zone (starts at 15 = bottom of top 16 pixel rows).
 	// 255 = this column is fully eroded (bullet passes through).
-	shield_col_top : array[12] of byte = (20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20);
+	shield_col_top : array[12] of byte = (15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15);
 	// --- Hitbox / explosion tuning ---
 	// Explosion sprite X alignment: subtracted from block_x + col*18 (increase = moves left)
 	const EXPLOSION_X_OFFSET : byte = 6;
@@ -1359,11 +1359,11 @@ begin
 					// 255 = this column is already fully tunnelled through.
 					if csc_erase_top <> 255 then
 					begin
-						// Erase 8 rows of the bullet's byte column upward from csc_erase_top.
+						// Erase 4 rows of the bullet's byte column upward from csc_erase_top.
 						csc_erase_idx := 0;
 						csc_shield_row := csc_erase_top;
 						csc_expl_row := 20;
-						while csc_erase_idx < 8 do
+						while csc_erase_idx < 4 do
 						begin
 							csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
 							csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
@@ -1383,16 +1383,12 @@ begin
 							inc(csc_erase_idx);
 						end;
 
-						// Advance the depth: next shot starts 8 rows higher.
-						if csc_erase_top < 8 then
+						// Advance the depth: next shot starts 4 rows higher.
+						if csc_erase_top < 4 then
 							shield_col_top[csc_col_idx] := 255  // fully tunnelled
 						else
 						begin
 							shield_col_top[csc_col_idx] := csc_erase_top;
-							dec(shield_col_top[csc_col_idx]);
-							dec(shield_col_top[csc_col_idx]);
-							dec(shield_col_top[csc_col_idx]);
-							dec(shield_col_top[csc_col_idx]);
 							dec(shield_col_top[csc_col_idx]);
 							dec(shield_col_top[csc_col_idx]);
 							dec(shield_col_top[csc_col_idx]);
@@ -1448,10 +1444,10 @@ begin
 		css_dst_ptr[0] := css_src_ptr[0];
 		inc(css_src_ptr); inc(css_dst_ptr); inc(css_i);
 	end;
-	// Reset per-column erosion depths to sprite bottom (row 20).
+	// Reset per-column erosion depths to row 15 (bottom of the 16 lit pixel rows).
 	css_i := 0;
 	while css_i < 12 do begin
-		shield_col_top[css_i] := 20;
+		shield_col_top[css_i] := 15;
 		inc(css_i);
 	end;
 end;
