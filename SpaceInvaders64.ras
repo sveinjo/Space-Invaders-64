@@ -1,4 +1,4 @@
-﻿program SpaceInvaders64;
+program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -1096,7 +1096,7 @@ begin
 			bullet_sprite_index := 2   // Alien-hit explosion sprite
 		end
 		else if player_bullet_active = 3 then
-			bullet_sprite_index := 3   // Enemy-shot explosion sprite
+			bullet_sprite_index := 23   // Enemy-shot explosion sprite
 		else
 			bullet_sprite_index := 1;  // Normal bullet sprite
 		
