@@ -96,7 +96,7 @@ var
 	
 
 	// Player bullet variables
-	player_bullet_active : byte = 0;  // 0 = inactive, 1 = active, 2 = exploding
+	player_bullet_active : byte = 0;  // 0=inactive, 1=moving, 2=exploding(alien hit), 3=exploding(enemy shot hit)
 	player_bullet_x : byte;
 	player_bullet_y : byte;
 	explosion_frame_counter : byte = 0;  // Counts frames for explosion animation
@@ -318,9 +318,9 @@ begin
 	sub_i := 0;
 	while sub_i <= 2 do
 	begin
+		ub_sprite := ufo_bullet_sprite[sub_i];
 		if ufo_bullet_active[sub_i] <> 0 then
 		begin
-			ub_sprite := ufo_bullet_sprite[sub_i];
 			if ufo_bullet_active[sub_i] = 1 then
 				ub_sprite_index := ufo_bullet_anim_start[sub_i] + ufo_bullet_anim_index[sub_i]
 			else
@@ -328,7 +328,9 @@ begin
 
 			SetSpriteLoc(ub_sprite, @spriteLoc/64 + ub_sprite_index - 1, useBank);
 			SpritePos(ufo_bullet_x[sub_i], ufo_bullet_y[sub_i], ub_sprite);
-		end;
+		end
+		else
+			SpritePos(0, 255, ub_sprite);  // Push off-screen when inactive
 		inc(sub_i);
 	end;
 end;
@@ -440,7 +442,7 @@ begin
 							// The Rolling handler never checks for pixel overlap
 							// so it continues. The player bullet DOES detect the
 							// overlap and is destroyed (status 3 → explosion).
-							player_bullet_active := 2;
+							player_bullet_active := 3;  // enemy-shot explosion sprite
 							explosion_frame_counter := 0;
 							// Rolling shot keeps moving — do NOT touch ufo_bullet_active
 						end
@@ -450,7 +452,7 @@ begin
 							if SHOT_COLLISION_LOCKOUT_PLAYER = 1 then
 							begin
 								// Arcade-like: player bullet locked out (explosion on player sprite)
-								player_bullet_active := 2;
+								player_bullet_active := 3;  // enemy-shot explosion sprite
 								explosion_frame_counter := 0;
 								// Enemy shot resets immediately
 								ufo_bullet_active[sc_i] := 0;
@@ -831,34 +833,30 @@ begin
 	// explosion is still visually correct even when the box top is well above the enemy.
 	if player_bullet_active <> 0 then
 	begin
-		// Select sprite based on bullet state: 1=normal bullet, 2=explosion
+		// Select sprite based on bullet state:
+		//   1 = normal bullet
+		//   2 = alien-hit explosion (sprite 2)
+		//   3 = enemy-shot explosion (sprite 3)
 		if player_bullet_active = 2 then
 		begin
-			// Alternate enemy color each frame while exploding
-			//if player_bullet_active = 1 then
-			//begin
+			// Alternate color each frame while showing alien-hit explosion
 			if player_bullet_color_toggle = 0 then
 				bullet_color := light_blue
 			else
 				bullet_color := cyan;
-				
 			sprite_color[1] := bullet_color;
 			sprite_color[2] := bullet_color;
 			sprite_color[3] := bullet_color;
 			sprite_color[4] := bullet_color;
-			//sprite_color[0] := bullet_color;
 			if player_bullet_color_toggle = 0 then
-			begin
-				player_bullet_color_toggle := 1;
-				//dec(monster_base_y);					
-			end	else
-			begin
+				player_bullet_color_toggle := 1
+			else
 				player_bullet_color_toggle := 0;
-				//inc(monster_base_y);					
-			end;
-	
-			bullet_sprite_index := 2  // Explosion sprite
-		end	else
+			bullet_sprite_index := 2   // Alien-hit explosion sprite
+		end
+		else if player_bullet_active = 3 then
+			bullet_sprite_index := 3   // Enemy-shot explosion sprite
+		else
 			bullet_sprite_index := 1;  // Normal bullet sprite
 		
 		SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
@@ -883,13 +881,12 @@ begin
 			player_bullet_active := 0;
 		end;
 	end
-	else if player_bullet_active = 2 then
+	else if player_bullet_active >= 2 then
 	begin
-		// Explosion animation - count frames
+		// Explosion animation (state 2 = alien hit, state 3 = enemy shot hit)
 		inc(explosion_frame_counter);
 		if explosion_frame_counter >= EXPLOSION_DURATION then
 		begin
-			// Explosion finished, reset bullet
 			player_bullet_active := 0;
 			explosion_frame_counter := 0;
 		end;

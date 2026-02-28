@@ -191,14 +191,16 @@ var
 //             (status 3). Enemy shot is marked for removal (bit 0 of $2073).
 //     C64 LOCKOUT=0: enemy shot explodes (active:=2, ES_SHOT_EXPLODE_DURATION
 //             frames). Player bullet resets immediately (active:=0).
-//     C64 LOCKOUT=1: player bullet explodes (active:=2, EXPLOSION_DURATION
-//             frames). Enemy shot resets immediately.
+//     C64 LOCKOUT=1: player bullet enters state 3 (active:=3,
+//             EXPLOSION_DURATION frames, shows enemy-shot explosion sprite).
+//             Enemy shot resets immediately (active:=0, pushed off-screen).
 //
 //  2. Rolling/Teflon vs player bullet → PLAYER BULLET DESTROYED ONLY
 //     Arcade: Rolling handler never checks $2061 so Rolling shot survives.
 //             Player bullet's collision routine ($14D8) detects the overlap,
 //             fails the alien lookup → status 3 (16-frame explosion).
-//     C64:    Player bullet enters explosion (active:=2). Rolling shot is
+//     C64:    Player bullet enters state 3 (active:=3, EXPLOSION_DURATION
+//             frames, shows enemy-shot explosion sprite). Rolling shot is
 //             NOT affected — continues moving.
 //
 //  3. Rolling/Teflon vs player bullet (old behaviour, pre-fix) → PASS-THROUGH
