@@ -1,0 +1,2518 @@
+
+======================================================================
+  Reset Vector and Interrupt Handlers
+  Address range: $0000-$0048
+======================================================================
+
+RESET:
+  0000  00           NOP
+  0001  00           NOP
+  0002  00           NOP
+  0003  C3 D4 18     JMP $18D4
+  0006  00           NOP
+  0007  00           NOP
+
+ScanLine96_ISR:
+  0008  F5           PUSH PSW
+  0009  C5           PUSH B
+  000A  D5           PUSH D
+  000B  E5           PUSH H
+  000C  C3 8C 00     JMP $008C
+  000F  00           NOP
+
+ScanLine224_ISR:
+  0010  F5           PUSH PSW
+  0011  C5           PUSH B
+  0012  D5           PUSH D
+  0013  E5           PUSH H
+  0014  3E 80        MVI A,$80
+  0016  32 72 20     STA numCoins
+  0019  21 C0 20     LXI H,plyrShotStatus
+  001C  35           DCR M
+  001D  CD CD 17     CALL $17CD
+
+TimeToSaucer_rst4:
+  0020  DB 01        IN $01
+  0022  0F           RRC
+  0023  DA 67 00     JC $0067
+  0026  3A EA 20     LDA $20EA
+  0029  A7           ANA A
+  002A  CA 42 00     JZ $0042
+  002D  3A EB 20     LDA rolShotStatus
+
+RST6:
+  0030  FE 99        CPI $99
+  0032  CA 3E 00     JZ $003E
+  0035  C6 01        ADI $01
+  0037  27           DAA
+
+RST7:
+  0038  32 EB 20     STA rolShotStatus
+  003B  CD 47 19     CALL $1947
+  003E  AF           XRA A
+  003F  32 EA 20     STA $20EA
+  0042  3A E9 20     LDA $20E9
+  0045  A7           ANA A
+
+InitRack:
+  0046  CA 82 00     JZ $0082
+
+======================================================================
+  DrawAlien / CursorNextAlien / GetAlienCoords / MoveRefAlien
+  Address range: $008F-$0100
+======================================================================
+
+DrawAlien:
+  008F  20           RIM
+  0090  3A E9 20     LDA $20E9
+  0093  A7           ANA A
+  0094  CA 82 00     JZ $0082
+  0097  3A EF 20     LDA $20EF
+  009A  A7           ANA A
+  009B  C2 A5 00     JNZ $00A5
+  009E  3A C1 20     LDA plyrObjPtr
+  00A1  0F           RRC
+  00A2  D2 82 00     JNC $0082
+  00A5  21 20 20     LXI H,obj0Timer
+  00A8  CD 4B 02     CALL $024B
+  00AB  CD 41 01     CALL EraseSimpleSprite
+  00AE  C3 82 00     JMP $0082
+  00B1  CD 86 08     CALL $0886
+  00B4  E5           PUSH H
+  00B5  7E           MOV A,M
+  00B6  23           INX H
+  00B7  66           MOV H,M
+  00B8  6F           MOV L,A
+  00B9  22 09 20     SHLD rackDownDelta
+  00BC  22 0B 20     SHLD waitOnDraw
+  00BF  E1           POP H
+  00C0  2B           DCX H
+  00C1  7E           MOV A,M
+  00C2  FE 03        CPI $03
+  00C4  C2 C8 00     JNZ $00C8
+  00C7  3D           DCR A
+  00C8  32 08 20     STA rackDirection
+  00CB  FE FE        CPI $FE
+  00CD  3E 00        MVI A,$00
+  00CF  C2 D3 00     JNZ $00D3
+  00D2  3C           INR A
+  00D3  32 0D 20     STA $200D
+  00D6  C9           RET
+  00D7  3E 02        MVI A,$02
+  00D9  32 FB 21     STA $21FB
+  00DC  32 FB 22     STA $22FB
+  00DF  C3 E4 08     JMP $08E4
+  00E2  00           NOP
+
+MoveRefAlien:
+  00E3  00           NOP
+  00E4  00           NOP
+  00E5  00           NOP
+  00E6  00           NOP
+  00E7  00           NOP
+  00E8  00           NOP
+  00E9  00           NOP
+  00EA  00           NOP
+  00EB  00           NOP
+  00EC  00           NOP
+  00ED  00           NOP
+  00EE  00           NOP
+  00EF  00           NOP
+  00F0  00           NOP
+  00F1  00           NOP
+  00F2  00           NOP
+  00F3  00           NOP
+  00F4  00           NOP
+  00F5  00           NOP
+  00F6  00           NOP
+  00F7  00           NOP
+  00F8  00           NOP
+  00F9  00           NOP
+  00FA  00           NOP
+  00FB  00           NOP
+  00FC  00           NOP
+  00FD  00           NOP
+  00FE  00           NOP
+  00FF  00           NOP
+
+======================================================================
+  MoveAliensCurRow / EraseSimpleSprite / DrawSpriteGeneric
+  Address range: $0100-$01A1
+======================================================================
+
+MoveAliensCurRow:
+  0100  21 02 20     LXI H,alienCurIndex
+  0103  7E           MOV A,M
+  0104  A7           ANA A
+  0105  C2 38 15     JNZ SpriteShotCollision
+  0108  E5           PUSH H
+  0109  3A 06 20     LDA refAlienY
+  010C  6F           MOV L,A
+  010D  3A 67 20     LDA numAliens
+  0110  67           MOV H,A
+  0111  7E           MOV A,M
+  0112  A7           ANA A
+  0113  E1           POP H
+  0114  CA 36 01     JZ $0136
+  0117  23           INX H
+  0118  23           INX H
+  0119  7E           MOV A,M
+  011A  23           INX H
+  011B  46           MOV B,M
+  011C  E6 FE        ANI $FE
+  011E  07           RLC
+  011F  07           RLC
+  0120  07           RLC
+  0121  5F           MOV E,A
+  0122  16 00        MVI D,$00
+  0124  21 00 1C     LXI H,$1C00
+  0127  19           DAD D
+  0128  EB           XCHG
+  0129  78           MOV A,B
+  012A  A7           ANA A
+  012B  C4 3B 01     CNZ $013B
+  012E  2A 0B 20     LHLD waitOnDraw
+  0131  06 10        MVI B,$10
+  0133  CD D3 15     CALL $15D3
+  0136  AF           XRA A
+  0137  32 00 20     STA alienAlive
+  013A  C9           RET
+  013B  21 30 00     LXI H,RST6
+  013E  19           DAD D
+  013F  EB           XCHG
+  0140  C9           RET
+
+EraseSimpleSprite:
+  0141  3A 68 20     LDA saucerActive
+  0144  A7           ANA A
+  0145  C8           RZ
+  0146  3A 00 20     LDA alienAlive
+  0149  A7           ANA A
+  014A  C0           RNZ
+  014B  3A 67 20     LDA numAliens
+  014E  67           MOV H,A
+  014F  3A 06 20     LDA refAlienY
+  0152  16 02        MVI D,$02
+  0154  3C           INR A
+  0155  FE 37        CPI $37
+  0157  CC A1 01     CZ PlayerShotHitAlien
+  015A  6F           MOV L,A
+  015B  46           MOV B,M
+  015C  05           DCR B
+  015D  C2 54 01     JNZ $0154
+  0160  32 06 20     STA refAlienY
+  0163  CD 7A 01     CALL DrawSpriteGeneric
+  0166  61           MOV H,C
+  0167  22 0B 20     SHLD waitOnDraw
+  016A  7D           MOV A,L
+  016B  FE 28        CPI $28
+  016D  DA 71 19     JC $1971
+  0170  7A           MOV A,D
+  0171  32 04 20     STA refAlienDeltaY
+  0174  3E 01        MVI A,$01
+  0176  32 00 20     STA alienAlive
+  0179  C9           RET
+
+DrawSpriteGeneric:
+  017A  16 00        MVI D,$00
+  017C  7D           MOV A,L
+  017D  21 09 20     LXI H,rackDownDelta
+  0180  46           MOV B,M
+  0181  23           INX H
+  0182  4E           MOV C,M
+  0183  FE 0B        CPI $0B
+  0185  FA 94 01     JM $0194
+  0188  DE 0B        SBI $0B
+  018A  5F           MOV E,A
+  018B  78           MOV A,B
+  018C  C6 10        ADI $10
+  018E  47           MOV B,A
+  018F  7B           MOV A,E
+  0190  14           INR D
+  0191  C3 83 01     JMP $0183
+  0194  68           MOV L,B
+  0195  A7           ANA A
+  0196  C8           RZ
+  0197  5F           MOV E,A
+  0198  79           MOV A,C
+  0199  C6 10        ADI $10
+  019B  4F           MOV C,A
+  019C  7B           MOV A,E
+  019D  3D           DCR A
+  019E  C3 95 01     JMP $0195
+
+======================================================================
+  PlayerShotHitAlien / ReadInputs
+  Address range: $01A1-$01D0
+======================================================================
+
+PlayerShotHitAlien:
+  01A1  15           DCR D
+  01A2  CA CD 01     JZ $01CD
+  01A5  21 06 20     LXI H,refAlienY
+  01A8  36 00        MVI M,$00
+  01AA  23           INX H
+  01AB  4E           MOV C,M
+  01AC  36 00        MVI M,$00
+  01AE  CD D9 01     CALL $01D9
+  01B1  21 05 20     LXI H,refAlienDeltaX
+  01B4  7E           MOV A,M
+  01B5  3C           INR A
+  01B6  E6 01        ANI $01
+  01B8  77           MOV M,A
+  01B9  AF           XRA A
+  01BA  21 67 20     LXI H,numAliens
+  01BD  66           MOV H,M
+  01BE  C9           RET
+  01BF  00           NOP
+
+ReadInputs:
+  01C0  21 00 21     LXI H,pluShotStatus
+  01C3  06 37        MVI B,$37
+  01C5  36 01        MVI M,$01
+  01C7  23           INX H
+  01C8  05           DCR B
+  01C9  C2 C5 01     JNZ $01C5
+  01CC  C9           RET
+  01CD  E1           POP H
+  01CE  C9           RET
+
+GameObj0:
+  01CF  3E 01        MVI A,$01
+
+======================================================================
+  Player Shot Handler
+  Address range: $03BB-$04D0
+======================================================================
+
+PlayerShotHandler:
+  03BB  11 2A 20     LXI D,$202A
+  03BE  CD 06 1A     CALL $1A06
+  03C1  E1           POP H
+  03C2  D0           RNC
+  03C3  23           INX H
+  03C4  7E           MOV A,M
+  03C5  A7           ANA A
+  03C6  C8           RZ
+  03C7  FE 01        CPI $01
+  03C9  CA FA 03     JZ $03FA
+  03CC  FE 02        CPI $02
+  03CE  CA 0A 04     JZ $040A
+  03D1  23           INX H
+  03D2  FE 03        CPI $03
+  03D4  C2 2A 04     JNZ $042A
+  03D7  35           DCR M
+  03D8  CA 36 04     JZ $0436
+  03DB  7E           MOV A,M
+  03DC  FE 0F        CPI $0F
+  03DE  C0           RNZ
+  03DF  E5           PUSH H
+  03E0  CD 30 04     CALL PlayerShotMoving
+  03E3  CD 52 14     CALL $1452
+  03E6  E1           POP H
+  03E7  23           INX H
+  03E8  34           INR M
+  03E9  23           INX H
+  03EA  23           INX H
+  03EB  35           DCR M
+  03EC  35           DCR M
+  03ED  23           INX H
+  03EE  35           DCR M
+  03EF  35           DCR M
+  03F0  35           DCR M
+  03F1  23           INX H
+  03F2  36 08        MVI M,$08
+  03F4  CD 30 04     CALL PlayerShotMoving
+  03F7  C3 00 14     JMP DrawAlienRow
+  03FA  3C           INR A
+  03FB  77           MOV M,A
+  03FC  3A 1B 20     LDA $201B
+  03FF  C6 08        ADI $08
+  0401  32 2A 20     STA $202A
+  0404  CD 30 04     CALL PlayerShotMoving
+  0407  C3 00 14     JMP DrawAlienRow
+  040A  CD 30 04     CALL PlayerShotMoving
+  040D  D5           PUSH D
+  040E  E5           PUSH H
+  040F  C5           PUSH B
+  0410  CD 52 14     CALL $1452
+  0413  C1           POP B
+  0414  E1           POP H
+  0415  D1           POP D
+  0416  3A 2C 20     LDA $202C
+  0419  85           ADD L
+  041A  6F           MOV L,A
+  041B  32 29 20     STA $2029
+  041E  CD 91 14     CALL $1491
+  0421  3A 61 20     LDA playerDataMSB
+  0424  A7           ANA A
+  0425  C8           RZ
+  0426  32 02 20     STA alienCurIndex
+  0429  C9           RET
+  042A  FE 05        CPI $05
+  042C  C8           RZ
+  042D  C3 36 04     JMP $0436
+
+PlayerShotMoving:
+  0430  21 27 20     LXI H,$2027
+  0433  C3 3B 1A     JMP $1A3B
+  0436  CD 30 04     CALL PlayerShotMoving
+  0439  CD 52 14     CALL $1452
+  043C  21 25 20     LXI H,shotSync
+  043F  11 25 1B     LXI D,$1B25
+  0442  06 07        MVI B,$07
+  0444  CD 32 1A     CALL $1A32
+  0447  2A 8D 20     LHLD $208D
+  044A  2C           INR L
+  044B  7D           MOV A,L
+  044C  FE 63        CPI $63
+
+EndOfPlayerShot:
+  044E  DA 53 04     JC $0453
+  0451  2E 54        MVI L,$54
+  0453  22 8D 20     SHLD $208D
+  0456  2A 8F 20     LHLD $208F
+  0459  2C           INR L
+  045A  22 8F 20     SHLD $208F
+  045D  3A 84 20     LDA numLives
+  0460  A7           ANA A
+  0461  C0           RNZ
+  0462  7E           MOV A,M
+  0463  E6 01        ANI $01
+  0465  01 29 02     LXI B,$0229
+  0468  C2 6E 04     JNZ $046E
+
+HandlePlayerShotHit:
+  046B  01 E0 FE     LXI B,$FEE0
+  046E  21 8A 20     LXI H,$208A
+  0471  71           MOV M,C
+  0472  23           INX H
+  0473  23           INX H
+  0474  70           MOV M,B
+  0475  C9           RET
+  0476  E1           POP H
+  0477  3A 32 1B     LDA $1B32
+  047A  32 32 20     STA $2032
+  047D  2A 38 20     LHLD $2038
+  0480  7D           MOV A,L
+  0481  B4           ORA H
+  0482  C2 8A 04     JNZ $048A
+  0485  2B           DCX H
+  0486  22 38 20     SHLD $2038
+  0489  C9           RET
+  048A  11 35 20     LXI D,$2035
+  048D  3E F9        MVI A,$F9
+  048F  CD 50 05     CALL ScoreForAlien
+  0492  3A 46 20     LDA $2046
+  0495  32 70 20     STA splashAnimate
+  0498  3A 56 20     LDA $2056
+  049B  32 71 20     STA $2071
+  049E  CD 63 05     CALL AlienScoreDelta
+  04A1  3A 78 20     LDA P1ScorL
+  04A4  A7           ANA A
+  04A5  21 35 20     LXI H,$2035
+  04A8  C2 5B 05     JNZ $055B
+  04AB  11 30 1B     LXI D,$1B30
+  04AE  21 30 20     LXI H,$2030
+  04B1  06 10        MVI B,$10
+  04B3  C3 32 1A     JMP $1A32
+
+ShotBlowingUp:
+  04B6  E1           POP H
+  04B7  3A 6E 20     LDA $206E
+  04BA  A7           ANA A
+  04BB  C0           RNZ
+  04BC  3A 80 20     LDA score1
+  04BF  FE 01        CPI $01
+  04C1  C0           RNZ
+  04C2  11 45 20     LXI D,$2045
+  04C5  3E ED        MVI A,$ED
+  04C7  CD 50 05     CALL ScoreForAlien
+
+DrawPlayerDie:
+  04CA  3A 36 20     LDA $2036
+  04CD  32 70 20     STA splashAnimate
+
+======================================================================
+  Score Calculation for Alien Hits
+  Address range: $0550-$05EA
+======================================================================
+
+ScoreForAlien:
+  0550  32 7F 20     STA $207F
+  0553  21 73 20     LXI H,$2073
+  0556  06 0B        MVI B,$0B
+  0558  C3 32 1A     JMP $1A32
+  055B  11 73 20     LXI D,$2073
+  055E  06 0B        MVI B,$0B
+  0560  C3 32 1A     JMP $1A32
+
+AlienScoreDelta:
+  0563  21 73 20     LXI H,$2073
+  0566  7E           MOV A,M
+  0567  E6 80        ANI $80
+  0569  C2 C1 05     JNZ $05C1
+  056C  3A C1 20     LDA plyrObjPtr
+  056F  FE 04        CPI $04
+  0571  3A 69 20     LDA saucerHit
+  0574  CA B7 05     JZ $05B7
+  0577  A7           ANA A
+  0578  C8           RZ
+  0579  23           INX H
+  057A  36 00        MVI M,$00
+  057C  3A 70 20     LDA splashAnimate
+  057F  A7           ANA A
+  0580  CA 89 05     JZ $0589
+  0583  47           MOV B,A
+  0584  3A CF 20     LDA $20CF
+  0587  B8           CMP B
+  0588  D0           RNC
+  0589  3A 71 20     LDA $2071
+  058C  A7           ANA A
+  058D  CA 96 05     JZ $0596
+  0590  47           MOV B,A
+  0591  3A CF 20     LDA $20CF
+  0594  B8           CMP B
+  0595  D0           RNC
+  0596  23           INX H
+  0597  7E           MOV A,M
+  0598  A7           ANA A
+  0599  CA 1B 06     JZ $061B
+  059C  2A 76 20     LHLD $2076
+  059F  4E           MOV C,M
+  05A0  23           INX H
+  05A1  00           NOP
+  05A2  22 76 20     SHLD $2076
+  05A5  CD 2F 06     CALL $062F
+  05A8  D0           RNC
+  05A9  CD 7A 01     CALL DrawSpriteGeneric
+  05AC  79           MOV A,C
+  05AD  C6 07        ADI $07
+  05AF  67           MOV H,A
+  05B0  7D           MOV A,L
+  05B1  D6 0A        SUI $0A
+  05B3  6F           MOV L,A
+  05B4  22 7B 20     SHLD P2ScorL
+  05B7  21 73 20     LXI H,$2073
+  05BA  7E           MOV A,M
+  05BB  F6 80        ORI $80
+  05BD  77           MOV M,A
+  05BE  23           INX H
+  05BF  34           INR M
+  05C0  C9           RET
+  05C1  11 7C 20     LXI D,P2ScorM
+  05C4  CD 06 1A     CALL $1A06
+  05C7  D0           RNC
+  05C8  23           INX H
+  05C9  7E           MOV A,M
+  05CA  E6 01        ANI $01
+  05CC  C2 44 06     JNZ RollingShot_handler
+  05CF  23           INX H
+  05D0  34           INR M
+  05D1  CD 75 06     CALL $0675
+  05D4  3A 79 20     LDA P1ScorM
+  05D7  C6 03        ADI $03
+  05D9  21 7F 20     LXI H,$207F
+  05DC  BE           CMP M
+  05DD  DA E2 05     JC $05E2
+  05E0  D6 0C        SUI $0C
+  05E2  32 79 20     STA P1ScorM
+  05E5  3A 7B 20     LDA P2ScorL
+  05E8  47           MOV B,A
+
+SquigglyShot_handler:
+  05E9  3A 7E 20     LDA HiScor
+
+======================================================================
+  Three Shot Types (Squiggly/Plunger/Rolling)
+  Address range: $05E9-$0740
+======================================================================
+
+SquigglyShot_handler:
+  05E9  3A 7E 20     LDA HiScor
+  05EC  80           ADD B
+  05ED  32 7B 20     STA P2ScorL
+  05F0  CD 6C 06     CALL $066C
+  05F3  3A 7B 20     LDA P2ScorL
+  05F6  FE 15        CPI $15
+  05F8  DA 12 06     JC $0612
+  05FB  3A 61 20     LDA playerDataMSB
+  05FE  A7           ANA A
+  05FF  C8           RZ
+  0600  3A 7B 20     LDA P2ScorL
+  0603  FE 1E        CPI $1E
+  0605  DA 12 06     JC $0612
+  0608  FE 27        CPI $27
+  060A  00           NOP
+  060B  D2 12 06     JNC $0612
+  060E  97           SUB A
+  060F  32 15 20     STA alienIsExploding
+  0612  3A 73 20     LDA $2073
+  0615  F6 01        ORI $01
+
+PlungerShot_handler:
+  0617  32 73 20     STA $2073
+  061A  C9           RET
+  061B  3A 1B 20     LDA $201B
+  061E  C6 08        ADI $08
+  0620  67           MOV H,A
+  0621  CD 6F 15     CALL $156F
+  0624  79           MOV A,C
+  0625  FE 0C        CPI $0C
+  0627  DA A5 05     JC $05A5
+  062A  0E 0B        MVI C,$0B
+  062C  C3 A5 05     JMP $05A5
+  062F  0D           DCR C
+  0630  3A 67 20     LDA numAliens
+  0633  67           MOV H,A
+  0634  69           MOV L,C
+  0635  16 05        MVI D,$05
+  0637  7E           MOV A,M
+  0638  A7           ANA A
+  0639  37           STC
+  063A  C0           RNZ
+  063B  7D           MOV A,L
+  063C  C6 0B        ADI $0B
+  063E  6F           MOV L,A
+  063F  15           DCR D
+  0640  C2 37 06     JNZ $0637
+  0643  C9           RET
+
+RollingShot_handler:
+  0644  21 78 20     LXI H,P1ScorL
+  0647  35           DCR M
+  0648  7E           MOV A,M
+  0649  FE 03        CPI $03
+  064B  C2 67 06     JNZ $0667
+  064E  CD 75 06     CALL $0675
+  0651  21 DC 1C     LXI H,$1CDC
+  0654  22 79 20     SHLD P1ScorM
+  0657  21 7C 20     LXI H,P2ScorM
+  065A  35           DCR M
+  065B  35           DCR M
+  065C  2B           DCX H
+  065D  35           DCR M
+  065E  35           DCR M
+  065F  3E 06        MVI A,$06
+  0661  32 7D 20     STA $207D
+  0664  C3 6C 06     JMP $066C
+  0667  A7           ANA A
+  0668  C0           RNZ
+  0669  C3 75 06     JMP $0675
+  066C  21 79 20     LXI H,P1ScorM
+  066F  CD 3B 1A     CALL $1A3B
+  0672  C3 91 14     JMP $1491
+  0675  21 79 20     LXI H,P1ScorM
+  0678  CD 3B 1A     CALL $1A3B
+  067B  C3 52 14     JMP $1452
+  067E  22 48 20     SHLD $2048
+  0681  C9           RET
+  0682  E1           POP H
+  0683  3A 80 20     LDA score1
+  0686  FE 02        CPI $02
+  0688  C0           RNZ
+  0689  21 83 20     LXI H,$2083
+  068C  7E           MOV A,M
+  068D  A7           ANA A
+  068E  CA 0F 05     JZ $050F
+  0691  3A 56 20     LDA $2056
+  0694  A7           ANA A
+  0695  C2 0F 05     JNZ $050F
+  0698  23           INX H
+  0699  7E           MOV A,M
+  069A  A7           ANA A
+  069B  C2 AB 06     JNZ $06AB
+  069E  3A 82 20     LDA shotPicEnd
+  06A1  FE 08        CPI $08
+  06A3  DA 0F 05     JC $050F
+  06A6  36 01        MVI M,$01
+  06A8  CD 3C 07     CALL $073C
+  06AB  11 8A 20     LXI D,$208A
+  06AE  CD 06 1A     CALL $1A06
+  06B1  D0           RNC
+  06B2  21 85 20     LXI H,$2085
+  06B5  7E           MOV A,M
+  06B6  A7           ANA A
+
+HandleAlienShotMove:
+  06B7  C2 D6 06     JNZ $06D6
+  06BA  21 8A 20     LXI H,$208A
+  06BD  7E           MOV A,M
+  06BE  23           INX H
+  06BF  23           INX H
+  06C0  86           ADD M
+  06C1  32 8A 20     STA $208A
+  06C4  CD 3C 07     CALL $073C
+  06C7  21 8A 20     LXI H,$208A
+  06CA  7E           MOV A,M
+  06CB  FE 28        CPI $28
+  06CD  DA F9 06     JC $06F9
+  06D0  FE E1        CPI $E1
+  06D2  D2 F9 06     JNC $06F9
+  06D5  C9           RET
+  06D6  06 FE        MVI B,$FE
+
+HandleShotAtBottom:
+  06D8  CD DC 19     CALL $19DC
+  06DB  23           INX H
+  06DC  35           DCR M
+  06DD  7E           MOV A,M
+  06DE  FE 1F        CPI $1F
+  06E0  CA 4B 07     JZ ShotWithinAlienFormation
+  06E3  FE 18        CPI $18
+  06E5  CA 0C 07     JZ $070C
+  06E8  A7           ANA A
+  06E9  C0           RNZ
+  06EA  06 EF        MVI B,$EF
+  06EC  21 98 20     LXI H,$2098
+  06EF  7E           MOV A,M
+  06F0  A0           ANA B
+  06F1  77           MOV M,A
+
+AlienShotBlowingUp:
+  06F2  E6 20        ANI $20
+  06F4  D3 05        OUT $05
+  06F6  00           NOP
+  06F7  00           NOP
+  06F8  00           NOP
+  06F9  CD 42 07     CALL $0742
+  06FC  CD CB 14     CALL DrawShields
+  06FF  21 83 20     LXI H,$2083
+  0702  06 0A        MVI B,$0A
+  0704  CD 5F 07     CALL $075F
+  0707  06 FE        MVI B,$FE
+  0709  C3 DC 19     JMP $19DC
+  070C  3E 01        MVI A,$01
+  070E  32 F1 20     STA rolShotBlow
+  0711  2A 8D 20     LHLD $208D
+  0714  46           MOV B,M
+  0715  0E 04        MVI C,$04
+  0717  21 50 1D     LXI H,$1D50
+  071A  11 4C 1D     LXI D,$1D4C
+  071D  1A           LDAX D
+  071E  B8           CMP B
+  071F  CA 28 07     JZ $0728
+  0722  23           INX H
+  0723  13           INX D
+  0724  0D           DCR C
+  0725  C2 1D 07     JNZ $071D
+  0728  7E           MOV A,M
+  0729  32 87 20     STA $2087
+  072C  26 00        MVI H,$00
+  072E  68           MOV L,B
+  072F  29           DAD H
+  0730  29           DAD H
+  0731  29           DAD H
+  0732  29           DAD H
+  0733  22 F2 20     SHLD $20F2
+  0736  CD 42 07     CALL $0742
+  0739  C3 F1 08     JMP $08F1
+  073C  CD 42 07     CALL $0742
+  073F  C3 39 14     JMP GetRefAlienDelta
+
+======================================================================
+  Fire Column Table / FindAlienInColumn / TimeToFire
+  Address range: $0740-$07C0
+======================================================================
+
+ReadColumnFireTable:
+  0740  39           DAD SP
+  0741  14           INR D
+  0742  21 87 20     LXI H,$2087
+  0745  CD 3B 1A     CALL $1A3B
+  0748  C3 47 1A     JMP $1A47
+
+ShotWithinAlienFormation:
+  074B  06 10        MVI B,$10
+  074D  21 98 20     LXI H,$2098
+  0750  7E           MOV A,M
+  0751  B0           ORA B
+  0752  77           MOV M,A
+  0753  CD 70 17     CALL $1770
+  0756  21 7C 1D     LXI H,$1D7C
+  0759  22 87 20     SHLD $2087
+  075C  C3 3C 07     JMP $073C
+  075F  11 83 1B     LXI D,$1B83
+  0762  C3 32 1A     JMP $1A32
+  0765  3E 01        MVI A,$01
+  0767  32 93 20     STA $2093
+  076A  31 00 24     LXI SP,VRAM_Start
+  076D  FB           EI
+  076E  CD 79 19     CALL $1979
+  0771  CD D6 09     CALL $09D6
+  0774  21 13 30     LXI H,$3013
+  0777  11 F3 1F     LXI D,$1FF3
+  077A  0E 04        MVI C,$04
+  077C  CD F3 08     CALL $08F3
+  077F  3A EB 20     LDA rolShotStatus
+  0782  3D           DCR A
+  0783  21 10 28     LXI H,$2810
+  0786  0E 14        MVI C,$14
+  0788  C2 57 08     JNZ $0857
+  078B  11 CF 1A     LXI D,$1ACF
+  078E  CD F3 08     CALL $08F3
+  0791  DB 01        IN $01
+  0793  E6 04        ANI $04
+  0795  CA 7F 07     JZ $077F
+
+TimeToFire:
+  0798  06 99        MVI B,$99
+  079A  AF           XRA A
+  079B  32 CE 20     STA $20CE
+  079E  3A EB 20     LDA rolShotStatus
+  07A1  80           ADD B
+  07A2  27           DAA
+  07A3  32 EB 20     STA rolShotStatus
+  07A6  CD 47 19     CALL $1947
+  07A9  21 00 00     LXI H,RESET
+  07AC  22 F8 20     SHLD $20F8
+  07AF  22 FC 20     SHLD $20FC
+  07B2  CD 25 19     CALL $1925
+  07B5  CD 2B 19     CALL $192B
+  07B8  CD D7 19     CALL $19D7
+  07BB  21 01 01     LXI H,$0101
+
+SaucerScoring:
+  07BE  7C           MOV A,H
+  07BF  32 EF 20     STA $20EF
+
+======================================================================
+  Saucer Scoring / RemoveSaucer
+  Address range: $07BE-$0840
+======================================================================
+
+SaucerScoring:
+  07BE  7C           MOV A,H
+  07BF  32 EF 20     STA $20EF
+  07C2  22 E7 20     SHLD $20E7
+  07C5  22 E5 20     SHLD $20E5
+  07C8  CD 56 19     CALL $1956
+  07CB  CD EF 01     CALL HandleNotAliveGameObj
+  07CE  CD F5 01     CALL $01F5
+  07D1  CD D1 08     CALL $08D1
+  07D4  32 FF 21     STA $21FF
+  07D7  32 FF 22     STA $22FF
+  07DA  CD D7 00     CALL $00D7
+  07DD  AF           XRA A
+  07DE  32 FE 21     STA $21FE
+  07E1  32 FE 22     STA $22FE
+  07E4  CD C0 01     CALL ReadInputs
+  07E7  CD 04 19     CALL $1904
+  07EA  21 78 38     LXI H,$3878
+  07ED  22 FC 21     SHLD $21FC
+  07F0  22 FC 22     SHLD $22FC
+  07F3  CD E4 01     CALL $01E4
+  07F6  CD 7F 1A     CALL $1A7F
+  07F9  CD 8D 08     CALL $088D
+  07FC  CD D6 09     CALL $09D6
+  07FF  00           NOP
+  0800  AF           XRA A
+  0801  32 C1 20     STA plyrObjPtr
+  0804  CD CF 01     CALL GameObj0
+  0807  3A 67 20     LDA numAliens
+  080A  0F           RRC
+  080B  DA 72 08     JC $0872
+  080E  CD 13 02     CALL $0213
+  0811  CD CF 01     CALL GameObj0
+  0814  CD B1 00     CALL $00B1
+
+RemoveSaucer:
+  0817  CD D1 19     CALL $19D1
+  081A  06 20        MVI B,$20
+  081C  CD FA 18     CALL $18FA
+  081F  CD 18 16     CALL $1618
+  0822  CD 0A 19     CALL $190A
+  0825  CD F3 15     CALL $15F3
+  0828  CD 88 09     CALL $0988
+  082B  3A 82 20     LDA shotPicEnd
+  082E  A7           ANA A
+  082F  CA EF 09     JZ $09EF
+  0832  CD 0E 17     CALL $170E
+  0835  CD 35 09     CALL ISR_MidScreen
+  0838  CD D8 08     CALL $08D8
+  083B  CD 2C 17     CALL $172C
+  083E  CD 59 0A     CALL $0A59
+
+======================================================================
+  Power On Reset / ISR Setup
+  Address range: $08D4-$0978
+======================================================================
+
+PowerOnReset:
+  08D4  03           INX B
+  08D5  C6 03        ADI $03
+  08D7  C9           RET
+  08D8  3A 82 20     LDA shotPicEnd
+  08DB  FE 09        CPI $09
+  08DD  D0           RNC
+  08DE  3E FB        MVI A,$FB
+  08E0  32 7E 20     STA HiScor
+  08E3  C9           RET
+  08E4  3A CE 20     LDA $20CE
+  08E7  A7           ANA A
+  08E8  C0           RNZ
+  08E9  21 1C 39     LXI H,$391C
+  08EC  06 20        MVI B,$20
+  08EE  C3 CB 14     JMP DrawShields
+  08F1  0E 03        MVI C,$03
+  08F3  1A           LDAX D
+  08F4  D5           PUSH D
+  08F5  CD FF 08     CALL $08FF
+  08F8  D1           POP D
+  08F9  13           INX D
+  08FA  0D           DCR C
+  08FB  C2 F3 08     JNZ $08F3
+  08FE  C9           RET
+  08FF  11 00 1E     LXI D,$1E00
+  0902  E5           PUSH H
+  0903  26 00        MVI H,$00
+  0905  6F           MOV L,A
+  0906  29           DAD H
+  0907  29           DAD H
+  0908  29           DAD H
+  0909  19           DAD D
+  090A  EB           XCHG
+  090B  E1           POP H
+  090C  06 08        MVI B,$08
+  090E  D3 06        OUT $06
+  0910  C3 39 14     JMP GetRefAlienDelta
+
+SetupInterruptChain:
+  0913  3A 09 20     LDA rackDownDelta
+  0916  FE 78        CPI $78
+  0918  D0           RNC
+  0919  2A 91 20     LHLD $2091
+  091C  7D           MOV A,L
+  091D  B4           ORA H
+  091E  C2 29 09     JNZ $0929
+  0921  21 00 06     LXI H,$0600
+  0924  3E 01        MVI A,$01
+  0926  32 83 20     STA $2083
+  0929  2B           DCX H
+  092A  22 91 20     SHLD $2091
+  092D  C9           RET
+  092E  CD 11 16     CALL $1611
+  0931  2E FF        MVI L,$FF
+  0933  7E           MOV A,M
+  0934  C9           RET
+
+ISR_MidScreen:
+  0935  CD 10 19     CALL $1910
+  0938  2B           DCX H
+  0939  2B           DCX H
+  093A  7E           MOV A,M
+  093B  A7           ANA A
+  093C  C8           RZ
+  093D  06 15        MVI B,$15
+  093F  DB 02        IN $02
+  0941  E6 08        ANI $08
+  0943  CA 48 09     JZ $0948
+  0946  06 10        MVI B,$10
+  0948  CD CA 09     CALL ThinkSaucer
+  094B  23           INX H
+  094C  7E           MOV A,M
+  094D  B8           CMP B
+  094E  D8           RC
+  094F  CD 2E 09     CALL $092E
+  0952  34           INR M
+
+ISR_Vblank:
+  0953  7E           MOV A,M
+  0954  F5           PUSH PSW
+  0955  21 01 25     LXI H,$2501
+  0958  24           INR H
+  0959  24           INR H
+  095A  3D           DCR A
+  095B  C2 58 09     JNZ $0958
+  095E  06 10        MVI B,$10
+  0960  11 60 1C     LXI D,$1C60
+  0963  CD 39 14     CALL GetRefAlienDelta
+  0966  F1           POP PSW
+  0967  3C           INR A
+  0968  CD 8B 1A     CALL $1A8B
+  096B  CD 10 19     CALL $1910
+  096E  2B           DCX H
+  096F  2B           DCX H
+  0970  36 00        MVI M,$00
+  0972  3E FF        MVI A,$FF
+  0974  32 99 20     STA $2099
+
+RackBump_adjustSpeed:
+  0977  06 10        MVI B,$10
+
+======================================================================
+  Saucer Logic
+  Address range: $0993-$0A07
+======================================================================
+
+TimeToSaucer:
+  0993  20           RIM
+  0994  E5           PUSH H
+  0995  2A F2 20     LHLD $20F2
+  0998  EB           XCHG
+  0999  E1           POP H
+  099A  7E           MOV A,M
+  099B  83           ADD E
+  099C  27           DAA
+  099D  77           MOV M,A
+  099E  5F           MOV E,A
+  099F  23           INX H
+  09A0  7E           MOV A,M
+  09A1  8A           ADC D
+  09A2  27           DAA
+  09A3  77           MOV M,A
+  09A4  57           MOV D,A
+  09A5  23           INX H
+  09A6  7E           MOV A,M
+  09A7  23           INX H
+  09A8  66           MOV H,M
+  09A9  6F           MOV L,A
+  09AA  C3 AD 09     JMP $09AD
+  09AD  7A           MOV A,D
+  09AE  CD B2 09     CALL DrawSaucer
+  09B1  7B           MOV A,E
+
+DrawSaucer:
+  09B2  D5           PUSH D
+  09B3  F5           PUSH PSW
+  09B4  0F           RRC
+  09B5  0F           RRC
+  09B6  0F           RRC
+  09B7  0F           RRC
+  09B8  E6 0F        ANI $0F
+  09BA  CD C5 09     CALL $09C5
+  09BD  F1           POP PSW
+  09BE  E6 0F        ANI $0F
+  09C0  CD C5 09     CALL $09C5
+  09C3  D1           POP D
+  09C4  C9           RET
+  09C5  C6 1A        ADI $1A
+  09C7  C3 FF 08     JMP $08FF
+
+ThinkSaucer:
+  09CA  3A 67 20     LDA numAliens
+  09CD  0F           RRC
+  09CE  21 F8 20     LXI H,$20F8
+  09D1  D8           RC
+  09D2  21 FC 20     LXI H,$20FC
+  09D5  C9           RET
+  09D6  21 02 24     LXI H,$2402
+  09D9  36 00        MVI M,$00
+  09DB  23           INX H
+  09DC  7D           MOV A,L
+  09DD  E6 1F        ANI $1F
+  09DF  FE 1C        CPI $1C
+  09E1  DA E8 09     JC $09E8
+
+SaucerMoving:
+  09E4  11 06 00     LXI D,$0006
+  09E7  19           DAD D
+  09E8  7C           MOV A,H
+  09E9  FE 40        CPI $40
+  09EB  DA D9 09     JC $09D9
+  09EE  C9           RET
+  09EF  CD 3C 0A     CALL $0A3C
+  09F2  AF           XRA A
+  09F3  32 E9 20     STA $20E9
+  09F6  CD D6 09     CALL $09D6
+  09F9  3A 67 20     LDA numAliens
+  09FC  F5           PUSH PSW
+  09FD  CD E4 01     CALL $01E4
+  0A00  F1           POP PSW
+  0A01  32 67 20     STA numAliens
+  0A04  3A 67 20     LDA numAliens
+
+======================================================================
+  Init Aliens / Restore Shields / Print Message
+  Address range: $0A07-$0B00
+======================================================================
+
+InitAliens:
+  0A07  67           MOV H,A
+  0A08  E5           PUSH H
+  0A09  2E FE        MVI L,$FE
+  0A0B  7E           MOV A,M
+  0A0C  E6 07        ANI $07
+  0A0E  3C           INR A
+  0A0F  77           MOV M,A
+  0A10  21 A2 1D     LXI H,$1DA2
+  0A13  23           INX H
+  0A14  3D           DCR A
+  0A15  C2 13 0A     JNZ $0A13
+  0A18  7E           MOV A,M
+  0A19  E1           POP H
+  0A1A  2E FC        MVI L,$FC
+  0A1C  77           MOV M,A
+  0A1D  23           INX H
+  0A1E  36 38        MVI M,$38
+  0A20  7C           MOV A,H
+  0A21  0F           RRC
+  0A22  DA 33 0A     JC $0A33
+  0A25  3E 21        MVI A,$21
+  0A27  32 98 20     STA $2098
+  0A2A  CD F5 01     CALL $01F5
+  0A2D  CD 04 19     CALL $1904
+  0A30  C3 04 08     JMP $0804
+  0A33  CD EF 01     CALL HandleNotAliveGameObj
+  0A36  CD C0 01     CALL ReadInputs
+  0A39  C3 04 08     JMP $0804
+  0A3C  CD 59 0A     CALL $0A59
+  0A3F  C2 52 0A     JNZ $0A52
+  0A42  3E 30        MVI A,$30
+  0A44  32 C0 20     STA plyrShotStatus
+  0A47  3A C0 20     LDA plyrShotStatus
+  0A4A  A7           ANA A
+  0A4B  C8           RZ
+  0A4C  CD 59 0A     CALL $0A59
+  0A4F  CA 47 0A     JZ $0A47
+  0A52  CD 59 0A     CALL $0A59
+  0A55  C2 52 0A     JNZ $0A52
+  0A58  C9           RET
+  0A59  3A 15 20     LDA alienIsExploding
+  0A5C  FE FF        CPI $FF
+
+DrawShieldBuffer:
+  0A5E  C9           RET
+  0A5F  3A EF 20     LDA $20EF
+  0A62  A7           ANA A
+  0A63  CA 7C 0A     JZ $0A7C
+  0A66  48           MOV C,B
+  0A67  06 08        MVI B,$08
+  0A69  CD FA 18     CALL $18FA
+  0A6C  41           MOV B,C
+  0A6D  78           MOV A,B
+  0A6E  CD 7C 09     CALL $097C
+  0A71  7E           MOV A,M
+  0A72  21 F3 20     LXI H,rolShotXr
+  0A75  36 00        MVI M,$00
+  0A77  2B           DCX H
+  0A78  77           MOV M,A
+  0A79  2B           DCX H
+  0A7A  36 01        MVI M,$01
+  0A7C  21 62 20     LXI H,playerOK2
+  0A7F  C9           RET
+  0A80  3E 02        MVI A,$02
+  0A82  32 C1 20     STA plyrObjPtr
+  0A85  D3 06        OUT $06
+  0A87  3A CB 20     LDA $20CB
+  0A8A  A7           ANA A
+  0A8B  CA 85 0A     JZ $0A85
+  0A8E  AF           XRA A
+  0A8F  32 C1 20     STA plyrObjPtr
+  0A92  C9           RET
+  0A93  D5           PUSH D
+  0A94  1A           LDAX D
+  0A95  CD FF 08     CALL $08FF
+  0A98  D1           POP D
+  0A99  3E 07        MVI A,$07
+  0A9B  32 C0 20     STA plyrShotStatus
+  0A9E  3A C0 20     LDA plyrShotStatus
+  0AA1  3D           DCR A
+  0AA2  C2 9E 0A     JNZ $0A9E
+  0AA5  13           INX D
+  0AA6  0D           DCR C
+  0AA7  C2 93 0A     JNZ $0A93
+  0AAA  C9           RET
+
+PrintMessage:
+  0AAB  21 50 20     LXI H,$2050
+  0AAE  C3 4B 02     JMP $024B
+  0AB1  3E 40        MVI A,$40
+  0AB3  C3 D7 0A     JMP CopyShields
+  0AB6  3E 80        MVI A,$80
+  0AB8  C3 D7 0A     JMP CopyShields
+  0ABB  E1           POP H
+  0ABC  C3 72 00     JMP $0072
+  0ABF  3A C1 20     LDA plyrObjPtr
+  0AC2  0F           RRC
+  0AC3  DA BB 0A     JC $0ABB
+  0AC6  0F           RRC
+  0AC7  DA 68 18     JC $1868
+  0ACA  0F           RRC
+  0ACB  DA AB 0A     JC PrintMessage
+  0ACE  C9           RET
+  0ACF  21 14 2B     LXI H,$2B14
+  0AD2  0E 0F        MVI C,$0F
+  0AD4  C3 93 0A     JMP $0A93
+
+CopyShields:
+  0AD7  32 C0 20     STA plyrShotStatus
+  0ADA  3A C0 20     LDA plyrShotStatus
+  0ADD  A7           ANA A
+  0ADE  C2 DA 0A     JNZ $0ADA
+  0AE1  C9           RET
+  0AE2  21 C2 20     LXI H,$20C2
+  0AE5  06 0C        MVI B,$0C
+  0AE7  C3 32 1A     JMP $1A32
+  0AEA  AF           XRA A
+  0AEB  D3 03        OUT $03
+  0AED  D3 05        OUT $05
+  0AEF  CD 82 19     CALL $1982
+  0AF2  FB           EI
+  0AF3  CD B1 0A     CALL $0AB1
+  0AF6  3A EC 20     LDA $20EC
+  0AF9  A7           ANA A
+  0AFA  21 17 30     LXI H,$3017
+  0AFD  0E 04        MVI C,$04
+  0AFF  C2 E8 0B     JNZ $0BE8
+
+======================================================================
+  Game Loop / New Game / Main Play Loop
+  Address range: $0B79-$0C00
+======================================================================
+
+GameLoop:
+  0B79  CD 59 0A     CALL $0A59
+  0B7C  CA 71 0B     JZ $0B71
+  0B7F  AF           XRA A
+  0B80  32 25 20     STA shotSync
+  0B83  CD 59 0A     CALL $0A59
+  0B86  C2 83 0B     JNZ $0B83
+  0B89  AF           XRA A
+  0B8A  32 C1 20     STA plyrObjPtr
+  0B8D  CD B1 0A     CALL $0AB1
+  0B90  CD 88 19     CALL $1988
+  0B93  0E 0C        MVI C,$0C
+  0B95  21 11 2C     LXI H,$2C11
+  0B98  11 90 1F     LXI D,$1F90
+  0B9B  CD F3 08     CALL $08F3
+  0B9E  3A EC 20     LDA $20EC
+  0BA1  FE 00        CPI $00
+  0BA3  C2 AE 0B     JNZ $0BAE
+  0BA6  21 11 33     LXI H,$3311
+  0BA9  3E 02        MVI A,$02
+  0BAB  CD FF 08     CALL $08FF
+  0BAE  01 9C 1F     LXI B,$1F9C
+  0BB1  CD 56 18     CALL $1856
+  0BB4  CD 4C 18     CALL $184C
+  0BB7  DB 02        IN $02
+  0BB9  07           RLC
+  0BBA  DA C3 0B     JC $0BC3
+  0BBD  01 A0 1F     LXI B,$1FA0
+  0BC0  CD 3A 18     CALL $183A
+  0BC3  CD B6 0A     CALL $0AB6
+  0BC6  3A EC 20     LDA $20EC
+  0BC9  FE 00        CPI $00
+  0BCB  C2 DA 0B     JNZ $0BDA
+  0BCE  11 D5 1F     LXI D,$1FD5
+  0BD1  CD E2 0A     CALL $0AE2
+  0BD4  CD 80 0A     CALL $0A80
+  0BD7  CD 9E 18     CALL $189E
+  0BDA  21 EC 20     LXI H,$20EC
+  0BDD  7E           MOV A,M
+  0BDE  3C           INR A
+  0BDF  E6 01        ANI $01
+  0BE1  77           MOV M,A
+  0BE2  CD D6 09     CALL $09D6
+  0BE5  C3 DF 18     JMP $18DF
+  0BE8  11 AB 1D     LXI D,$1DAB
+  0BEB  CD 93 0A     CALL $0A93
+  0BEE  C3 0B 0B     JMP $0B0B
+  0BF1  CD 0A 19     CALL $190A
+  0BF4  C3 9A 19     JMP $199A
+  0BF7  13           INX D
+  0BF8  00           NOP
+  0BF9  08           NOP
+  0BFA  13           INX D
+  0BFB  0E 26        MVI C,$26
+  0BFD  02           STAX B
+  0BFE  0E 0F        MVI C,$0F
+
+======================================================================
+  Score Display and Status / Clear Playfield / Draw Bottom Line
+  Address range: $0CF4-$0DEA
+======================================================================
+
+PrintScore:
+  0CF4  00           NOP
+  0CF5  00           NOP
+  0CF6  00           NOP
+  0CF7  00           NOP
+  0CF8  00           NOP
+  0CF9  00           NOP
+  0CFA  00           NOP
+  0CFB  00           NOP
+  0CFC  00           NOP
+  0CFD  00           NOP
+  0CFE  00           NOP
+  0CFF  00           NOP
+  0D00  00           NOP
+  0D01  00           NOP
+  0D02  00           NOP
+  0D03  00           NOP
+  0D04  00           NOP
+  0D05  00           NOP
+  0D06  00           NOP
+  0D07  00           NOP
+  0D08  00           NOP
+  0D09  00           NOP
+  0D0A  00           NOP
+  0D0B  00           NOP
+  0D0C  00           NOP
+  0D0D  00           NOP
+  0D0E  00           NOP
+  0D0F  00           NOP
+  0D10  00           NOP
+  0D11  00           NOP
+
+AdjScoreP1:
+  0D12  00           NOP
+  0D13  00           NOP
+  0D14  00           NOP
+  0D15  00           NOP
+  0D16  00           NOP
+  0D17  00           NOP
+  0D18  00           NOP
+  0D19  00           NOP
+  0D1A  00           NOP
+  0D1B  00           NOP
+  0D1C  00           NOP
+  0D1D  00           NOP
+  0D1E  00           NOP
+  0D1F  00           NOP
+  0D20  00           NOP
+  0D21  00           NOP
+  0D22  00           NOP
+  0D23  00           NOP
+  0D24  00           NOP
+  0D25  00           NOP
+  0D26  00           NOP
+  0D27  00           NOP
+  0D28  00           NOP
+  0D29  00           NOP
+  0D2A  00           NOP
+  0D2B  00           NOP
+  0D2C  00           NOP
+  0D2D  00           NOP
+  0D2E  00           NOP
+  0D2F  00           NOP
+  0D30  00           NOP
+  0D31  00           NOP
+
+AdjScoreP2:
+  0D32  00           NOP
+  0D33  00           NOP
+  0D34  00           NOP
+  0D35  00           NOP
+  0D36  00           NOP
+  0D37  00           NOP
+  0D38  00           NOP
+  0D39  00           NOP
+  0D3A  00           NOP
+  0D3B  00           NOP
+  0D3C  00           NOP
+  0D3D  00           NOP
+  0D3E  00           NOP
+  0D3F  00           NOP
+  0D40  00           NOP
+  0D41  00           NOP
+  0D42  00           NOP
+  0D43  00           NOP
+  0D44  00           NOP
+  0D45  00           NOP
+  0D46  00           NOP
+  0D47  00           NOP
+  0D48  00           NOP
+  0D49  00           NOP
+  0D4A  00           NOP
+  0D4B  00           NOP
+  0D4C  00           NOP
+  0D4D  00           NOP
+  0D4E  00           NOP
+  0D4F  00           NOP
+  0D50  00           NOP
+  0D51  00           NOP
+
+AdjHighScore:
+  0D52  00           NOP
+  0D53  00           NOP
+  0D54  00           NOP
+  0D55  00           NOP
+  0D56  00           NOP
+  0D57  00           NOP
+  0D58  00           NOP
+  0D59  00           NOP
+  0D5A  00           NOP
+  0D5B  00           NOP
+  0D5C  00           NOP
+  0D5D  00           NOP
+  0D5E  00           NOP
+  0D5F  00           NOP
+  0D60  00           NOP
+  0D61  00           NOP
+  0D62  00           NOP
+  0D63  00           NOP
+  0D64  00           NOP
+  0D65  00           NOP
+  0D66  00           NOP
+  0D67  00           NOP
+  0D68  00           NOP
+  0D69  00           NOP
+  0D6A  00           NOP
+  0D6B  00           NOP
+  0D6C  00           NOP
+  0D6D  00           NOP
+  0D6E  00           NOP
+  0D6F  00           NOP
+  0D70  00           NOP
+  0D71  00           NOP
+  0D72  00           NOP
+  0D73  00           NOP
+
+Print4Digits:
+  0D74  00           NOP
+  0D75  00           NOP
+  0D76  00           NOP
+  0D77  00           NOP
+  0D78  00           NOP
+  0D79  00           NOP
+  0D7A  00           NOP
+  0D7B  00           NOP
+  0D7C  00           NOP
+  0D7D  00           NOP
+  0D7E  00           NOP
+  0D7F  00           NOP
+  0D80  00           NOP
+  0D81  00           NOP
+  0D82  00           NOP
+  0D83  00           NOP
+  0D84  00           NOP
+  0D85  00           NOP
+  0D86  00           NOP
+  0D87  00           NOP
+  0D88  00           NOP
+  0D89  00           NOP
+  0D8A  00           NOP
+  0D8B  00           NOP
+  0D8C  00           NOP
+  0D8D  00           NOP
+  0D8E  00           NOP
+  0D8F  00           NOP
+  0D90  00           NOP
+  0D91  00           NOP
+  0D92  00           NOP
+  0D93  00           NOP
+  0D94  00           NOP
+  0D95  00           NOP
+  0D96  00           NOP
+  0D97  00           NOP
+  0D98  00           NOP
+  0D99  00           NOP
+  0D9A  00           NOP
+  0D9B  00           NOP
+  0D9C  00           NOP
+  0D9D  00           NOP
+  0D9E  00           NOP
+  0D9F  00           NOP
+  0DA0  00           NOP
+  0DA1  00           NOP
+  0DA2  00           NOP
+  0DA3  00           NOP
+  0DA4  00           NOP
+  0DA5  00           NOP
+
+DrawStatus:
+  0DA6  00           NOP
+  0DA7  00           NOP
+  0DA8  00           NOP
+  0DA9  00           NOP
+  0DAA  00           NOP
+  0DAB  00           NOP
+  0DAC  00           NOP
+  0DAD  00           NOP
+  0DAE  00           NOP
+  0DAF  00           NOP
+  0DB0  00           NOP
+  0DB1  00           NOP
+  0DB2  00           NOP
+  0DB3  00           NOP
+  0DB4  00           NOP
+  0DB5  00           NOP
+  0DB6  00           NOP
+  0DB7  00           NOP
+  0DB8  00           NOP
+  0DB9  00           NOP
+  0DBA  00           NOP
+  0DBB  00           NOP
+  0DBC  00           NOP
+  0DBD  00           NOP
+  0DBE  00           NOP
+  0DBF  00           NOP
+
+ClearPlayfield:
+  0DC0  00           NOP
+  0DC1  00           NOP
+  0DC2  00           NOP
+  0DC3  00           NOP
+  0DC4  00           NOP
+  0DC5  00           NOP
+  0DC6  00           NOP
+  0DC7  00           NOP
+  0DC8  00           NOP
+  0DC9  00           NOP
+  0DCA  00           NOP
+  0DCB  00           NOP
+  0DCC  00           NOP
+  0DCD  00           NOP
+  0DCE  00           NOP
+  0DCF  00           NOP
+  0DD0  00           NOP
+  0DD1  00           NOP
+  0DD2  00           NOP
+  0DD3  00           NOP
+  0DD4  00           NOP
+  0DD5  00           NOP
+
+DrawBottomLine:
+  0DD6  00           NOP
+  0DD7  00           NOP
+  0DD8  00           NOP
+  0DD9  00           NOP
+  0DDA  00           NOP
+  0DDB  00           NOP
+  0DDC  00           NOP
+  0DDD  00           NOP
+  0DDE  00           NOP
+  0DDF  00           NOP
+  0DE0  00           NOP
+  0DE1  00           NOP
+  0DE2  00           NOP
+  0DE3  00           NOP
+  0DE4  00           NOP
+  0DE5  00           NOP
+  0DE6  00           NOP
+  0DE7  00           NOP
+  0DE8  00           NOP
+  0DE9  00           NOP
+
+======================================================================
+  Sprite Data Table
+  Address range: $0E00-$0E40
+======================================================================
+
+SpriteDataTable:
+  0E00  00           NOP
+  0E01  00           NOP
+  0E02  00           NOP
+  0E03  00           NOP
+  0E04  00           NOP
+  0E05  00           NOP
+  0E06  00           NOP
+  0E07  00           NOP
+  0E08  00           NOP
+  0E09  00           NOP
+  0E0A  00           NOP
+  0E0B  00           NOP
+  0E0C  00           NOP
+  0E0D  00           NOP
+  0E0E  00           NOP
+  0E0F  00           NOP
+  0E10  00           NOP
+  0E11  00           NOP
+  0E12  00           NOP
+  0E13  00           NOP
+  0E14  00           NOP
+  0E15  00           NOP
+  0E16  00           NOP
+  0E17  00           NOP
+  0E18  00           NOP
+  0E19  00           NOP
+  0E1A  00           NOP
+  0E1B  00           NOP
+  0E1C  00           NOP
+  0E1D  00           NOP
+  0E1E  00           NOP
+  0E1F  00           NOP
+  0E20  00           NOP
+  0E21  00           NOP
+  0E22  00           NOP
+  0E23  00           NOP
+  0E24  00           NOP
+  0E25  00           NOP
+  0E26  00           NOP
+  0E27  00           NOP
+  0E28  00           NOP
+  0E29  00           NOP
+  0E2A  00           NOP
+  0E2B  00           NOP
+  0E2C  00           NOP
+  0E2D  00           NOP
+  0E2E  00           NOP
+  0E2F  00           NOP
+
+AlienSpritesCR:
+  0E30  00           NOP
+  0E31  00           NOP
+  0E32  00           NOP
+  0E33  00           NOP
+  0E34  00           NOP
+  0E35  00           NOP
+  0E36  00           NOP
+  0E37  00           NOP
+
+AlienSpritesCR_B:
+  0E38  00           NOP
+  0E39  00           NOP
+  0E3A  00           NOP
+  0E3B  00           NOP
+  0E3C  00           NOP
+  0E3D  00           NOP
+  0E3E  00           NOP
+  0E3F  00           NOP
+
+======================================================================
+  Sprite Graphics Data (Aliens, Shots, Player, Shields)
+  Address range: $1000-$1200
+======================================================================
+
+AlienSpriteTypeA:
+  1000  20           RIM
+  1001  C3 C9 16     JMP $16C9
+  1004  21 84 20     LXI H,numLives
+  1007  7E           MOV A,M
+  1008  A7           ANA A
+  1009  CA 07 07     JZ $0707
+  100C  23           INX H
+  100D  7E           MOV A,M
+  100E  A7           ANA A
+  100F  C0           RNZ
+
+AlienSpriteTypeA2:
+  1010  06 01        MVI B,$01
+  1012  C3 FA 18     JMP $18FA
+  1015  21 10 28     LXI H,$2810
+  1018  11 A3 1C     LXI D,$1CA3
+  101B  0E 15        MVI C,$15
+  101D  CD F3 08     CALL $08F3
+
+AlienSpriteTypeB:
+  1020  3E 0A        MVI A,$0A
+  1022  32 6C 20     STA saucerScoreStr
+  1025  01 BE 1D     LXI B,$1DBE
+  1028  CD 56 18     CALL $1856
+  102B  DA 37 18     JC $1837
+  102E  CD 44 18     CALL $1844
+  1031  C3 28 18     JMP $1828
+  1034  CD B1 0A     CALL $0AB1
+  1037  01 CF 1D     LXI B,$1DCF
+  103A  CD 56 18     CALL $1856
+  103D  D8           RC
+  103E  CD 4C 18     CALL $184C
+  1041  C3 3A 18     JMP $183A
+  1044  C5           PUSH B
+  1045  06 10        MVI B,$10
+  1047  CD 39 14     CALL GetRefAlienDelta
+  104A  C1           POP B
+  104B  C9           RET
+  104C  C5           PUSH B
+  104D  3A 6C 20     LDA saucerScoreStr
+
+AlienSpriteTypeC2:
+  1050  4F           MOV C,A
+  1051  CD 93 0A     CALL $0A93
+  1054  C1           POP B
+  1055  C9           RET
+  1056  0A           LDAX B
+  1057  FE FF        CPI $FF
+  1059  37           STC
+  105A  C8           RZ
+  105B  6F           MOV L,A
+  105C  03           INX B
+  105D  0A           LDAX B
+  105E  67           MOV H,A
+  105F  03           INX B
+
+ShotExplodingSprite:
+  1060  0A           LDAX B
+  1061  5F           MOV E,A
+  1062  03           INX B
+  1063  0A           LDAX B
+  1064  57           MOV D,A
+  1065  03           INX B
+  1066  A7           ANA A
+  1067  C9           RET
+
+PlayerShotSprite:
+  1068  21 C2 20     LXI H,$20C2
+  106B  34           INR M
+  106C  23           INX H
+  106D  4E           MOV C,M
+  106E  CD D9 01     CALL $01D9
+  1071  47           MOV B,A
+  1072  3A CA 20     LDA $20CA
+  1075  B8           CMP B
+  1076  CA 98 18     JZ $1898
+  1079  3A C2 20     LDA $20C2
+  107C  E6 04        ANI $04
+  107E  2A CC 20     LHLD $20CC
+  1081  C2 88 18     JNZ $1888
+  1084  11 30 00     LXI D,RST6
+  1087  19           DAD D
+  1088  22 C7 20     SHLD plyrShotXr
+  108B  21 C5 20     LXI H,plyrShotSize
+  108E  CD 3B 1A     CALL $1A3B
+  1091  EB           XCHG
+  1092  C3 D3 15     JMP $15D3
+  1095  00           NOP
+  1096  00           NOP
+  1097  00           NOP
+
+ShieldSprite:
+  1098  3E 01        MVI A,$01
+  109A  32 CB 20     STA $20CB
+  109D  C9           RET
+  109E  21 50 20     LXI H,$2050
+  10A1  11 C0 1B     LXI D,$1BC0
+  10A4  06 10        MVI B,$10
+  10A6  CD 32 1A     CALL $1A32
+  10A9  3E 02        MVI A,$02
+  10AB  32 80 20     STA score1
+  10AE  3E FF        MVI A,$FF
+  10B0  32 7E 20     STA HiScor
+  10B3  3E 04        MVI A,$04
+  10B5  32 C1 20     STA plyrObjPtr
+  10B8  3A 55 20     LDA $2055
+  10BB  E6 01        ANI $01
+  10BD  CA B8 18     JZ $18B8
+  10C0  3A 55 20     LDA $2055
+  10C3  E6 01        ANI $01
+  10C5  C2 C0 18     JNZ $18C0
+  10C8  21 11 33     LXI H,$3311
+  10CB  3E 26        MVI A,$26
+  10CD  00           NOP
+  10CE  CD FF 08     CALL $08FF
+  10D1  C3 B6 0A     JMP $0AB6
+  10D4  31 00 24     LXI SP,VRAM_Start
+  10D7  06 00        MVI B,$00
+  10D9  CD E6 01     CALL $01E6
+  10DC  CD 56 19     CALL $1956
+  10DF  3E 08        MVI A,$08
+  10E1  32 CF 20     STA $20CF
+  10E4  C3 EA 0A     JMP $0AEA
+  10E7  3A 67 20     LDA numAliens
+  10EA  21 E7 20     LXI H,$20E7
+  10ED  0F           RRC
+  10EE  D0           RNC
+  10EF  23           INX H
+  10F0  C9           RET
+  10F1  06 02        MVI B,$02
+  10F3  3A 82 20     LDA shotPicEnd
+  10F6  3D           DCR A
+  10F7  C0           RNZ
+  10F8  04           INR B
+  10F9  C9           RET
+  10FA  3A 94 20     LDA $2094
+  10FD  B0           ORA B
+  10FE  32 94 20     STA $2094
+  1101  D3 03        OUT $03
+  1103  C9           RET
+  1104  21 00 22     LXI H,$2200
+  1107  C3 C3 01     JMP $01C3
+  110A  CD D8 14     CALL $14D8
+  110D  C3 97 15     JMP $1597
+
+SquigglyShotData_C:
+  1110  21 E7 20     LXI H,$20E7
+  1113  3A 67 20     LDA numAliens
+  1116  0F           RRC
+  1117  D8           RC
+
+PlungerShotData_A:
+  1118  23           INX H
+  1119  C9           RET
+  111A  0E 1C        MVI C,$1C
+
+PlungerShotData_B:
+  111C  21 1E 24     LXI H,$241E
+  111F  11 E4 1A     LXI D,$1AE4
+  1122  C3 F3 08     JMP $08F3
+  1125  21 F8 20     LXI H,$20F8
+
+RollingShotData_A:
+  1128  C3 31 19     JMP $1931
+  112B  21 FC 20     LXI H,$20FC
+  112E  C3 31 19     JMP $1931
+  1131  5E           MOV E,M
+  1132  23           INX H
+  1133  56           MOV D,M
+
+RollingShotData_D:
+  1134  23           INX H
+  1135  7E           MOV A,M
+  1136  23           INX H
+  1137  66           MOV H,M
+  1138  6F           MOV L,A
+  1139  C3 AD 09     JMP $09AD
+  113C  0E 07        MVI C,$07
+  113E  21 01 35     LXI H,$3501
+  1141  11 A9 1F     LXI D,$1FA9
+  1144  C3 F3 08     JMP $08F3
+  1147  3A EB 20     LDA rolShotStatus
+  114A  21 01 3C     LXI H,$3C01
+  114D  C3 B2 09     JMP DrawSaucer
+  1150  21 F4 20     LXI H,$20F4
+  1153  C3 31 19     JMP $1931
+  1156  CD 5C 1A     CALL $1A5C
+  1159  CD 1A 19     CALL $191A
+  115C  CD 25 19     CALL $1925
+  115F  CD 2B 19     CALL $192B
+  1162  CD 50 19     CALL $1950
+  1165  CD 3C 19     CALL $193C
+  1168  C3 47 19     JMP $1947
+  116B  CD DC 19     CALL $19DC
+  116E  C3 71 16     JMP $1671
+  1171  3E 01        MVI A,$01
+  1173  32 6D 20     STA $206D
+  1176  C3 E6 16     JMP $16E6
+  1179  CD D7 19     CALL $19D7
+  117C  CD 47 19     CALL $1947
+  117F  C3 3C 19     JMP $193C
+  1182  32 C1 20     STA plyrObjPtr
+  1185  C9           RET
+  1186  8B           ADC E
+  1187  19           DAD D
+  1188  C3 D6 09     JMP $09D6
+  118B  21 03 28     LXI H,$2803
+  118E  11 BE 19     LXI D,$19BE
+  1191  0E 13        MVI C,$13
+  1193  C3 F3 08     JMP $08F3
+  1196  00           NOP
+  1197  00           NOP
+
+PlayfieldAlienStartY:
+  1198  00           NOP
+  1199  00           NOP
+  119A  3A 1E 20     LDA $201E
+  119D  A7           ANA A
+  119E  C2 AC 19     JNZ $19AC
+  11A1  DB 01        IN $01
+  11A3  E6 76        ANI $76
+  11A5  D6 72        SUI $72
+  11A7  C0           RNZ
+  11A8  3C           INR A
+  11A9  32 1E 20     STA $201E
+  11AC  DB 01        IN $01
+  11AE  E6 76        ANI $76
+  11B0  FE 34        CPI $34
+  11B2  C0           RNZ
+  11B3  21 1B 2E     LXI H,$2E1B
+  11B6  11 F7 0B     LXI D,$0BF7
+  11B9  0E 09        MVI C,$09
+  11BB  C3 F3 08     JMP $08F3
+  11BE  28           NOP
+  11BF  13           INX D
+  11C0  00           NOP
+  11C1  08           NOP
+  11C2  13           INX D
+  11C3  0E 26        MVI C,$26
+  11C5  02           STAX B
+  11C6  0E 11        MVI C,$11
+  11C8  0F           RRC
+  11C9  0E 11        MVI C,$11
+  11CB  00           NOP
+  11CC  13           INX D
+  11CD  08           NOP
+  11CE  0E 0D        MVI C,$0D
+  11D0  28           NOP
+  11D1  3E 01        MVI A,$01
+  11D3  32 E9 20     STA $20E9
+  11D6  C9           RET
+  11D7  AF           XRA A
+  11D8  C3 D3 19     JMP $19D3
+  11DB  00           NOP
+  11DC  3A 94 20     LDA $2094
+  11DF  A0           ANA B
+  11E0  32 94 20     STA $2094
+  11E3  D3 03        OUT $03
+  11E5  C9           RET
+  11E6  21 01 27     LXI H,$2701
+  11E9  CA FA 19     JZ $19FA
+  11EC  11 60 1C     LXI D,$1C60
+  11EF  06 10        MVI B,$10
+  11F1  4F           MOV C,A
+  11F2  CD 39 14     CALL GetRefAlienDelta
+  11F5  79           MOV A,C
+  11F6  3D           DCR A
+  11F7  C2 EC 19     JNZ $19EC
+  11FA  06 10        MVI B,$10
+  11FC  CD CB 14     CALL DrawShields
+  11FF  7C           MOV A,H
+
+======================================================================
+  Draw Alien Row / Check Bottom / Count Aliens
+  Address range: $1400-$14D0
+======================================================================
+
+DrawAlienRow:
+  1400  00           NOP
+  1401  00           NOP
+  1402  39           DAD SP
+  1403  79           MOV A,C
+  1404  7A           MOV A,D
+  1405  6E           MOV L,M
+  1406  EC FA FA     CPE $FAFA
+  1409  EC 6E 7A     CPE $7A6E
+  140C  79           MOV A,C
+  140D  39           DAD SP
+  140E  00           NOP
+  140F  00           NOP
+  1410  00           NOP
+  1411  00           NOP
+  1412  00           NOP
+  1413  78           MOV A,B
+  1414  1D           DCR E
+  1415  BE           CMP M
+  1416  6C           MOV L,H
+  1417  3C           INR A
+  1418  3C           INR A
+  1419  3C           INR A
+  141A  6C           MOV L,H
+  141B  BE           CMP M
+
+CheckAlienReachedBottom:
+  141C  1D           DCR E
+  141D  78           MOV A,B
+  141E  00           NOP
+  141F  00           NOP
+  1420  00           NOP
+  1421  00           NOP
+  1422  00           NOP
+  1423  00           NOP
+
+CursorNextAlienInRow:
+  1424  19           DAD D
+  1425  3A 6D FA     LDA $FA6D
+  1428  FA 6D 3A     JM $3A6D
+  142B  19           DAD D
+  142C  00           NOP
+  142D  00           NOP
+  142E  00           NOP
+  142F  00           NOP
+  1430  00           NOP
+  1431  00           NOP
+  1432  38           NOP
+  1433  7A           MOV A,D
+  1434  7F           MOV A,A
+  1435  6D           MOV L,L
+  1436  EC FA FA     CPE $FAFA
+
+GetRefAlienDelta:
+  1439  EC 6D 7F     CPE $7F6D
+  143C  7A           MOV A,D
+  143D  38           NOP
+  143E  00           NOP
+  143F  00           NOP
+  1440  00           NOP
+  1441  00           NOP
+  1442  00           NOP
+  1443  0E 18        MVI C,$18
+  1445  BE           CMP M
+  1446  6D           MOV L,L
+  1447  3D           DCR A
+  1448  3C           INR A
+  1449  3D           DCR A
+  144A  6D           MOV L,L
+  144B  BE           CMP M
+  144C  18           NOP
+  144D  0E 00        MVI C,$00
+  144F  00           NOP
+
+MoveRefAlienYX:
+  1450  00           NOP
+  1451  00           NOP
+  1452  00           NOP
+  1453  00           NOP
+  1454  1A           LDAX D
+  1455  3D           DCR A
+  1456  68           MOV L,B
+  1457  FC FC 68     CM $68FC
+  145A  3D           DCR A
+  145B  1A           LDAX D
+  145C  00           NOP
+  145D  00           NOP
+  145E  00           NOP
+  145F  00           NOP
+  1460  00           NOP
+  1461  00           NOP
+  1462  0F           RRC
+  1463  1F           RAR
+  1464  1F           RAR
+  1465  1F           RAR
+  1466  1F           RAR
+  1467  7F           MOV A,A
+  1468  FF           RST 7
+  1469  7F           MOV A,A
+  146A  1F           RAR
+  146B  1F           RAR
+  146C  1F           RAR
+  146D  1F           RAR
+  146E  0F           RRC
+  146F  00           NOP
+
+GetAlienStatPtr:
+  1470  00           NOP
+  1471  04           INR B
+  1472  01 13 03     LXI B,$0313
+  1475  07           RLC
+  1476  B3           ORA E
+  1477  0F           RRC
+  1478  2F           CMA
+  1479  03           INX B
+  147A  2F           CMA
+  147B  49           MOV C,C
+  147C  04           INR B
+  147D  03           INX B
+  147E  00           NOP
+  147F  01 40 08     LXI B,$0840
+
+HandleAlienKilled:
+  1482  05           DCR B
+  1483  A3           ANA E
+  1484  0A           LDAX B
+  1485  03           INX B
+  1486  5B           MOV E,E
+  1487  0F           RRC
+  1488  27           DAA
+  1489  27           DAA
+  148A  0B           DCX B
+  148B  4B           MOV C,E
+  148C  40           MOV B,B
+  148D  84           ADD H
+  148E  11 48 0F     LXI D,$0F48
+  1491  99           SBB C
+  1492  3C           INR A
+  1493  7E           MOV A,M
+  1494  3D           DCR A
+  1495  BC           CMP H
+  1496  3E 7C        MVI A,$7C
+  1498  99           SBB C
+  1499  27           DAA
+  149A  1B           DCX D
+  149B  1A           LDAX D
+  149C  26 0F        MVI H,$0F
+  149E  0E 08        MVI C,$08
+  14A0  0D           DCR C
+  14A1  13           INX D
+  14A2  12           STAX D
+  14A3  28           NOP
+  14A4  12           STAX D
+  14A5  02           STAX B
+  14A6  0E 11        MVI C,$11
+  14A8  04           INR B
+  14A9  26 00        MVI H,$00
+  14AB  03           INX B
+  14AC  15           DCR D
+  14AD  00           NOP
+  14AE  0D           DCR C
+  14AF  02           STAX B
+  14B0  04           INR B
+  14B1  26 13        MVI H,$13
+  14B3  00           NOP
+  14B4  01 0B 04     LXI B,$040B
+  14B7  28           NOP
+  14B8  02           STAX B
+  14B9  10           NOP
+  14BA  20           RIM
+  14BB  30           SIM
+  14BC  13           INX D
+  14BD  08           NOP
+  14BE  0B           DCX B
+  14BF  13           INX D
+
+CountAliens:
+  14C0  00           NOP
+  14C1  08           NOP
+  14C2  49           MOV C,C
+  14C3  22 14 81     SHLD $8114
+  14C6  42           MOV B,D
+  14C7  00           NOP
+  14C8  42           MOV B,D
+  14C9  81           ADD C
+  14CA  14           INR D
+
+DrawShields:
+  14CB  22 49 08     SHLD $0849
+  14CE  00           NOP
+  14CF  00           NOP
+
+======================================================================
+  Draw Shields / Saucer / Collision / Player Hit
+  Address range: $14CB-$1600
+======================================================================
+
+DrawShields:
+  14CB  22 49 08     SHLD $0849
+  14CE  00           NOP
+  14CF  00           NOP
+  14D0  44           MOV B,H
+  14D1  AA           XRA D
+  14D2  10           NOP
+  14D3  88           ADC B
+  14D4  54           MOV D,H
+  14D5  22 10 AA     SHLD $AA10
+  14D8  44           MOV B,H
+  14D9  22 54 88     SHLD $8854
+  14DC  4A           MOV C,D
+  14DD  15           DCR D
+  14DE  BE           CMP M
+  14DF  3F           CMC
+  14E0  5E           MOV E,M
+  14E1  25           DCR H
+  14E2  04           INR B
+  14E3  FC 04 10     CM $1004
+  14E6  FC 10 20     CM enableAlienFire
+  14E9  FC 20 80     CM $8020
+  14EC  FC 80 00     CM $0080
+  14EF  FE 00        CPI $00
+  14F1  24           INR H
+  14F2  FE 12        CPI $12
+  14F4  00           NOP
+  14F5  FE 00        CPI $00
+  14F7  48           MOV C,B
+  14F8  FE 90        CPI $90
+  14FA  0F           RRC
+  14FB  0B           DCX B
+  14FC  00           NOP
+  14FD  29           DAD H
+  14FE  00           NOP
+  14FF  00           NOP
+
+SaucerLogic:
+  1500  01 07 01     LXI B,$0107
+  1503  01 01 04     LXI B,$0401
+  1506  0B           DCX B
+  1507  01 06 03     LXI B,$0306
+  150A  01 01 0B     LXI B,$0B01
+  150D  09           DAD B
+  150E  02           STAX B
+  150F  08           NOP
+  1510  02           STAX B
+  1511  0B           DCX B
+  1512  04           INR B
+  1513  07           RLC
+  1514  0A           LDAX B
+  1515  05           DCR B
+  1516  02           STAX B
+  1517  05           DCR B
+  1518  04           INR B
+  1519  06 07        MVI B,$07
+  151B  08           NOP
+  151C  0A           LDAX B
+  151D  06 0A        MVI B,$0A
+  151F  03           INX B
+  1520  FF           RST 7
+  1521  0F           RRC
+  1522  FF           RST 7
+  1523  1F           RAR
+  1524  FF           RST 7
+  1525  3F           CMC
+  1526  FF           RST 7
+  1527  7F           MOV A,A
+  1528  FF           RST 7
+  1529  FF           RST 7
+  152A  FC FF F8     CM $F8FF
+  152D  FF           RST 7
+  152E  F0           RP
+  152F  FF           RST 7
+  1530  F0           RP
+  1531  FF           RST 7
+  1532  F0           RP
+  1533  FF           RST 7
+  1534  F0           RP
+  1535  FF           RST 7
+  1536  F0           RP
+  1537  FF           RST 7
+
+SpriteShotCollision:
+  1538  F0           RP
+  1539  FF           RST 7
+  153A  F0           RP
+  153B  FF           RST 7
+  153C  F8           RM
+  153D  FF           RST 7
+  153E  FC FF FF     CM $FFFF
+  1541  FF           RST 7
+  1542  FF           RST 7
+  1543  FF           RST 7
+  1544  FF           RST 7
+  1545  7F           MOV A,A
+  1546  FF           RST 7
+  1547  3F           CMC
+  1548  FF           RST 7
+  1549  1F           RAR
+  154A  FF           RST 7
+  154B  0F           RRC
+  154C  05           DCR B
+  154D  10           NOP
+  154E  15           DCR D
+  154F  30           SIM
+
+CheckPlayerHit:
+  1550  94           SUB H
+  1551  97           SUB A
+  1552  9A           SBB D
+  1553  9D           SBB L
+  1554  10           NOP
+  1555  05           DCR B
+  1556  05           DCR B
+  1557  10           NOP
+  1558  15           DCR D
+  1559  10           NOP
+  155A  10           NOP
+  155B  05           DCR B
+  155C  30           SIM
+  155D  10           NOP
+  155E  10           NOP
+  155F  10           NOP
+  1560  05           DCR B
+  1561  15           DCR D
+  1562  10           NOP
+  1563  05           DCR B
+  1564  00           NOP
+  1565  00           NOP
+  1566  00           NOP
+  1567  00           NOP
+  1568  04           INR B
+  1569  0C           INR C
+  156A  1E 37        MVI E,$37
+  156C  3E 7C        MVI A,$7C
+  156E  74           MOV M,H
+  156F  7E           MOV A,M
+  1570  7E           MOV A,M
+  1571  74           MOV M,H
+  1572  7C           MOV A,H
+  1573  3E 37        MVI A,$37
+  1575  1E 0C        MVI E,$0C
+  1577  04           INR B
+  1578  00           NOP
+  1579  00           NOP
+  157A  00           NOP
+  157B  00           NOP
+  157C  00           NOP
+  157D  22 00 A5     SHLD $A500
+
+ShotLandedOnPlayer:
+  1580  40           MOV B,B
+  1581  08           NOP
+  1582  98           SBB B
+  1583  3D           DCR A
+  1584  B6           ORA M
+  1585  3C           INR A
+  1586  36 1D        MVI M,$1D
+  1588  10           NOP
+  1589  48           MOV C,B
+  158A  62           MOV H,D
+  158B  B6           ORA M
+  158C  1D           DCR E
+  158D  98           SBB B
+  158E  08           NOP
+  158F  42           MOV B,D
+  1590  90           SUB B
+  1591  08           NOP
+
+DropExtraLife:
+  1592  00           NOP
+  1593  00           NOP
+  1594  26 1F        MVI H,$1F
+  1596  1A           LDAX D
+  1597  1B           DCX D
+  1598  1A           LDAX D
+  1599  1A           LDAX D
+  159A  1B           DCX D
+  159B  1F           RAR
+  159C  1A           LDAX D
+  159D  1D           DCR E
+  159E  1A           LDAX D
+  159F  1A           LDAX D
+  15A0  10           NOP
+  15A1  20           RIM
+  15A2  30           SIM
+  15A3  60           MOV H,B
+  15A4  50           MOV D,B
+  15A5  48           MOV C,B
+  15A6  48           MOV C,B
+  15A7  48           MOV C,B
+  15A8  40           MOV B,B
+  15A9  40           MOV B,B
+  15AA  40           MOV B,B
+  15AB  0F           RRC
+  15AC  0B           DCX B
+  15AD  00           NOP
+  15AE  18           NOP
+  15AF  12           STAX D
+  15B0  0F           RRC
+  15B1  00           NOP
+  15B2  02           STAX B
+  15B3  04           INR B
+  15B4  26 26        MVI H,$26
+  15B6  08           NOP
+  15B7  0D           DCR C
+  15B8  15           DCR D
+  15B9  00           NOP
+  15BA  03           INX B
+  15BB  04           INR B
+  15BC  11 12 0E     LXI D,$0E12
+  15BF  2C           INR L
+
+PlayerAlive:
+  15C0  68           MOV L,B
+  15C1  1D           DCR E
+  15C2  0C           INR C
+  15C3  2C           INR L
+  15C4  20           RIM
+  15C5  1C           INR E
+  15C6  0A           LDAX B
+  15C7  2C           INR L
+  15C8  40           MOV B,B
+  15C9  1C           INR E
+  15CA  08           NOP
+  15CB  2C           INR L
+  15CC  00           NOP
+  15CD  1C           INR E
+  15CE  FF           RST 7
+  15CF  0E 2E        MVI C,$2E
+  15D1  E0           RPO
+  15D2  1D           DCR E
+  15D3  0C           INR C
+  15D4  2E EA        MVI L,$EA
+  15D6  1D           DCR E
+  15D7  0A           LDAX B
+  15D8  2E F4        MVI L,$F4
+  15DA  1D           DCR E
+  15DB  08           NOP
+  15DC  2E 99        MVI L,$99
+  15DE  1C           INR E
+  15DF  FF           RST 7
+  15E0  27           DAA
+  15E1  38           NOP
+  15E2  26 0C        MVI H,$0C
+  15E4  18           NOP
+  15E5  12           STAX D
+  15E6  13           INX D
+  15E7  04           INR B
+  15E8  11 18 27     LXI D,$2718
+  15EB  1D           DCR E
+  15EC  1A           LDAX D
+  15ED  26 0F        MVI H,$0F
+  15EF  0E 08        MVI C,$08
+  15F1  0D           DCR C
+  15F2  13           INX D
+  15F3  12           STAX D
+  15F4  27           DAA
+  15F5  1C           INR E
+  15F6  1A           LDAX D
+  15F7  26 0F        MVI H,$0F
+  15F9  0E 08        MVI C,$08
+  15FB  0D           DCR C
+  15FC  13           INX D
+  15FD  12           STAX D
+  15FE  00           NOP
+  15FF  00           NOP
+
+======================================================================
+  Score Headers / AdjScore
+  Address range: $1780-$17D0
+======================================================================
+
+DrawScoreHead:
+  1780  60           MOV H,B
+  1781  10           NOP
+  1782  0F           RRC
+  1783  10           NOP
+  1784  60           MOV H,B
+  1785  30           SIM
+  1786  18           NOP
+  1787  1A           LDAX D
+  1788  3D           DCR A
+  1789  68           MOV L,B
+  178A  FC FC 68     CM $68FC
+  178D  3D           DCR A
+  178E  1A           LDAX D
+  178F  00           NOP
+  1790  08           NOP
+  1791  0D           DCR C
+  1792  12           STAX D
+  1793  04           INR B
+  1794  11 13 26     LXI D,$2613
+  1797  26 02        MVI H,$02
+  1799  0E 08        MVI C,$08
+  179B  0D           DCR C
+  179C  0D           DCR C
+  179D  2A 50 1F     LHLD $1F50
+  17A0  0A           LDAX B
+  17A1  2A 62 1F     LHLD $1F62
+  17A4  07           RLC
+  17A5  2A E1 1F     LHLD $1FE1
+  17A8  FF           RST 7
+  17A9  02           STAX B
+  17AA  11 04 03     LXI D,$0304
+  17AD  08           NOP
+  17AE  13           INX D
+  17AF  26 00        MVI H,$00
+  17B1  60           MOV H,B
+  17B2  10           NOP
+  17B3  0F           RRC
+  17B4  10           NOP
+  17B5  60           MOV H,B
+  17B6  38           NOP
+  17B7  19           DAD D
+  17B8  3A 6D FA     LDA $FA6D
+  17BB  FA 6D 3A     JM $3A6D
+  17BE  19           DAD D
+  17BF  00           NOP
+
+CreditMessage:
+  17C0  00           NOP
+  17C1  20           RIM
+  17C2  40           MOV B,B
+  17C3  4D           MOV C,L
+  17C4  50           MOV D,B
+  17C5  20           RIM
+  17C6  00           NOP
+  17C7  00           NOP
+  17C8  00           NOP
+
+AdjScore:
+  17C9  00           NOP
+  17CA  00           NOP
+  17CB  FF           RST 7
+  17CC  B8           CMP B
+  17CD  FF           RST 7
+  17CE  80           ADD B
+  17CF  1F           RAR
+
+======================================================================
+  Sprite Graphics Data (hex dump)
+======================================================================
+
+  Alien Type A Frame 1 (16 bytes, 2 bytes wide x 8 rows) ($1000-$100F):
+  20 C3 C9 16 21 84 20 7E A7 CA 07 07 23 7E A7 C0
+    ..#.....##....##
+    ##..#..#...#.##.
+    ..#....##....#..
+    ..#......######.
+    #.#..#####..#.#.
+    .....###.....###
+    ..#...##.######.
+    #.#..#####......
+
+  Alien Type A Frame 2 ($1010-$101F):
+  06 01 C3 FA 18 21 10 28 11 A3 1C 0E 15 CD F3 08
+    .....##........#
+    ##....#######.#.
+    ...##.....#....#
+    ...#......#.#...
+    ...#...##.#...##
+    ...###......###.
+    ...#.#.###..##.#
+    ####..##....#...
+
+  Alien Type B Frame 1 ($1020-$102F):
+  3E 0A 32 6C 20 01 BE 1D CD 56 18 DA 37 18 CD 44
+    ..#####.....#.#.
+    ..##..#..##.##..
+    ..#............#
+    #.#####....###.#
+    ##..##.#.#.#.##.
+    ...##...##.##.#.
+    ..##.###...##...
+    ##..##.#.#...#..
+
+  Alien Type B Frame 2 ($1030-$103F):
+  18 C3 28 18 CD B1 0A 01 CF 1D CD 56 18 D8 CD 4C
+    ...##...##....##
+    ..#.#......##...
+    ##..##.##.##...#
+    ....#.#........#
+    ##..####...###.#
+    ##..##.#.#.#.##.
+    ...##...##.##...
+    ##..##.#.#..##..
+
+  Alien Type C Frame 1 ($1040-$104F):
+  18 C3 3A 18 C5 06 10 CD 39 14 C1 C9 C5 3A 6C 20
+    ...##...##....##
+    ..###.#....##...
+    ##...#.#.....##.
+    ...#....##..##.#
+    ..###..#...#.#..
+    ##.....###..#..#
+    ##...#.#..###.#.
+    .##.##....#.....
+
+  Alien Type C Frame 2 ($1050-$105F):
+  4F CD 93 0A C1 C9 0A FE FF 37 C8 6F 03 0A 67 03
+    .#..######..##.#
+    #..#..##....#.#.
+    ##.....###..#..#
+    ....#.#.#######.
+    ########..##.###
+    ##..#....##.####
+    ......##....#.#.
+    .##..###......##
+
+  Shot Exploding Sprite ($1060-$1067):
+  0A 5F 03 0A 57 03 A7 C9
+    ....#.#..#.#####
+    ......##....#.#.
+    .#.#.###......##
+    #.#..#####..#..#
+
+  Player Shot Sprite ($1068-$106F):
+  21 C2 20 34 23 4E CD D9
+    ..#....###....#.
+    ..#.......##.#..
+    ..#...##.#..###.
+    ##..##.###.##..#
+
+  Alien Explode Sprite ($1070-$107F):
+  01 47 3A CA 20 B8 CA 98 18 3A C2 20 E6 04 2A CC
+    .......#.#...###
+    ..###.#.##..#.#.
+    ..#.....#.###...
+    ##..#.#.#..##...
+    ...##.....###.#.
+    ##....#...#.....
+    ###..##......#..
+    ..#.#.#.##..##..
+
+  Saucer (UFO) Sprite ($1080-$108F):
+  20 C2 88 18 11 30 00 19 22 C7 20 21 C5 20 CD 3B
+    ..#.....##....#.
+    #...#......##...
+    ...#...#..##....
+    ...........##..#
+    ..#...#.##...###
+    ..#.......#....#
+    ##...#.#..#.....
+    ##..##.#..###.##
+
+  Player Sprite ($1090-$1097):
+  1A EB C3 D3 15 00 00 00
+    ...##.#.###.#.##
+    ##....####.#..##
+    ...#.#.#........
+    ................
+
+  Shield Sprite ($1098-$10BF):
+  3E 01 32 CB 20 C9 21 50 20 11 C0 1B 06 10 CD 32 1A 3E 02 32 80 20 3E FF 32 7E 20 3E 04 32 C1 20 3A 55 20 E6 01 CA B8 18
+    ..#####........#
+    ..##..#.##..#.##
+    ..#.....##..#..#
+    ..#....#.#.#....
+    ..#........#...#
+    ##.........##.##
+    .....##....#....
+    ##..##.#..##..#.
+    ...##.#...#####.
+    ......#...##..#.
+    #.........#.....
+    ..#####.########
+    ..##..#..######.
+    ..#.......#####.
+    .....#....##..#.
+    ##.....#..#.....
+    ..###.#..#.#.#.#
+    ..#.....###..##.
+    .......###..#.#.
+    #.###......##...

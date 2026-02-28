@@ -1,11 +1,27 @@
 Unit Helpers;
-var  
-   i: byte; 
+
+// ============================================================================
+//  HELPERS UNIT — Utility functions & arcade game reference data
+// ============================================================================
+//
+//  This unit contains:
+//    1. General-purpose helper functions (Clamp, Div, Mod)
+//    2. Constants, data tables, and algorithmic reference extracted from the
+//       original Space Invaders arcade ROM (Intel 8080, Midway 1978).
+//
+//  ROM files analysed (Assets/Intel8080/):
+//    invaders.h  $0000-$07FF  |  invaders.g  $0800-$0FFF
+//    invaders.f  $1000-$17FF  |  invaders.e  $1800-$1FFF
+//
+// ============================================================================
+
+var
+   i: byte;
    temp: integer;
 
-//
-// Helpers
-//
+// ============================================================================
+//  1.  HELPER FUNCTIONS
+// ============================================================================
 
 function Clamp(value, minVal, maxVal: byte): byte;
 begin
@@ -16,55 +32,6 @@ begin
 	else
 		temp := value;
 	Clamp := temp;
-	
-//	asm("
-//    ; Inputs:
-//; Helpers_value (lo/hi)
-//; Helpers_minVal (lo/hi)
-//; Helpers_maxVal (lo/hi)
-//;
-//; Output:
-//; A = low byte
-//; Y = high byte
-
-//;Helpers_Clamp:
-
-//    ; Load value once
-//    ldy Helpers_value+1
-//    lda Helpers_value
-
-//; ---------- check min ----------
-//    cpy Helpers_minVal+1
-//    bcc .ret_min
-//    bne .check_max
-
-//    cmp Helpers_minVal
-//    bcc .ret_min
-
-//; ---------- check max ----------
-//.check_max:
-//    cpy Helpers_maxVal+1
-//    bcc .ret_val
-//    bne .ret_max
-
-//    cmp Helpers_maxVal
-//    bcc .ret_val
-//    beq .ret_val
-
-//.ret_max:
-//    ldy Helpers_maxVal+1
-//    lda Helpers_maxVal
-//    rts
-
-//.ret_min:
-//    ldy Helpers_minVal+1
-//    lda Helpers_minVal
-//    rts
-
-//.ret_val:
-//    rts
-//    ");
-
 end;
 
 function Div(dividendInput, divisorInput: byte): byte;
@@ -77,6 +44,497 @@ function Mod(modDividend, modDivisor: byte): byte;
 begin
 	// Modulo operation (dividend mod divisor)
 	Mod := modDividend - ((modDividend / modDivisor) * modDivisor);
+end;
+
+// ============================================================================
+//  2.  ORIGINAL ARCADE GAME CONSTANTS
+// ============================================================================
+//
+//  --- Screen Geometry (arcade hardware) ---
+//  Resolution:  256 x 224 pixels (monitor rotated 90 deg CCW)
+//  VRAM start:  $2400 (1 bit per pixel, column-major, 7 KB)
+//  Frame rate:  60 Hz (two interrupts per frame: mid-screen + vblank)
+//
+//  --- Alien Formation ---
+//  Layout: 5 rows x 11 columns = 55 aliens
+//    Row 1 (top):      Type C  'Octopus'   x 11    10 pts each
+//    Rows 2-3 (mid):   Type B  'Crab'      x 22    20 pts each
+//    Rows 4-5 (bot):   Type A  'Squid'     x 22    30 pts each
+//  Total value per full rack:  110 + 440 + 660 = 1210 points
+//
+//  Grid cell: 16 x 16 pixels (aliens centered within cell)
+//  Alien pixel widths: Type A = 12 px, Type B = 11 px, Type C = 8 px
+//  All sprites stored as 16 columns x 8 rows (rotated-screen format)
+//
+//  --- Extra Life ---
+//  Awarded once at 1500 points (DIP-switch selectable: 1000 or 1500)
+//
+
+// ============================================================================
+//  3.  SAUCER (MYSTERY SHIP) SCORING TABLE
+// ============================================================================
+//
+//  The saucer score is NOT random. It is determined by how many shots the
+//  player has fired during the current rack. The table cycles every 15 shots.
+//
+//  ROM address: $1D54  (16 BCD entries; index = shot_count mod 15)
+//
+//    Shot #   Score        Shot #   Score
+//    ------   -----        ------   -----
+//      1       100           9       300  <-- "trick shot"
+//      2        50          10       100
+//      3        50          11       100
+//      4       100          12       100
+//      5       150          13        50
+//      6       100          14       150
+//      7       100          15       100
+//      8        50          (repeats)
+//
+//  To always get 300, fire exactly 23 shots then hit the saucer.
+//
+
+var
+	// Saucer score lookup (points / 10, stored as byte to save RAM)
+	// Index with: (player_shot_count - 1) mod 15
+	const ARCADE_SAUCER_SCORE_COUNT : byte = 15;
+	arcade_saucer_score_table : array[15] of byte = (
+		10, 5, 5, 10, 15, 10, 10, 5, 30, 10, 10, 10, 5, 15, 10
+	);
+	// Multiply looked-up value by 10 to get actual score
+
+// ============================================================================
+//  4.  ALIEN SHOT SYSTEM — THREE SHOT TYPES
+// ============================================================================
+//
+//  The arcade fires up to 3 alien shots simultaneously, each a different type:
+//
+//  ---- Rolling Shot ----
+//  ALWAYS targets the player's current X column.
+//  Finds the lowest alive alien in that column and fires from it.
+//  This is the "aimed" shot — the one that chases you.
+//  Animation: cross/plus pattern that rotates.
+//
+//  ---- Plunger Shot ----
+//  Fires from a PREDETERMINED column sequence (table below).
+//  Steps through the table sequentially; wraps after 16 entries.
+//  Finds the lowest alive alien in the selected column.
+//
+//  ---- Squiggly Shot ----
+//  Same mechanism as Plunger but uses a DIFFERENT column table.
+//  The Squiggly shot is suppressed while the saucer is on screen.
+//
+//  All three shot types share the same speed: 1 pixel per frame (4 px/step,
+//  with steps every 4 frames). Each has 4 animation frames that cycle.
+//
+//  Fire rate is controlled by a reload timer that shortens as aliens are
+//  destroyed.  The reload value = $30 (48 frames) at the start, decreasing
+//  through a lookup table as the rack empties.
+//
+
+var
+	// Plunger shot fire column table (ROM $1D00, 16 entries)
+	// Values 1-11 represent alien formation columns (1 = leftmost)
+	arcade_plunger_columns : array[16] of byte = (
+		1, 7, 1, 1, 1, 4, 11, 1, 6, 3, 1, 1, 11, 9, 2, 8
+	);
+
+	// Squiggly shot fire column table (ROM $1D10, 16 entries)
+	arcade_squiggly_columns : array[16] of byte = (
+		2, 11, 4, 7, 10, 5, 2, 5, 4, 6, 7, 8, 10, 6, 10, 3
+	);
+
+// ============================================================================
+//  5.  SPEED CURVE — FORMATION MARCH TIMING
+// ============================================================================
+//
+//  The formation advances one step every N frames, where N depends on how
+//  many aliens remain alive.  This is the core "acceleration" mechanic.
+//
+//  ROM speed table at $1AA1 (threshold / frames-per-step pairs):
+//
+//    Aliens remaining   Frames per step   Approx frequency
+//    ----------------   ---------------   ----------------
+//         >= 50               48           1.25 Hz (slow)
+//         >= 40               16           3.75 Hz
+//         >= 30               11           5.5  Hz
+//         >= 20                8           7.5  Hz
+//         >= 10                7           8.6  Hz
+//         >= 5                 6           10   Hz
+//         >= 3                 5           12   Hz
+//         >= 2                 4           15   Hz
+//           1                  3           20   Hz (fast)
+//
+//  NOTE: Your C64 version already implements a similar scheme with
+//  enemyMoveCounter = (INITIAL_INVADER_COUNT - numberOfEnemies).
+//  The arcade's table is non-linear — it accelerates faster near the end.
+//
+
+var
+	// Speed table: (threshold, frames_per_step) pairs
+	// Walk the table top-down; use the first entry where aliens_remaining >= threshold
+	const ARCADE_SPEED_ENTRIES : byte = 9;
+	arcade_speed_threshold : array[9] of byte = (50, 40, 30, 20, 10, 5, 3, 2, 1);
+	arcade_speed_delay     : array[9] of byte = (48, 16, 11,  8,  7, 6, 5, 4, 3);
+
+// ============================================================================
+//  6.  FORMATION MARCH ALGORITHM
+// ============================================================================
+//
+//  The arcade's alien march works as follows (from the ROM at $00E3 onward):
+//
+//  State variables:
+//    refAlienX, refAlienY : position of the "reference alien" (bottom-left)
+//    rackDirection         : 0 = moving left, 1 = moving right
+//    rackDownDelta         : pixels to drop on next direction change
+//
+//  Each game tick:
+//    1. Advance to the next alive alien (column-major scan: bottom-up,
+//       left-to-right).  This means each "step" moves ONE alien, and
+//       it takes 55 steps (or fewer as aliens die) to complete one full
+//       march across the formation.
+//
+//    2. Draw the current alien at its calculated position:
+//         alienX = refAlienX + (column * 16)
+//         alienY = refAlienY + (row * 16)
+//
+//    3. After scanning all aliens (one full march), move the reference
+//       alien by +/-2 pixels horizontally.
+//
+//    4. Edge detection:
+//         If rightmost alien reaches X >= 198 → set direction = left, queue drop
+//         If leftmost alien reaches X <= 26  → set direction = right, queue drop
+//
+//    5. On direction change: drop the formation by rackDownDelta pixels
+//       (initially 8, increases to 10 after the first rack is cleared).
+//
+//    6. The four distinct march sounds (thump 1-4) cycle each full pass.
+//
+//  IMPORTANT: The arcade draws aliens one-at-a-time over multiple frames.
+//  Your C64 version draws entire rows per raster IRQ, which is more
+//  efficient but means the "step" timing maps differently.
+//
+
+// ============================================================================
+//  7.  ALIEN SHOT COLLISION — SHIELD EROSION
+// ============================================================================
+//
+//  When an alien shot or player shot hits a shield:
+//    1. The shot sprite is XORed with the shield bitmap at the collision point.
+//    2. This erases the shield pixels under the shot, creating a bite pattern.
+//    3. Alien shots erode shields from below; player shots erode from above.
+//    4. After sufficient hits, shots pass through the gap.
+//
+//  The arcade uses 4 shields, each 22 px wide x 16 px tall.
+//  Shield bitmap data is at ROM $1098 (44 bytes = 22 columns x 2 bytes each,
+//  stored in rotated-screen column format like all sprites).
+//
+//  Shield X positions (pixel coords, original 224-wide playfield):
+//    Shield 1:  36    Shield 2:  78    Shield 3: 120    Shield 4: 162
+//
+
+// ============================================================================
+//  8.  SAUCER BEHAVIOR
+// ============================================================================
+//
+//  ROM routines: $0993 (TimeToSaucer), $09CA (ThinkSaucer), $09E4 (SaucerMoving)
+//
+//  Trigger:
+//    A countdown timer (tillSaucerTime at RAM $206B) decrements each frame.
+//    Reset value = $0600 (1536 frames = ~25.6 seconds at 60 Hz).
+//    When it reaches zero and fewer than 8 aliens remain, it resets without
+//    spawning. Otherwise the saucer appears.
+//
+//  Direction:
+//    Determined by bit 0 of the player's shot count:
+//      Even shots → saucer enters from the LEFT  (moves right)
+//      Odd shots  → saucer enters from the RIGHT (moves left)
+//
+//  Speed: 2 pixels per step, one step every other frame = 1 px/frame average.
+//
+//  The saucer is suppressed while the Squiggly shot is active.
+//
+
+var
+	const ARCADE_SAUCER_TIMER_RESET : integer = 1536; // frames between saucers
+	const ARCADE_SAUCER_MIN_ALIENS  : byte = 8;       // minimum aliens for saucer
+	const ARCADE_SAUCER_SPEED       : byte = 2;       // pixels per movement step
+
+// ============================================================================
+//  9.  ORIGINAL SPRITE DATA (visual reference)
+// ============================================================================
+//
+//  All sprites from the arcade ROM rendered in their correct orientation.
+//  Each '#' = lit pixel, '.' = background. Stored in rotated-screen column
+//  format (each byte = 1 column of 8 vertical pixels, bit 7 = top row).
+//
+//  --- Alien Type C 'Octopus' Frame 1 (ROM $1C00, 10 pts) ---
+//     ......####......
+//     ...##########...
+//     ..############..
+//     ..###..##..###..
+//     ..############..
+//     .....##..##.....
+//     ....##.##.##....
+//     ..##........##..
+//
+//  --- Alien Type C 'Octopus' Frame 2 (ROM $1C10) ---
+//     .....#.....#....
+//     ...#..#...#..#..
+//     ...#.#######.#..
+//     ...###.###.###..
+//     ...###########..
+//     ....#########...
+//     .....#.....#....
+//     ....#.......#...
+//
+//  --- Alien Type A 'Squid' Frame 1 (ROM $1C20, 30 pts) ---
+//     .......##.......
+//     ......####......
+//     .....######.....
+//     ....##.##.##....
+//     ....########....
+//     ......#..#......
+//     .....#.##.#.....
+//     ....#.#..#.#....
+//
+//  --- Alien Type A 'Squid' Frame 2 (ROM $1C50) ---
+//     .......##.......
+//     ......####......
+//     .....######.....
+//     ....##.##.##....
+//     ....########....
+//     .....#.##.#.....
+//     ....#......#....
+//     .....#....#.....
+//
+//  --- Alien Type B 'Crab' Frame 1 (ROM $1C30, 20 pts) ---
+//     ......####......
+//     ...##########...
+//     ..############..
+//     ..###..##..###..
+//     ..############..
+//     ....###..###....
+//     ...##..##..##...
+//     ....##....##....
+//
+//  --- Alien Type B 'Crab' Frame 2 (ROM $1C40) ---
+//     .....#.....#....
+//     ......#...#.....
+//     .....#######....
+//     ....##.###.##...
+//     ...###########..
+//     ...#.#######.#..
+//     ...#.#.....#.#..
+//     ......##.##.....
+//
+//  --- Saucer / UFO (ROM $1C60) ---
+//     ........#.......
+//     .......###......
+//     .......###......
+//     ...###########..
+//     ..#############.
+//     ..#############.
+//     ..#############.
+//     ..#############.
+//
+//  --- Alien Explosion (ROM $1C70) ---
+//     ......#.........
+//     ...........#....
+//     ......#.#.#.....
+//     ...#..#.........
+//     .......##.##....
+//     .#...#.##.#.#...
+//     ...########..#..
+//     ..##########.#.#
+//
+//  --- Player Ship (ROM $1BA1) ---
+//     .........##.....
+//     ..#.....####....
+//     ..#....######...
+//     ..###.##.##.##..
+//     ..#..#########..
+//     .#.#...#.##.#...
+//     #...#.#......#..
+//     #...#..#....#...
+//
+//  --- Shot Explosion / Cross (ROM $1CC0) ---
+//     .....#...#......
+//     ..#...#.#...#...
+//     ...#.......#....
+//     ....#.....#.....
+//     .##.........##..
+//     ....#.....#.....
+//     ...#..#.#..#....
+//     ..#..#...#..#...
+//
+
+// ============================================================================
+//  10.  ARCADE RAM MAP (key variables from $2000-$20FF)
+// ============================================================================
+//
+//  $2002  alienCurIndex       Current alien being processed in the march
+//  $2006  refAlienY           Reference alien Y coordinate
+//  $2007  refAlienX           Reference alien X coordinate
+//  $2008  rackDirection       0 = moving left, 1 = moving right (was 0xFF/0x01)
+//  $2009  rackDownDelta       Pixels to drop on next edge hit (8 or 10)
+//  $200A  playerAlive         Non-zero = player is alive
+//  $2067  numAliens           Number of aliens currently alive
+//  $2068  saucerActive        Non-zero = saucer is on screen
+//  $206B  tillSaucerTime      Countdown timer to next saucer appearance
+//  $206F  shotCountdown       Frames until next alien shot can fire
+//  $2072  numCoins            Coin counter
+//  $2078  P1ScorL             Player 1 score (low BCD byte)
+//  $2079  P1ScorM             Player 1 score (mid BCD byte)
+//  $2084  numLives            Lives remaining
+//  $20C0  plyrShotStatus      0=inactive, 1=normal, 2=exploding, 5=alien-hit
+//  $20C3  plyrShotYr          Player shot Y coordinate (rotated)
+//  $20C7  plyrShotXr          Player shot X coordinate (rotated)
+//  $20EB  rolShotStatus       Rolling shot status
+//  $2100  pluShotStatus       Plunger shot status
+//  $2115  squShotStatus       Squiggly shot status
+//
+
+// ============================================================================
+//  11.  KEY ROM ROUTINE MAP
+// ============================================================================
+//
+//  Addr   Name                   Description
+//  ----   ----                   -----------
+//  $0000  RESET                  NOP;NOP;NOP; JMP PowerOnReset
+//  $0008  ScanLine96_ISR         Mid-screen interrupt (draws top half sprites)
+//  $0010  ScanLine224_ISR        Vblank interrupt (game logic + bottom sprites)
+//  $008F  DrawAlien              Draw one alien at current march position
+//  $00E3  MoveRefAlien           Advance reference alien position
+//  $0141  EraseSimpleSprite      Clear a sprite from VRAM
+//  $017A  DrawSpriteGeneric      XOR-draw a sprite into VRAM
+//  $01A1  PlayerShotHitAlien     Check if player bullet hit an alien
+//  $01C0  ReadInputs             Read coin/start/joystick input ports
+//  $0380  RemoveAlien            Remove alien from alive list & update score
+//  $03BB  PlayerShotHandler      Main player shot state machine
+//  $0550  ScoreForAlien          Calculate score for killed alien by type
+//  $05E9  SquigglyShotHandler    Squiggly alien shot state machine
+//  $0617  PlungerShotHandler     Plunger alien shot state machine
+//  $0644  RollingShotHandler     Rolling (aimed) alien shot state machine
+//  $0798  TimeToFire             Check if an alien shot should be fired
+//  $07BE  SaucerScoring          Determine saucer hit score from shot count
+//  $08D4  PowerOnReset           Hardware init: LXI SP,$2400; clear RAM; etc.
+//  $0935  ISR_MidScreen          Mid-screen game logic handler
+//  $0953  ISR_Vblank             Vblank game logic handler
+//  $0993  TimeToSaucer           Check countdown and spawn saucer
+//  $09E4  SaucerMoving           Move saucer across screen
+//  $0A07  InitAliens             Set up 55-alien formation for new rack
+//  $0AE0  RestoreShields         Copy shield template into VRAM (4 shields)
+//  $0B79  GameLoop               Main attract/play loop
+//  $0BED  MainPlayLoop           Core per-frame gameplay update
+//  $0CF4  PrintScore             Draw score digits to screen
+//  $0DC0  ClearPlayfield         Zero out playfield area of VRAM
+//  $1400  DrawAlienRow           Draw row of aliens during ISR
+//  $141C  CheckAlienReachedBottom Check if formation dropped to player level
+//  $14C0  CountAliens            Count remaining alive aliens
+//  $14CB  DrawShields            Render shield bitmaps
+//  $1538  SpriteShotCollision    Pixel-level collision detection
+//  $17C9  AdjScore               Add BCD score delta to player score
+//
+//  The full annotated disassembly is saved to:
+//    Assets/Intel8080/disassembly.txt
+//
+
+// ============================================================================
+//  12.  REUSABLE PROCEDURES — Arcade algorithms adapted for TRSE / C64
+// ============================================================================
+
+//
+// GetArcadeSaucerScore
+//   Returns the saucer score (divided by 10) based on the player's shot count.
+//   Multiply the result by 10 to get the actual point value.
+//   This replicates the original arcade's "mystery score" mechanic.
+//
+function GetArcadeSaucerScore(player_shot_count : byte) : byte;
+var
+	saucer_table_index : byte;
+	saucer_result : byte;
+begin
+	// shot_count starts at 1; table is 0-indexed and cycles every 15
+	if player_shot_count = 0 then
+		saucer_table_index := 0
+	else
+		saucer_table_index := (player_shot_count - 1) - ((player_shot_count - 1) / ARCADE_SAUCER_SCORE_COUNT) * ARCADE_SAUCER_SCORE_COUNT;
+	saucer_result := arcade_saucer_score_table[saucer_table_index];
+	GetArcadeSaucerScore := saucer_result;
+end;
+
+//
+// GetArcadeSpeedDelay
+//   Given the number of aliens alive, returns the number of frames
+//   between formation march steps (from the arcade speed curve).
+//   Lower = faster.
+//
+function GetArcadeSpeedDelay(aliens_alive : byte) : byte;
+var
+	speed_index : byte;
+	speed_found_flag : byte;
+	speed_result : byte;
+begin
+	speed_found_flag := 0;
+	speed_result := arcade_speed_delay[0]; // default to slowest
+	speed_index := 0;
+	while (speed_index < ARCADE_SPEED_ENTRIES and speed_found_flag = 0) do
+	begin
+		if aliens_alive >= arcade_speed_threshold[speed_index] then
+		begin
+			speed_result := arcade_speed_delay[speed_index];
+			speed_found_flag := 1;
+		end;
+		inc(speed_index);
+	end;
+	// If no threshold matched (shouldn't happen), use fastest
+	if speed_found_flag = 0 then
+		speed_result := 3;
+	GetArcadeSpeedDelay := speed_result;
+end;
+
+//
+// GetPlungerFireColumn
+//   Returns the next alien column (1-11) for the plunger shot to fire from.
+//   Call this each time a plunger shot needs to be spawned.
+//   Pass in a counter that increments and wraps at 16.
+//
+function GetPlungerFireColumn(plunger_step : byte) : byte;
+var
+	plunger_column_result : byte;
+begin
+	plunger_column_result := arcade_plunger_columns[plunger_step & $0F];
+	GetPlungerFireColumn := plunger_column_result;
+end;
+
+//
+// GetSquigglyFireColumn
+//   Same as above, but for the squiggly shot type.
+//
+function GetSquigglyFireColumn(squiggly_step : byte) : byte;
+var
+	squiggly_column_result : byte;
+begin
+	squiggly_column_result := arcade_squiggly_columns[squiggly_step & $0F];
+	GetSquigglyFireColumn := squiggly_column_result;
+end;
+
+//
+// GetSaucerDirection
+//   Returns the direction the saucer should enter from, based on the
+//   player's shot count (matching the original arcade behavior).
+//   Result: 0 = enters from left (moves right), 1 = enters from right (moves left)
+//
+function GetSaucerDirection(player_shot_count : byte) : byte;
+var
+	saucer_dir_result : byte;
+begin
+	// Even shot count → from left; odd → from right
+	if (player_shot_count & 1) = 0 then
+		saucer_dir_result := 0
+	else
+		saucer_dir_result := 1;
+	GetSaucerDirection := saucer_dir_result;
 end;
 
 end.
