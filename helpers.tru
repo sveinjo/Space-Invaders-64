@@ -147,34 +147,39 @@ var
 //  5.  SPEED CURVE — FORMATION MARCH TIMING
 // ============================================================================
 //
-//  The formation advances one step every N frames, where N depends on how
-//  many aliens remain alive.  This is the core "acceleration" mechanic.
+//  The arcade has NO speed table.  Speed is purely emergent:
+//  each frame the game processes ONE alive alien, so a full formation
+//  sweep takes exactly N frames (N = aliens alive).  That sweep moves
+//  the reference position 2 px.  Perceived speed = 2/N px per frame.
 //
-//  ROM speed table at $1AA1 (threshold / frames-per-step pairs):
+//  On the C64 all aliens move in a single batch, so delay = N gives
+//  identical formation speed.  The table below bins nearby alien counts
+//  into brackets, giving a gentle staircase boost: within each bracket
+//  the delay equals the bracket minimum instead of the exact count.
+//  This compensates slightly for the C64's lack of the arcade's
+//  visual ripple (individual aliens drawn one per frame).
 //
-//    Aliens remaining   Frames per step   Approx frequency
-//    ----------------   ---------------   ----------------
-//         >= 50               48           1.25 Hz (slow)
-//         >= 40               16           3.75 Hz
-//         >= 30               11           5.5  Hz
-//         >= 20                8           7.5  Hz
-//         >= 10                7           8.6  Hz
-//         >= 5                 6           10   Hz
-//         >= 3                 5           12   Hz
-//         >= 2                 4           15   Hz
-//           1                  3           20   Hz (fast)
+//    Bracket (alive)    Delay (frames)    Arcade linear
+//    ----------------   ---------------   -------------
+//         >= 50               50              50-54
+//         >= 40               40              40-49
+//         >= 30               30              30-39
+//         >= 20               20              20-29
+//         >= 10               10              10-19
+//         >= 5                 5               5-9
+//         >= 3                 3               3-4
+//         >= 2                 2               2
+//           1                  1               1
 //
-//  NOTE: Your C64 version already implements a similar scheme with
-//  enemyMoveCounter = (INITIAL_INVADER_COUNT - numberOfEnemies).
-//  The arcade's table is non-linear — it accelerates faster near the end.
+//  Toggle USE_SPEED_TABLE (in the main program) to compare.
 //
 
 var
-	// Speed table: (threshold, frames_per_step) pairs
-	// Walk the table top-down; use the first entry where aliens_remaining >= threshold
+	// Speed table: (threshold, delay) pairs — delay = threshold for arcade parity.
+	// Walk the table top-down; use the first entry where aliens_remaining >= threshold.
 	const ARCADE_SPEED_ENTRIES : byte = 9;
 	arcade_speed_threshold : array[9] of byte = (50, 40, 30, 20, 10, 5, 3, 2, 1);
-	arcade_speed_delay     : array[9] of byte = (48, 16, 11,  8,  7, 6, 5, 4, 3);
+	arcade_speed_delay     : array[9] of byte = (50, 40, 30, 20, 10, 5, 3, 2, 1);
 
 // ============================================================================
 //  6.  FORMATION MARCH ALGORITHM

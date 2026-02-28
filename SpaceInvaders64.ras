@@ -35,6 +35,8 @@ var
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
 	const DEBUG_ENABLE : byte = 0;
+	// Speed curve toggle: 1 = table lookup (gentle staircase boost), 0 = pure linear (arcade-accurate)
+	const USE_SPEED_TABLE : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	border_debug_color : byte = 2;
@@ -44,6 +46,7 @@ var
 	const DEBUG_KEEP_ALIVE : byte = 3;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
+	current_speed_delay : byte = 50; // frames per march step (table or linear)
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	const MONSTER_DROP_AMOUNT : byte = 6;
@@ -718,7 +721,7 @@ begin
 			//if player_bullet_active = 1 then
 			//begin
 			if player_bullet_color_toggle = 0 then
-				bullet_color := white
+				bullet_color := light_blue
 			else
 				bullet_color := cyan;
 				
@@ -1165,15 +1168,25 @@ begin
 	begin
 		dec(enemyMoveCounter);
 		// Premove: fires 2 frames before the main tick to smooth out the
-		// direction-change transition. Suppressed at high speed (reload <= 3)
-		// because the two ticks are too close together to provide any visual
-		// benefit, and the doubled left-edge pressure increases underflow risk.
+		// direction-change transition. Suppressed when delay <= 2 because
+		// at that speed premove can't fire before the main tick.
 		if enemyMoveCounter = 2 then
-			if enemy_count_diff > 2 then
+			if current_speed_delay > 2 then
 				should_move_enemy := 1;
 	end
 	else begin
-		enemyMoveCounter := enemy_count_diff;
+		// Reload delay.
+		// USE_SPEED_TABLE=1: table lookup capped to linear (gentle staircase boost).
+		// USE_SPEED_TABLE=0: pure linear (delay = aliens alive, arcade-accurate).
+		if USE_SPEED_TABLE <> 0 then
+		begin
+			current_speed_delay := Helpers::GetArcadeSpeedDelay(enemy_count_diff);
+			if enemy_count_diff < current_speed_delay then
+				current_speed_delay := enemy_count_diff;
+		end
+		else
+			current_speed_delay := enemy_count_diff;
+		enemyMoveCounter := current_speed_delay;
 
 		monster_animation_frame := monster_animation_frame xor 1;
 		// Note: AnimateMonsters is NOT called here. All three rows are handled
@@ -1214,8 +1227,9 @@ begin
 		end
 		else begin
 			// No direction change: move horizontally.
-			// At maximum speed (moving every 1-2 frames), move 2 pixels to match player speed.
-			if enemy_count_diff <= 2 then
+			// When premove is suppressed (delay <= 2), the main tick must move
+			// 2px to maintain the arcade's 2px-per-cycle rate.
+			if current_speed_delay <= 2 then
 			begin
 				if enemy_direction <> 0 then
 					monster_base_x := monster_base_x + 2
@@ -1556,7 +1570,9 @@ begin
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();    
 	preventirq();  
-	//poke(^$D019, 0, 0);  		
+	//poke(^$D019, 0, 0);  
+	
+		
 	
 	RasterIRQ(MainRasterChain(), 0, @useKernal);	
 	CloseIRQ();
@@ -1602,9 +1618,7 @@ begin
 	asm(" lda $D01F");
 	
 	StarField::CreateStarScreen();
-	
-	
-	
+		
 	// IO area visible at $D000-$DFFF, RAM visible at $A000-$BFFF (NO BASIC) and RAM visible at $E000-$FFFF (NO KERNAL). 
 	// This is the typical memory configuration for demo/game development. 
 	SetMemoryConfig(1, 0, 0);	
