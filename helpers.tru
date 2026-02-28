@@ -175,11 +175,14 @@ var
 //  ---- Shot-vs-Shot Hit Behaviour (C64 vs Arcade) ----
 //  Arcade: both bullets enter explosion state; player bullet locked out
 //          for 16 frames showing a cross-shaped explosion sprite.
-//  C64:    player bullet resets IMMEDIATELY (active := 0, can fire again
-//          on the next frame).  Only the enemy shot enters explosion state
+//  C64:    controlled by SHOT_COLLISION_LOCKOUT_PLAYER toggle:
+//    = 0 (default): player bullet resets IMMEDIATELY (active := 0, can fire
+//          again next frame).  Only the enemy shot enters explosion state
 //          (active := 2) for ES_SHOT_EXPLODE_DURATION frames (4).
-//          This gives the player a slight advantage over the arcade but
-//          avoids the lockout feeling sluggish at 60 Hz.
+//          Explosion displayed on the enemy shot's HW sprite.
+//    = 1 (arcade-like): player bullet is LOCKED OUT (active := 2) for
+//          EXPLOSION_DURATION frames (16), showing the cross explosion on
+//          the player bullet's HW sprite.  Enemy shot resets immediately.
 //
 //  Enemy shot explosion duration:
 //    Arcade: ~3-5 frames.   C64: ES_SHOT_EXPLODE_DURATION = 4 frames.

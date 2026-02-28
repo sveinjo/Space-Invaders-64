@@ -35,6 +35,10 @@ var
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
 	const DEBUG_ENABLE : byte = 0;
+	// Shot-vs-shot lockout toggle:
+	//   0 = player bullet resets immediately, enemy shot shows explosion (current default)
+	//   1 = player bullet locked out (shows explosion), enemy shot resets immediately (arcade-like)
+	const SHOT_COLLISION_LOCKOUT_PLAYER : byte = 0;
 	// Speed curve toggle: 1 = table lookup (gentle staircase boost), 0 = pure linear (arcade-accurate)
 	const USE_SPEED_TABLE : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
@@ -430,12 +434,22 @@ begin
 						// Rolling / Teflon shot (slot 1) is immune — skip it
 						if sc_i <> SHOT_SLOT_ROLLING then
 						begin
-							// Enemy shot enters explosion state (locked out)
-							ufo_bullet_active[sc_i] := 2;
-							ufo_bullet_explode_counter[sc_i] := 0;
-
-							// Player bullet resets immediately — can fire again next frame
-							player_bullet_active := 0;
+							if SHOT_COLLISION_LOCKOUT_PLAYER = 1 then
+							begin
+								// Arcade-like: player bullet locked out (explosion on player sprite)
+								player_bullet_active := 2;
+								explosion_frame_counter := 0;
+								// Enemy shot resets immediately
+								ufo_bullet_active[sc_i] := 0;
+							end
+							else
+							begin
+								// Default: enemy shot explodes (explosion on enemy sprite)
+								ufo_bullet_active[sc_i] := 2;
+								ufo_bullet_explode_counter[sc_i] := 0;
+								// Player bullet resets immediately — can fire again next frame
+								player_bullet_active := 0;
+							end;
 						end;
 						// For SHOT_SLOT_ROLLING: do nothing — both bullets keep going
 					end;
