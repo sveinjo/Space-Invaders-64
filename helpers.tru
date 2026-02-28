@@ -156,6 +156,34 @@ var
 //  destroyed.  The reload value = $30 (48 frames) at the start, decreasing
 //  through a lookup table as the rack empties.
 //
+//  ---- Shot-vs-Shot Collision Hitboxes ----
+//  Active pixels are positioned at the BOTTOM of the 24×21 sprite box,
+//  horizontally centered 1 pixel LEFT of the sprite's true centre
+//  (X offset 11 in a 24px-wide box).
+//
+//  ┌──────────────────┬───────┬────────┬──────────────────────────────────┐
+//  │ Bullet           │ Width │ Height │ Active area (sprite-local X, Y)  │
+//  ├──────────────────┼───────┼────────┼──────────────────────────────────┤
+//  │ Player bullet    │  1 px │  4 px  │ (11, 17) – (11, 20)             │
+//  │ Enemy shot       │  3 px │  7 px  │ (10, 14) – (12, 20)             │
+//  └──────────────────┴───────┴────────┴──────────────────────────────────┘
+//
+//  AABB overlap conditions (derived from the pixel positions above):
+//    X overlap:  |player_x - enemy_x|  <=  1
+//    Y overlap:  player_y  >=  enemy_y - 6   AND   player_y  <=  enemy_y + 3
+//
+//  ---- Shot-vs-Shot Hit Behaviour (C64 vs Arcade) ----
+//  Arcade: both bullets enter explosion state; player bullet locked out
+//          for 16 frames showing a cross-shaped explosion sprite.
+//  C64:    player bullet resets IMMEDIATELY (active := 0, can fire again
+//          on the next frame).  Only the enemy shot enters explosion state
+//          (active := 2) for ES_SHOT_EXPLODE_DURATION frames (4).
+//          This gives the player a slight advantage over the arcade but
+//          avoids the lockout feeling sluggish at 60 Hz.
+//
+//  Enemy shot explosion duration:
+//    Arcade: ~3-5 frames.   C64: ES_SHOT_EXPLODE_DURATION = 4 frames.
+//
 
 var
 	// Plunger shot fire column table (ROM $1D00, 16 entries)

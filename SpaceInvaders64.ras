@@ -201,22 +201,32 @@ var
 	const ES_SHOT_ANIM_FRAMES:byte = 4;
 	const ES_SHOT_MOVE_FRAMES:byte = 3;   // every Nth frame an extra pixel is added to movement
 	const ES_SHOT_ANIM_HOLD_FRAMES:byte = 3; // frames each animation image is shown before advancing
-	const ES_SHOT_EXPLODE_DURATION:byte = 10; // frames enemy-shot explosion stays on screen
+	const ES_SHOT_EXPLODE_DURATION:byte = 4; // frames enemy-shot explosion stays on screen
 	const ES_SHOT_STAGGER_FRAMES:byte = 50; // ~1 second at 50Hz
 	const UFO_BULLET_STAGGER_FRAMES:byte = 50; // frames between UFO bullet fires
 
 	
 	// ---------------------------------------------------------------------------
 	// Shot-vs-Shot collision: check if the player bullet overlaps any enemy bullet.
-	// Plunger (slot 0) and Squiggly (slot 2) are destroyed on contact (mutual kill).
+	// Plunger (slot 0) and Squiggly (slot 2) are destroyed on contact.
 	// Rolling / Teflon (slot 1) is immune — the player bullet passes through it.
 	// ---------------------------------------------------------------------------
-	// Collision box: sprites overlap when their X positions are within
-	// SHOT_COLLISION_X_RANGE pixels and Y positions within SHOT_COLLISION_Y_RANGE.
-	// Both bullets show explosion frame 4 for ES_SHOT_EXPLODE_DURATION frames.
+	// Pixel-accurate AABB hitboxes (active pixels positioned at bottom of the
+	// 24x21 sprite box, horizontally centered 1px left of center at X offset 11):
+	//   Player bullet: 1px wide x 4px tall — sprite offsets (11,17)-(11,20)
+	//   Enemy shot:    3px wide x 7px tall — sprite offsets (10,14)-(12,20)
+	//
+	// Overlap conditions (derived from pixel positions):
+	//   X:  |player_x - enemy_x|  <=  1
+	//   Y:  player_y >= enemy_y - 6  AND  player_y <= enemy_y + 3
+	//
+	// On hit: player bullet resets immediately (active:=0, can fire again next
+	// frame).  Enemy shot enters explosion state (active:=2) for
+	// ES_SHOT_EXPLODE_DURATION frames.
 	// ---------------------------------------------------------------------------
-	const SHOT_COLLISION_X_RANGE : byte = 8;  // horizontal overlap tolerance (pixels)
-	const SHOT_COLLISION_Y_RANGE : byte = 12; // vertical overlap tolerance (pixels)
+	const SHOT_VS_SHOT_MAX_DX : byte = 1;  // max abs X distance for overlap
+	const SHOT_VS_SHOT_Y_ABOVE : byte = 6; // player can be up to 6px above enemy
+	const SHOT_VS_SHOT_Y_BELOW : byte = 3; // player can be up to 3px below enemy
 	
 	// Declarations (commented out where no longer needed)
 	
@@ -381,12 +391,11 @@ procedure CheckShotVsShotCollision();
 var
 	sc_i : byte;
 	sc_dx : byte;
-	sc_dy : byte;
-	sc_hit : byte;
+	sc_overlap : byte;
 begin
 	// Only check when the player bullet is actively moving (state 1)
 	if player_bullet_active <> 1 then
-		sc_hit := 0   // nothing to do but we need a statement here
+		sc_overlap := 0   // nothing to do but we need a statement here
 	else
 	begin
 		sc_i := 0;
@@ -395,33 +404,38 @@ begin
 			// Only test against actively moving enemy bullets (state 1)
 			if ufo_bullet_active[sc_i] = 1 then
 			begin
-				// Compute absolute X distance
+				// ---- X overlap (pixel-accurate AABB) ----
+				// Both active areas share the same X centre offset (pixel 11),
+				// so the check reduces to |player_x - enemy_x| <= MAX_DX.
 				if player_bullet_x >= ufo_bullet_x[sc_i] then
 					sc_dx := player_bullet_x - ufo_bullet_x[sc_i]
 				else
 					sc_dx := ufo_bullet_x[sc_i] - player_bullet_x;
 
-				// Compute absolute Y distance
-				if player_bullet_y >= ufo_bullet_y[sc_i] then
-					sc_dy := player_bullet_y - ufo_bullet_y[sc_i]
-				else
-					sc_dy := ufo_bullet_y[sc_i] - player_bullet_y;
-
-				if sc_dx < SHOT_COLLISION_X_RANGE then
+				if sc_dx <= SHOT_VS_SHOT_MAX_DX then
 				begin
-					if sc_dy < SHOT_COLLISION_Y_RANGE then
+					// ---- Y overlap (asymmetric AABB) ----
+					// Player active Y: [py+17 .. py+20]  (4px, bottom-aligned)
+					// Enemy  active Y: [ey+14 .. ey+20]  (7px, bottom-aligned)
+					// Overlap iff: py >= ey - Y_ABOVE  AND  py <= ey + Y_BELOW
+					sc_overlap := 1;
+					if player_bullet_y + SHOT_VS_SHOT_Y_ABOVE < ufo_bullet_y[sc_i] then
+						sc_overlap := 0;
+					if player_bullet_y > ufo_bullet_y[sc_i] + SHOT_VS_SHOT_Y_BELOW then
+						sc_overlap := 0;
+
+					if sc_overlap = 1 then
 					begin
 						// Hit detected!
 						// Rolling / Teflon shot (slot 1) is immune — skip it
 						if sc_i <> SHOT_SLOT_ROLLING then
 						begin
-							// Destroy the enemy bullet (enter explosion state)
+							// Enemy shot enters explosion state (locked out)
 							ufo_bullet_active[sc_i] := 2;
 							ufo_bullet_explode_counter[sc_i] := 0;
 
-							// Destroy the player bullet (enter explosion state)
-							player_bullet_active := 2;
-							explosion_frame_counter := 0;
+							// Player bullet resets immediately — can fire again next frame
+							player_bullet_active := 0;
 						end;
 						// For SHOT_SLOT_ROLLING: do nothing — both bullets keep going
 					end;
