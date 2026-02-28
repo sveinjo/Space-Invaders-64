@@ -133,14 +133,23 @@ var
 //  Finds the lowest alive alien in that column and fires from it.
 //  This is the "aimed" shot — the one that chases you.
 //  Animation: cross/plus pattern that rotates.
-//  CANNOT be destroyed by the player's bullet — it passes through.
+//  CANNOT be destroyed by the player's bullet — but the player bullet
+//  IS destroyed on contact (asymmetric collision).
 //  This is the "Teflon" shot referenced in competitive play guides.
 //
-//  In the arcade ROM the Rolling shot's collision handler ($0644) skips
-//  the player-bullet vs. alien-shot collision test that the Plunger
-//  ($0617) and Squiggly ($05E9) handlers perform.  The result is that
-//  the player's bullet has no effect on the Rolling shot: it simply
-//  passes through.  The Rolling shot CAN still be blocked by shields
+//  In the arcade ROM the Rolling shot's handler ($0644) draws to the
+//  framebuffer via $1491 but NEVER checks the collision flag $2061
+//  afterward.  The Plunger ($0617) and Squiggly ($05E9) handlers DO
+//  check $2061 and mark themselves for removal on overlap.
+//
+//  The player bullet's OWN collision routine ($14D8) runs separately
+//  from the game loop ($16EE).  It detects the Rolling shot's pixels
+//  in the framebuffer, tries to resolve an alien hit at that position,
+//  finds nothing ($151C: JZ $1530), and sets player shot status to 3
+//  (explosion, 16 frames).  The Rolling shot is completely unaware.
+//
+//  Result: player bullet destroyed with explosion, Rolling shot continues.
+//  The Rolling shot CAN still be blocked by shields
 //  (shield erosion applies to all shot types equally).
 //
 //  ---- Squiggly Shot (slot 2, anim 5-8) ----
@@ -173,16 +182,28 @@ var
 //    Y overlap:  player_y  >=  enemy_y - 6   AND   player_y  <=  enemy_y + 3
 //
 //  ---- Shot-vs-Shot Hit Behaviour (C64 vs Arcade) ----
-//  Arcade: both bullets enter explosion state; player bullet locked out
-//          for 16 frames showing a cross-shaped explosion sprite.
-//  C64:    controlled by SHOT_COLLISION_LOCKOUT_PLAYER toggle:
-//    = 0 (default): player bullet resets IMMEDIATELY (active := 0, can fire
-//          again next frame).  Only the enemy shot enters explosion state
-//          (active := 2) for ES_SHOT_EXPLODE_DURATION frames (4).
-//          Explosion displayed on the enemy shot's HW sprite.
-//    = 1 (arcade-like): player bullet is LOCKED OUT (active := 2) for
-//          EXPLOSION_DURATION frames (16), showing the cross explosion on
-//          the player bullet's HW sprite.  Enemy shot resets immediately.
+//
+//  Three collision scenarios:
+//
+//  1. Plunger or Squiggly vs player bullet → MUTUAL DESTRUCTION
+//     Arcade: Both shots check framebuffer overlap ($2061). Both enter
+//             explosion state. Player bullet shows 16-frame cross explosion
+//             (status 3). Enemy shot is marked for removal (bit 0 of $2073).
+//     C64 LOCKOUT=0: enemy shot explodes (active:=2, ES_SHOT_EXPLODE_DURATION
+//             frames). Player bullet resets immediately (active:=0).
+//     C64 LOCKOUT=1: player bullet explodes (active:=2, EXPLOSION_DURATION
+//             frames). Enemy shot resets immediately.
+//
+//  2. Rolling/Teflon vs player bullet → PLAYER BULLET DESTROYED ONLY
+//     Arcade: Rolling handler never checks $2061 so Rolling shot survives.
+//             Player bullet's collision routine ($14D8) detects the overlap,
+//             fails the alien lookup → status 3 (16-frame explosion).
+//     C64:    Player bullet enters explosion (active:=2). Rolling shot is
+//             NOT affected — continues moving.
+//
+//  3. Rolling/Teflon vs player bullet (old behaviour, pre-fix) → PASS-THROUGH
+//     Previous C64 implementation skipped collision entirely for Rolling shots.
+//     This was incorrect: in the arcade the player bullet IS destroyed.
 //
 //  Enemy shot explosion duration:
 //    Arcade: ~3-5 frames.   C64: ES_SHOT_EXPLODE_DURATION = 4 frames.

@@ -38,7 +38,7 @@ var
 	// Shot-vs-shot lockout toggle:
 	//   0 = player bullet resets immediately, enemy shot shows explosion (current default)
 	//   1 = player bullet locked out (shows explosion), enemy shot resets immediately (arcade-like)
-	const SHOT_COLLISION_LOCKOUT_PLAYER : byte = 0;
+	const SHOT_COLLISION_LOCKOUT_PLAYER : byte = 1;
 	// Speed curve toggle: 1 = table lookup (gentle staircase boost), 0 = pure linear (arcade-accurate)
 	const USE_SPEED_TABLE : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
@@ -75,7 +75,7 @@ var
 	// Slot 1 = Rolling / "Teflon" (anim 9-12, HW sprite 5) — aimed at player X, indestructible
 	// Slot 2 = Squiggly (anim 5-8, HW sprite 7) — column-table targeting, destroyable
 	const SHOT_SLOT_PLUNGER  : byte = 0;
-	const SHOT_SLOT_ROLLING  : byte = 1; // "Teflon" — passes through player bullet
+	const SHOT_SLOT_ROLLING  : byte = 1; // "Teflon" — destroys player bullet but continues moving
 	const SHOT_SLOT_SQUIGGLY : byte = 2;
 	ufo_bullet_active : array[3] of byte = (0, 0, 0);       // 0=inactive, 1=moving, 2=exploding
 	ufo_bullet_x : array[3] of byte = (0, 0, 0);           // Fixed X position (set when fired)
@@ -212,8 +212,11 @@ var
 	
 	// ---------------------------------------------------------------------------
 	// Shot-vs-Shot collision: check if the player bullet overlaps any enemy bullet.
-	// Plunger (slot 0) and Squiggly (slot 2) are destroyed on contact.
-	// Rolling / Teflon (slot 1) is immune — the player bullet passes through it.
+	// Plunger (slot 0) and Squiggly (slot 2): mutual destruction on contact.
+	// Rolling / Teflon (slot 1): player bullet destroyed, Rolling shot continues.
+	//   (Arcade: Rolling handler never checks framebuffer overlap,
+	//    but the player bullet's own collision routine detects the
+	//    Rolling shot's pixels and treats it as a missed-alien hit.)
 	// ---------------------------------------------------------------------------
 	// Pixel-accurate AABB hitboxes (active pixels positioned at bottom of the
 	// 24x21 sprite box, horizontally centered 1px left of center at X offset 11):
@@ -431,9 +434,19 @@ begin
 					if sc_overlap = 1 then
 					begin
 						// Hit detected!
-						// Rolling / Teflon shot (slot 1) is immune — skip it
-						if sc_i <> SHOT_SLOT_ROLLING then
+						if sc_i = SHOT_SLOT_ROLLING then
 						begin
+							// Rolling / "Teflon" — arcade asymmetric:
+							// The Rolling handler never checks for pixel overlap
+							// so it continues. The player bullet DOES detect the
+							// overlap and is destroyed (status 3 → explosion).
+							player_bullet_active := 2;
+							explosion_frame_counter := 0;
+							// Rolling shot keeps moving — do NOT touch ufo_bullet_active
+						end
+						else
+						begin
+							// Plunger / Squiggly — mutual destruction
 							if SHOT_COLLISION_LOCKOUT_PLAYER = 1 then
 							begin
 								// Arcade-like: player bullet locked out (explosion on player sprite)
@@ -451,7 +464,6 @@ begin
 								player_bullet_active := 0;
 							end;
 						end;
-						// For SHOT_SLOT_ROLLING: do nothing — both bullets keep going
 					end;
 				end;
 			end;
