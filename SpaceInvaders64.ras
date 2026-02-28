@@ -130,6 +130,11 @@ var
 	
 	// Shield collision tracking (per-frame state to prevent retriggering)
 	shield_collision_hit : byte = 0;    // 1-4 = shield 1-4 hit this frame, 0 = no collision
+	// Per-column erosion depth: 4 shields x 3 byte columns.
+	// Index = shield_idx*3 + byte_col (0-2).
+	// Value = sprite row of the BOTTOM of the next erase zone (starts at 20 = bottom of sprite).
+	// 255 = this column is fully eroded (bullet passes through).
+	shield_col_top : array[12] of byte = (20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20);
 	// --- Hitbox / explosion tuning ---
 	// Explosion sprite X alignment: subtracted from block_x + col*18 (increase = moves left)
 	const EXPLOSION_X_OFFSET : byte = 6;
@@ -1262,16 +1267,14 @@ end;
 
 // ---------------------------------------------------------------------------
 // CheckShieldCollision
-//   Column-accurate shield collision:
-//   1. X bounding box → which shield (1-4) and pixel offset within it (0-23).
-//   2. Map pixel offset to sprite byte column (0-2). Only that column is
-//      scanned and eroded — shots in adjacent columns are fully independent.
-//   3. Scan the bullet's byte column bottom-up (row 20→0) for the first
-//      non-zero byte. This is the true impact row after prior erosion.
-//   4. Stamp the explosion sprite (sprite 3 at $20C0) AND-NOT into that
-//      column for 8 rows upward from impact, then zero those rows so
-//      the next shot in the same column digs 8 rows deeper.
-//   5. Stop the bullet (state 3) and schedule a shield repaint.
+//   Per-column depth-tracked shield erosion:
+//   1. X/Y bounding box → which shield (1-4).
+//   2. Map bullet X to sprite byte column (0-2).
+//   3. Look up shield_col_top[shield_idx*3 + byte_col]:
+//        255 → this column already fully eroded, bullet passes through.
+//        0-20 → erase 8 rows upward from that row, then advance the top 8
+//               rows deeper (or mark as 255 if the top of the sprite is reached).
+//   4. Stop the bullet (state 3) and schedule a shield repaint.
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
 var
@@ -1279,11 +1282,10 @@ var
 	csc_shield_hit : byte;
 	csc_shield_left : byte;
 	csc_shield_base : integer;
-	csc_px_offset : byte;     // bullet pixel offset within shield (0-23)
-	csc_byte_col : byte;      // sprite byte column the bullet is in (0-2)
-	csc_scan_row : byte;
-	csc_hit_row : byte;
-	csc_found : byte;
+	csc_px_offset : byte;
+	csc_byte_col : byte;
+	csc_col_idx : byte;
+	csc_erase_top : byte;
 	csc_erase_idx : byte;
 	csc_shield_row : byte;
 	csc_expl_row : byte;
@@ -1349,34 +1351,17 @@ begin
 					if csc_px_offset >= 8 then csc_byte_col := 1;
 					if csc_px_offset >= 16 then csc_byte_col := 2;
 
-					// Scan only that byte column from row 20 upward
-					csc_scan_row := 20;
-					csc_found := 0;
-					while csc_found = 0 do
-					begin
-						csc_shield_addr := csc_shield_base + csc_scan_row * 3 + csc_byte_col;
-						csc_val := peek(csc_shield_addr, 0);
-						if csc_val <> 0 then
-						begin
-							csc_hit_row := csc_scan_row;
-							csc_found := 1;
-						end
-						else
-						begin
-							if csc_scan_row = 0 then
-								csc_found := 2  // column fully eroded, bullet passes through
-							else
-								dec(csc_scan_row);
-						end;
-					end;
+					// Look up per-column erosion depth.
+					csc_col_idx := csc_shield_idx * 3;
+					csc_col_idx := csc_col_idx + csc_byte_col;
+					csc_erase_top := shield_col_top[csc_col_idx];
 
-					if csc_found = 1 then
+					// 255 = this column is already fully tunnelled through.
+					if csc_erase_top <> 255 then
 					begin
-						// Stamp explosion sprite 3 ($20C0) AND-NOT into this column
-						// for 8 rows upward from impact, then zero to guarantee
-						// next shot in same column digs deeper.
+						// Erase 8 rows of the bullet's byte column upward from csc_erase_top.
 						csc_erase_idx := 0;
-						csc_shield_row := csc_hit_row;
+						csc_shield_row := csc_erase_top;
 						csc_expl_row := 20;
 						while csc_erase_idx < 8 do
 						begin
@@ -1387,15 +1372,31 @@ begin
 							csc_val := csc_expl_ptr[0] xor $FF;
 							csc_shield_ptr := csc_shield_addr;
 							csc_shield_ptr[0] := csc_shield_ptr[0] & csc_val;
-							// Zero the byte so next shot in this column digs deeper
+							// Also zero so the next shot's column scan finds this row empty.
 							csc_shield_ptr[0] := 0;
 
 							if csc_shield_row = 0 then
-								csc_erase_idx := 8
+								csc_erase_idx := 8   // hit top of sprite, stop early
 							else
 								dec(csc_shield_row);
 							if csc_expl_row > 0 then dec(csc_expl_row);
 							inc(csc_erase_idx);
+						end;
+
+						// Advance the depth: next shot starts 8 rows higher.
+						if csc_erase_top < 8 then
+							shield_col_top[csc_col_idx] := 255  // fully tunnelled
+						else
+						begin
+							shield_col_top[csc_col_idx] := csc_erase_top;
+							dec(shield_col_top[csc_col_idx]);
+							dec(shield_col_top[csc_col_idx]);
+							dec(shield_col_top[csc_col_idx]);
+							dec(shield_col_top[csc_col_idx]);
+							dec(shield_col_top[csc_col_idx]);
+							dec(shield_col_top[csc_col_idx]);
+							dec(shield_col_top[csc_col_idx]);
+							dec(shield_col_top[csc_col_idx]);
 						end;
 
 						shield_collision_hit := csc_shield_hit;
@@ -1446,6 +1447,12 @@ begin
 	while css_i < 64 do begin
 		css_dst_ptr[0] := css_src_ptr[0];
 		inc(css_src_ptr); inc(css_dst_ptr); inc(css_i);
+	end;
+	// Reset per-column erosion depths to sprite bottom (row 20).
+	css_i := 0;
+	while css_i < 12 do begin
+		shield_col_top[css_i] := 20;
+		inc(css_i);
 	end;
 end;
 
