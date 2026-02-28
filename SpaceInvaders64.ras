@@ -1,4 +1,4 @@
-program SpaceInvaders64;
+﻿program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -93,6 +93,10 @@ var
 	ufo_bullet_anim_start : array[3] of byte = (13, 9, 5); // First frame: Plunger=13, Rolling=9, Squiggly=5
 
 	ufo_bullet_stagger_counter : byte = 0;  // Countdown to fire next bullet
+
+	// Shield charset redefinition addresses
+	const SPRITE16_DATA       : address = @spriteLoc/64 + 16; // Sprite image 16: $2000 + 16*64
+	const SHIELD_CHARSET_BASE : address = $3360; // Char 108 ('l') glyph: $3000 + 108*8
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
 	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
@@ -267,6 +271,8 @@ var
 	function GetLeftmostEnemyOffset() : byte;
 	procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
 	procedure TickEnemyShotFiring();
+	procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
+	procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 	//procedure AnimateMonsters(enemyRow: byte);
 	//procedure UpdateMonsters(rowOffset: byte);
@@ -1205,6 +1211,52 @@ begin
 	end;
 end;
 
+// ---------------------------------------------------------------------------
+// PaintShieldChars
+//   Replaces the glyph bitmaps for the 6 chars used to draw the first shield
+//   block ("lmn" at row 19, "opq" at row 20) in the RAM charset at $3000.
+//
+//   TRSE PrintString writes raw ASCII bytes to screen RAM, so:
+//     'l'=108, 'm'=109, 'n'=110, 'o'=111, 'p'=112, 'q'=113
+//   Each glyph lives at $3000 + char_code * 8.
+//   'l'=108 → $3000 + 108*8 = $3360  (= Star2Limit/Star4Limit — the first
+//   byte the starfield animation does NOT touch, confirming this is safe).
+//
+//   Sprite image 16 data: $2000 + 16*64 = $2400.
+//   Bytes 0-5 of the sprite are spread across the 6 chars; each byte is
+//   replicated into all 8 scan-rows of the corresponding glyph.
+//
+//   psc_charset_addr is incremented by 1 each inner step (TRSE cannot
+//   assemble an integer+byte add-expression as a direct poke address).
+// ---------------------------------------------------------------------------
+procedure PaintShieldChars();
+var
+	psc_i           : byte;                // slot 0-5 (one per shield char)
+	psc_sprite_byte : byte;                // byte value read from sprite image 16
+	psc_row         : byte;                // glyph row counter 0-7
+	psc_src_ptr     : pointer of integer;  // walking source ptr into sprite 16 data
+	psc_dst_ptr     : pointer of integer;  // walking dest ptr into charset RAM
+begin
+	// Sprite 16 data starts at $2000 + 16*64 = SPRITE16_DATA
+	psc_src_ptr := #SPRITE16_DATA;
+	// 'l'=108 glyph starts at $3000 + 108*8 = SHIELD_CHARSET_BASE
+	psc_dst_ptr := #SHIELD_CHARSET_BASE;
+	psc_i := 0;
+	while psc_i <= 5 do
+	begin
+		psc_sprite_byte := psc_src_ptr[0];
+		inc(psc_src_ptr);
+		psc_row := 0;
+		while psc_row <= 7 do
+		begin
+			psc_dst_ptr[0] := psc_sprite_byte;
+			inc(psc_dst_ptr);
+			inc(psc_row);
+		end;
+		inc(psc_i);
+	end;
+end;
+
 Procedure DisplayText();
 begin	
 	//moveto(29,1,hi(screen_char_loc));
@@ -1221,6 +1273,9 @@ begin
 	Screen::PrintString("lmn",4,19,#Screen::screen0);
 	Screen::PrintString("opq",4,20,#Screen::screen0);
 	
+	// Shield block 1: screen row 19 col 4 → $0400 + 19*40 + 4 = $06FC; chars 108-113 ('l'-'q')
+	//PlaceShieldBlock($06FC, 108);
+	
 	Screen::PrintString("rst",10,19,#Screen::screen0);
 	Screen::PrintString("uvw",10,20,#Screen::screen0);
 	
@@ -1231,6 +1286,49 @@ begin
 	Screen::PrintString("/+*",22,20,#Screen::screen0);
 	
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
+
+	PaintShieldChars();
+end;
+
+// ---------------------------------------------------------------------------
+// WriteShieldRow
+//   Writes three consecutive char codes (c0, c1, c2) into screen RAM
+//   starting at a given integer address, using pointer dereferencing
+//   (the correct TRSE idiom — poke with an integer addr generates bad asm).
+// ---------------------------------------------------------------------------
+procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
+begin
+	// poke with a plain integer variable compiles correctly (single-byte write).
+	// Advance wsr_addr between pokes to avoid the ,x addressing bug from inline expressions.
+	poke(wsr_addr, wsr_c0, 0);
+	wsr_addr := wsr_addr + 1;
+	poke(wsr_addr, wsr_c1, 0);
+	wsr_addr := wsr_addr + 1;
+	poke(wsr_addr, wsr_c2, 0);
+end;
+
+// ---------------------------------------------------------------------------
+// PlaceShieldBlock
+//   Writes a 3x2 shield block to screen RAM.
+//   psb_base_addr : integer address of the FIRST (top-left) screen cell.
+//   char_base     : first of 6 consecutive charset char codes.
+//     Top row    → char_base, char_base+1, char_base+2  at psb_base_addr
+//     Bottom row → char_base+3, char_base+4, char_base+5  at psb_base_addr+40
+//
+//   Pass a pre-computed integer constant for psb_base_addr to avoid
+//   byte-overflow from expressions like row*40 (e.g. 19*40=760 > 255).
+//   Formula (for reference): $0400 + screen_row*40 + col
+//     Shield 1 row 19 col 4  →  $0400 + 760 + 4 = $06FC
+// ---------------------------------------------------------------------------
+procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
+var
+	psb_addr : integer;
+begin
+	// Top row
+	//WriteShieldRow(psb_base_addr, psb_char_base, psb_char_base + 1, psb_char_base + 2);
+	// Bottom row: one screen row lower = +40 bytes
+	psb_addr := psb_base_addr + 40;
+	//WriteShieldRow(psb_addr, psb_char_base + 3, psb_char_base + 4, psb_char_base + 5);
 end;
 
 procedure ClearEnemyAtCounter();
