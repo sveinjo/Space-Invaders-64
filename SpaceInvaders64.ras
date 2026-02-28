@@ -94,9 +94,12 @@ var
 
 	ufo_bullet_stagger_counter : byte = 0;  // Countdown to fire next bullet
 
-	// Shield charset redefinition addresses
-	const SPRITE16_DATA       : address = @spriteLoc/64 + 16; // Sprite image 16: $2000 + 16*64
-	const SHIELD_CHARSET_BASE : address = $3360; // Char 108 ('l') glyph: $3000 + 108*8
+	// Shield charset redefinition: sprite 17 ($2000+17*64=$2440), charset chars 109-114 at $3368.
+	// Chars start at 109 (not 108) to leave an 8-byte gap above Star2Limit/Star4Limit ($3360).
+	// Star pointers do 2-byte writes when clearing; a one-glyph gap prevents them reaching our data.
+	// Using integer constants so they can be assigned directly to integer variables.
+	const SHIELD_SRC_BASE : integer = $2440; // sprite 17 data start
+	const SHIELD_DST_BASE : integer = $3368; // char 109 glyph start ($3000 + 109*8)
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
 	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
@@ -271,6 +274,7 @@ var
 	function GetLeftmostEnemyOffset() : byte;
 	procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
 	procedure TickEnemyShotFiring();
+	procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
 	procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
 	procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
@@ -1212,49 +1216,57 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// CopyShieldGlyph
+//   Copies 8 rows of one charset glyph from sprite data.
+//   csg_src: address of the first byte of the sprite column to read.
+//   csg_dst: address of the first byte of the 8-byte charset glyph to write.
+//   The sprite is 3 bytes wide per row, so src advances by 3 per row while
+//   dst advances by 1 per row.
+// ---------------------------------------------------------------------------
+procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
+var
+	csg_row     : byte;
+	csg_src_ptr : pointer of integer;
+	csg_dst_ptr : pointer of integer;
+begin
+	csg_src_ptr := csg_src;
+	csg_dst_ptr := csg_dst;
+	csg_row := 0;
+	while csg_row <= 7 do begin
+		csg_dst_ptr[0] := csg_src_ptr[0];
+		inc(csg_dst_ptr);
+		inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+		inc(csg_row);
+	end;
+end;
+
+// ---------------------------------------------------------------------------
 // PaintShieldChars
-//   Replaces the glyph bitmaps for the 6 chars used to draw the first shield
-//   block ("lmn" at row 19, "opq" at row 20) in the RAM charset at $3000.
-//
-//   TRSE PrintString writes raw ASCII bytes to screen RAM, so:
-//     'l'=108, 'm'=109, 'n'=110, 'o'=111, 'p'=112, 'q'=113
-//   Each glyph lives at $3000 + char_code * 8.
-//   'l'=108 → $3000 + 108*8 = $3360  (= Star2Limit/Star4Limit — the first
-//   byte the starfield animation does NOT touch, confirming this is safe).
-//
-//   Sprite image 16 data: $2000 + 16*64 = $2400.
-//   Bytes 0-5 of the sprite are spread across the 6 chars; each byte is
-//   replicated into all 8 scan-rows of the corresponding glyph.
-//
-//   psc_charset_addr is incremented by 1 each inner step (TRSE cannot
-//   assemble an integer+byte add-expression as a direct poke address).
+//   Redefines charset glyphs 109-114 with pixel data from sprite 17.
+//   Sprite 17 is 3 bytes/row x 21 rows.  We use rows 0-7 for the top
+//   shield chars (109-111) and rows 8-15 for the bottom (112-114).
+//   src offsets from SHIELD_SRC_BASE: col0=+0, col1=+1, col2=+2;
+//   row-band 1 starts at +24 (8 rows x 3 bytes).
 // ---------------------------------------------------------------------------
 procedure PaintShieldChars();
 var
-	psc_i           : byte;                // slot 0-5 (one per shield char)
-	psc_sprite_byte : byte;                // byte value read from sprite image 16
-	psc_row         : byte;                // glyph row counter 0-7
-	psc_src_ptr     : pointer of integer;  // walking source ptr into sprite 16 data
-	psc_dst_ptr     : pointer of integer;  // walking dest ptr into charset RAM
+	psc_src : integer;
+	psc_dst : integer;
 begin
-	// Sprite 16 data starts at $2000 + 16*64 = SPRITE16_DATA
-	psc_src_ptr := #SPRITE16_DATA;
-	// 'l'=108 glyph starts at $3000 + 108*8 = SHIELD_CHARSET_BASE
-	psc_dst_ptr := #SHIELD_CHARSET_BASE;
-	psc_i := 0;
-	while psc_i <= 5 do
-	begin
-		psc_sprite_byte := psc_src_ptr[0];
-		inc(psc_src_ptr);
-		psc_row := 0;
-		while psc_row <= 7 do
-		begin
-			psc_dst_ptr[0] := psc_sprite_byte;
-			inc(psc_dst_ptr);
-			inc(psc_row);
-		end;
-		inc(psc_i);
-	end;
+	psc_src := SHIELD_SRC_BASE;
+	psc_dst := SHIELD_DST_BASE;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 109: col 0, rows 0-7
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 110: col 1, rows 0-7
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 111: col 2, rows 0-7
+	psc_src := psc_src + 22; psc_dst := psc_dst + 8;    // jump to row-band 1 (+22 = skip rest of band 0)
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 112: col 0, rows 8-15
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 113: col 1, rows 8-15
+	psc_src := psc_src + 1;  psc_dst := psc_dst + 8;
+	CopyShieldGlyph(psc_src, psc_dst);                   // char 114: col 2, rows 8-15
 end;
 
 Procedure DisplayText();
@@ -1269,9 +1281,9 @@ begin
 	
 	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
 	Screen::PrintString("      1740",29,23,#Screen::screen0);
-
-	Screen::PrintString("lmn",4,19,#Screen::screen0);
-	Screen::PrintString("opq",4,20,#Screen::screen0);
+	Screen::PrintString("¤¤¤",4,18,#Screen::screen0);
+	Screen::PrintString("mno",4,19,#Screen::screen0);
+	Screen::PrintString("pqr",4,20,#Screen::screen0);
 	
 	// Shield block 1: screen row 19 col 4 → $0400 + 19*40 + 4 = $06FC; chars 108-113 ('l'-'q')
 	//PlaceShieldBlock($06FC, 108);
@@ -1285,7 +1297,7 @@ begin
 	Screen::PrintString("¤%&",22,19,#Screen::screen0);
 	Screen::PrintString("/+*",22,20,#Screen::screen0);
 	
-	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
+	//Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);	
 
 	PaintShieldChars();
 end;
