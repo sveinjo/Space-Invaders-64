@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 1;
+	const DEBUG_ENABLE : byte = 0;
 	// Shot-vs-shot lockout toggle:
 	//   0 = player bullet resets immediately, enemy shot shows explosion (current default)
 	//   1 = player bullet locked out (shows explosion), enemy shot resets immediately (arcade-like)
@@ -102,6 +102,10 @@ var
 	const SHIELD2_SRC : integer = $24C0; // sprite 19
 	const SHIELD3_SRC : integer = $2500; // sprite 20
 	const SHIELD4_SRC : integer = $2540; // sprite 21
+	// Optimized shield lookup table: (x_min, x_max) for each shield
+	SHIELD_X_MIN : array[4] of byte = (45, 93, 141, 189);
+	SHIELD_X_MAX : array[4] of byte = (69, 117, 165, 213);
+	SHIELD_BASE : array[4] of integer = (SHIELD1_SRC, SHIELD2_SRC, SHIELD3_SRC, SHIELD4_SRC);
 	const SHIELD1_DST : integer = $3368; // char 109 ($3000+109*8)
 	const SHIELD2_DST : integer = $3398; // char 115 ($3000+115*8)
 	const SHIELD3_DST : integer = $33C8; // char 121 ($3000+121*8)
@@ -1051,7 +1055,8 @@ end;
 
 procedure FirePlayerBullet();
 begin
-	peek(^$D01F, 0);
+	//peek(^$D01F, 0);
+	poke(^$D01F, 0, 0);
 	inc(player_shot_count);
 	player_bullet_active := 1;
 	player_bullet_x := player_sprite_x;  // Same X as player
@@ -1187,6 +1192,7 @@ begin
 			begin
 				block_x := monster_base_x + block_col * MONSTER_SPACING;
 
+
 				// Horizontal range check: contact point must fall within [block_x, block_x+48).
 				if player_bullet_x >= block_x - BULLET_X_CONTACT_REACH then
 					if player_bullet_x < block_x + 48 - BULLET_X_CONTACT_REACH then
@@ -1195,6 +1201,8 @@ begin
 
 						block_y := monster_base_y + block_row * MONSTER_ROW_OFFSET;
 						rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - block_y;
+						
+						
 
 						// Enemy column within block (0-2): 12px wide, 6px gaps.
 						if rel_x < 12 then
@@ -1231,6 +1239,7 @@ begin
 								found_hit := 1;
 							end;
 						end;
+						
 					end;
 			end;
 
@@ -1266,136 +1275,140 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// CheckShieldCollision
-//   Per-column depth-tracked shield erosion:
-//   1. X/Y bounding box → which shield (1-4).
-//   2. Map bullet X to sprite byte column (0-2).
+// CheckShieldCollision - OPTIMIZED
+//   Per-column depth-tracked shield erosion using lookup tables:
+//   1. X/Y bounding box → which shield (0-3) using lookup table.
+//   2. Map bullet X to sprite byte column (0-2) using bit shift.
 //   3. Look up shield_col_top[shield_idx*3 + byte_col]:
 //        255 → this column already fully eroded, bullet passes through.
-//        0-20 → erase 8 rows upward from that row, then advance the top 8
-//               rows deeper (or mark as 255 if the top of the sprite is reached).
+//        0-20 → erase 4 rows upward from that row, then advance erosion depth.
 //   4. Stop the bullet (state 3) and schedule a shield repaint.
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
 var
 	csc_shield_idx : byte;
-	csc_shield_hit : byte;
-	csc_shield_left : byte;
-	csc_shield_base : integer;
 	csc_px_offset : byte;
 	csc_byte_col : byte;
 	csc_col_idx : byte;
 	csc_erase_top : byte;
-	csc_erase_idx : byte;
 	csc_shield_row : byte;
 	csc_expl_row : byte;
 	csc_shield_addr : integer;
 	csc_expl_addr : integer;
+	csc_shield_base : integer;
 	csc_shield_ptr : pointer of byte;
 	csc_expl_ptr : pointer of byte;
-	csc_val : byte;
 begin
+
 	if player_bullet_active = 1 then
 		if player_bullet_y >= SHIELD_Y_MIN then
 			if player_bullet_y <= SHIELD_Y_MAX then
 			begin
-				csc_shield_hit := 0;
-				csc_shield_idx := 0;
-				csc_shield_left := 0;
-
-				if player_bullet_x >= 45 then
-					if player_bullet_x < 69 then
-					begin
-						csc_shield_hit := 1;
-						csc_shield_left := 45;
-					end;
-				if csc_shield_hit = 0 then
-					if player_bullet_x >= 93 then
-						if player_bullet_x < 117 then
-						begin
-							csc_shield_hit := 2;
-							csc_shield_idx := 1;
-							csc_shield_left := 93;
-						end;
-				if csc_shield_hit = 0 then
-					if player_bullet_x >= 141 then
-						if player_bullet_x < 165 then
-						begin
-							csc_shield_hit := 3;
-							csc_shield_idx := 2;
-							csc_shield_left := 141;
-						end;
-				if csc_shield_hit = 0 then
-					if player_bullet_x >= 189 then
-						if player_bullet_x < 213 then
-						begin
-							csc_shield_hit := 4;
-							csc_shield_idx := 3;
-							csc_shield_left := 189;
-						end;
-
-				if csc_shield_hit <> 0 then
+				// Determine which shield using direct if/else (no loop overhead)
+				// Also compute offset from shield start in same pass
+				csc_shield_idx := 255;
+				csc_px_offset := 0;
+				
+				if ((player_bullet_x >= 45) and (player_bullet_x < 69)) then
 				begin
-					if csc_shield_idx = 0 then
-						csc_shield_base := SHIELD1_SRC
-					else if csc_shield_idx = 1 then
-						csc_shield_base := SHIELD2_SRC
-					else if csc_shield_idx = 2 then
-						csc_shield_base := SHIELD3_SRC
-					else
-						csc_shield_base := SHIELD4_SRC;
+					csc_shield_idx := 0;
+					csc_px_offset := player_bullet_x - 45;
+				end
+				else if ((player_bullet_x >= 93) and (player_bullet_x < 117)) then
+				begin
+					csc_shield_idx := 1;
+					csc_px_offset := player_bullet_x - 93;
+				end
+				else if ((player_bullet_x >= 141) and (player_bullet_x < 165)) then
+				begin
+					csc_shield_idx := 2;
+					csc_px_offset := player_bullet_x - 141;
+				end
+				else if ((player_bullet_x >= 189) and (player_bullet_x < 213)) then
+				begin
+					csc_shield_idx := 3;
+					csc_px_offset := player_bullet_x - 189;
+				end;
 
-					// Which byte column (0-2) is the bullet in?
-					csc_px_offset := player_bullet_x - csc_shield_left;
-					csc_byte_col := 0;
-					if csc_px_offset >= 8 then csc_byte_col := 1;
-					if csc_px_offset >= 16 then csc_byte_col := 2;
+				// If found a shield (csc_shield_idx < 4)
+				if csc_shield_idx < 4 then
+				begin
+					// Get shield base address from lookup table
+					csc_shield_base := SHIELD_BASE[csc_shield_idx];
+
+					// Which byte column (0-2) is the bullet in? Use bit shift for speed
+					csc_byte_col := (csc_px_offset >> 3);  // Divide by 8 using bit shift
 
 					// Look up per-column erosion depth.
-					csc_col_idx := csc_shield_idx * 3;
-					csc_col_idx := csc_col_idx + csc_byte_col;
+					csc_col_idx := csc_shield_idx * 3 + csc_byte_col;
 					csc_erase_top := shield_col_top[csc_col_idx];
 
 					// 255 = this column is already fully tunnelled through.
 					if csc_erase_top <> 255 then
 					begin
 						// Erase 4 rows of the bullet's byte column upward from csc_erase_top.
-						csc_erase_idx := 0;
+						// UNROLLED: Erase rows directly instead of loop for speed
 						csc_shield_row := csc_erase_top;
 						csc_expl_row := 20;
-						while csc_erase_idx < 4 do
+
+						// Row 1
+						csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
+						csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
+						csc_expl_ptr := csc_expl_addr;
+						csc_shield_ptr := csc_shield_addr;
+						csc_shield_ptr[0] := csc_shield_ptr[0] & (csc_expl_ptr[0] xor $FF);
+						csc_shield_ptr[0] := 0;
+
+						if csc_shield_row > 0 then
 						begin
+							dec(csc_shield_row);
+							if csc_expl_row > 0 then dec(csc_expl_row);
+
+							// Row 2
 							csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
 							csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
-
 							csc_expl_ptr := csc_expl_addr;
-							csc_val := csc_expl_ptr[0] xor $FF;
 							csc_shield_ptr := csc_shield_addr;
-							csc_shield_ptr[0] := csc_shield_ptr[0] & csc_val;
-							// Also zero so the next shot's column scan finds this row empty.
+							csc_shield_ptr[0] := csc_shield_ptr[0] & (csc_expl_ptr[0] xor $FF);
 							csc_shield_ptr[0] := 0;
 
-							if csc_shield_row = 0 then
-								csc_erase_idx := 8   // hit top of sprite, stop early
-							else
+							if csc_shield_row > 0 then
+							begin
 								dec(csc_shield_row);
-							if csc_expl_row > 0 then dec(csc_expl_row);
-							inc(csc_erase_idx);
+								if csc_expl_row > 0 then dec(csc_expl_row);
+
+								// Row 3
+								csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
+								csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
+								csc_expl_ptr := csc_expl_addr;
+								csc_shield_ptr := csc_shield_addr;
+								csc_shield_ptr[0] := csc_shield_ptr[0] & (csc_expl_ptr[0] xor $FF);
+								csc_shield_ptr[0] := 0;
+
+								if csc_shield_row > 0 then
+								begin
+									dec(csc_shield_row);
+									if csc_expl_row > 0 then dec(csc_expl_row);
+
+									// Row 4
+									csc_expl_addr := $20C0 + csc_expl_row * 3 + csc_byte_col;
+									csc_shield_addr := csc_shield_base + csc_shield_row * 3 + csc_byte_col;
+									csc_expl_ptr := csc_expl_addr;
+									csc_shield_ptr := csc_shield_addr;
+									csc_shield_ptr[0] := csc_shield_ptr[0] & (csc_expl_ptr[0] xor $FF);
+									csc_shield_ptr[0] := 0;
+								end;
+							end;
 						end;
 
 						// Advance the depth: next shot starts 4 rows higher.
+						// Replace 4x dec() with single subtraction
 						if csc_erase_top < 4 then
 							shield_col_top[csc_col_idx] := 255  // fully tunnelled
 						else
-						begin
-							shield_col_top[csc_col_idx] := csc_erase_top;
-							dec(shield_col_top[csc_col_idx]);
-							dec(shield_col_top[csc_col_idx]);
-							dec(shield_col_top[csc_col_idx]);
-							dec(shield_col_top[csc_col_idx]);
-						end;
+							shield_col_top[csc_col_idx] := csc_erase_top - 4;
 
-						shield_collision_hit := csc_shield_hit;
+						shield_collision_hit := csc_shield_idx + 1;  // 1-4 for display
 						player_bullet_active := 3;
 						explosion_frame_counter := 0;
 					end;
@@ -2039,11 +2052,13 @@ interrupt MainRasterChain();
 var
 	mc_row_target : byte;
 begin
-		
+	
 	StartIRQ(@useKernal);	
+	
 	ShowBullet();
-	peek(^$D01F, 0);
 	CheckShieldCollision();
+	//peek(^$D01F, 0);
+	
 	// Shield repainting: now on-demand only (call PaintShield1-4 after erosion hit)
 	if DEBUG_ENABLE = 0 then
 		call(sidfile_1_play) // main-context playback (disabled)		
@@ -2257,13 +2272,17 @@ begin
 end;
 
 interrupt MainRasterRow3();
-begin		
+begin	
+		
 	//BorderDebug();
 
 	//ShowBullet();
 	
+	
+	
 
 	StartIRQ(@useKernal);
+	
 	
 	/*if player_bullet_active <> 0 then
 	begin
@@ -2290,9 +2309,8 @@ end;
 
 
 interrupt MainRasterPlayer();
-begin
-	
-	
+begin	
+		
 	UpdateSprite();
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLACK;
@@ -2343,7 +2361,7 @@ begin
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();	
 	preventirq();  
-	poke(^$D019, 0, 0);  
+	//poke(^$D019, 0, 0);  
 	
 	RasterIRQ(MainRasterChain(), 0, @useKernal);
 end;
