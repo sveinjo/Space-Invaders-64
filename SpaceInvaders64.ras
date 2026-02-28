@@ -1262,28 +1262,37 @@ end;
 
 // ---------------------------------------------------------------------------
 // CheckShieldCollision
-//   Arcade-accurate shield erosion. Every frame the player bullet is inside
-//   the shield Y band, one sprite row is AND-cleared at the bullet's current
-//   Y position (non-reversible, like the arcade). The bullet is NEVER stopped
-//   by a shield hit — it passes straight through and can still hit aliens,
-//   exactly as in the original. Shield repaint is scheduled via
-//   shield_collision_hit each frame a shield is touched.
+//   Arcade-accurate shield collision:
+//   1. Bullet X bounding box → which shield (1-4).
+//   2. Scan shield sprite rows from the bottom upward to find the first row
+//      with any lit pixel. Handles already-eroded columns correctly.
+//   3. On hit: stamp the enemy-shot explosion sprite (sprite 3, $20C0) into
+//      the shield data using AND-NOT — clears exactly the explosion's shape.
+//      Rows 13-20 of the 21-row explosion sprite have pixels; we place row 20
+//      at the impact row and walk upward 8 rows to row 13.
+//   4. Stop the bullet (state 3) and schedule a shield repaint.
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
 var
 	csc_shield_idx : byte;
 	csc_shield_hit : byte;
-	csc_shield_left : byte;  // left X boundary of the hit shield
-	csc_xor_dst : integer;
-	csc_px_offset : byte;    // bullet pixel offset within shield sprite (0-23)
-	csc_byte_col : byte;     // byte column in sprite row (0, 1, or 2)
-	csc_sub_px : byte;       // sub-byte pixel position (0-7)
-	csc_clear_half : byte;   // AND mask to erase 4-pixel half-column
-	csc_hit_row : byte;      // sprite row at bullet's current Y
-	csc_addr : integer;
-	csc_ptr : pointer of byte;
+	csc_shield_left : byte;
+	csc_shield_base : integer;
+	csc_expl_base : integer;    // explosion sprite 3 base: $2000 + 3*64 = $20C0
+	csc_scan_row : byte;
+	csc_hit_row : byte;
+	csc_found : byte;
+	csc_erase_idx : byte;
+	csc_shield_row : byte;
+	csc_expl_row : byte;
+	csc_shield_addr : integer;
+	csc_expl_addr : integer;
+	csc_shield_ptr : pointer of byte;
+	csc_expl_ptr : pointer of byte;
+	csc_b0 : byte;
+	csc_b1 : byte;
+	csc_b2 : byte;
 begin
-	// Only when bullet is actively moving and inside the shield Y band
 	if player_bullet_active = 1 then
 		if player_bullet_y >= SHIELD_Y_MIN then
 			if player_bullet_y <= SHIELD_Y_MAX then
@@ -1292,7 +1301,7 @@ begin
 				csc_shield_idx := 0;
 				csc_shield_left := 0;
 
-				// X bounding box: which shield is the bullet over?
+				// X bounding box: which shield?
 				if player_bullet_x >= 45 then
 					if player_bullet_x < 69 then
 					begin
@@ -1326,40 +1335,84 @@ begin
 
 				if csc_shield_hit <> 0 then
 				begin
-					// Sprite base for this shield
+					// Resolve shield sprite base
 					if csc_shield_idx = 0 then
-						csc_xor_dst := SHIELD1_SRC
+						csc_shield_base := SHIELD1_SRC
 					else if csc_shield_idx = 1 then
-						csc_xor_dst := SHIELD2_SRC
+						csc_shield_base := SHIELD2_SRC
 					else if csc_shield_idx = 2 then
-						csc_xor_dst := SHIELD3_SRC
+						csc_shield_base := SHIELD3_SRC
 					else
-						csc_xor_dst := SHIELD4_SRC;
+						csc_shield_base := SHIELD4_SRC;
 
-					// Map bullet X to sprite byte column (0-2) and 4-pixel half
-					csc_px_offset := player_bullet_x - csc_shield_left;
-					csc_byte_col := 0;
-					if csc_px_offset >= 8 then csc_byte_col := 1;
-					if csc_px_offset >= 16 then csc_byte_col := 2;
-					csc_sub_px := csc_px_offset - (csc_byte_col * 8);
-					// Left half (0-3): AND-clear with $0F  (erases upper nibble)
-					// Right half (4-7): AND-clear with $F0 (erases lower nibble)
-					csc_clear_half := $0F;
-					if csc_sub_px >= 4 then
-						csc_clear_half := $F0;
+					// Scan from bottom row (15) upward for any lit pixel
+					csc_scan_row := 15;
+					csc_found := 0;
+					while csc_found = 0 do
+					begin
+						csc_shield_addr := csc_shield_base + csc_scan_row * 3;
+						csc_b0 := peek(csc_shield_addr,     0);
+						csc_b1 := peek(csc_shield_addr + 1, 0);
+						csc_b2 := peek(csc_shield_addr + 2, 0);
+						csc_b0 := csc_b0 | csc_b1;
+						csc_b0 := csc_b0 | csc_b2;
+						if csc_b0 <> 0 then
+						begin
+							csc_hit_row := csc_scan_row;
+							csc_found := 1;
+						end
+						else
+						begin
+							if csc_scan_row = 0 then
+								csc_found := 2   // no pixels anywhere — skip
+							else
+								dec(csc_scan_row);
+						end;
+					end;
 
-					// Map bullet Y directly to sprite row (0=top, 15=bottom).
-					// One row per pixel step — bullet moves through and erodes as it goes.
-					csc_hit_row := player_bullet_y - SHIELD_Y_MIN;
-					if csc_hit_row > 15 then csc_hit_row := 15;
+					if csc_found = 1 then
+					begin
+						// Explosion sprite 3: $2000 + 3*64 = $20C0
+						// Lit pixels occupy rows 13-20 (EXPLOSION_PIXELS_FROM_TOP=13).
+						// Place explosion row 20 at csc_hit_row, walk upward 8 rows.
+						csc_expl_base := $20C0;
+						csc_erase_idx := 0;
+						csc_shield_row := csc_hit_row;
+						csc_expl_row := 20;
+						while csc_erase_idx < 8 do
+						begin
+							csc_expl_addr := csc_expl_base + csc_expl_row * 3;
+							csc_shield_addr := csc_shield_base + csc_shield_row * 3;
 
-					// AND-clear this row's half-column (no-op on already-blank rows)
-					csc_addr := csc_xor_dst + csc_hit_row * 3 + csc_byte_col;
-					csc_ptr := csc_addr;
-					csc_ptr[0] := csc_ptr[0] & csc_clear_half;
+							// AND-NOT: read explosion row, invert, AND into shield
+							csc_expl_ptr := csc_expl_addr;
+							csc_b0 := csc_expl_ptr[0] xor $FF;
+							inc(csc_expl_ptr);
+							csc_b1 := csc_expl_ptr[0] xor $FF;
+							inc(csc_expl_ptr);
+							csc_b2 := csc_expl_ptr[0] xor $FF;
+							csc_shield_ptr := csc_shield_addr;
+							csc_shield_ptr[0] := csc_shield_ptr[0] & csc_b0;
+							inc(csc_shield_ptr);
+							csc_shield_ptr[0] := csc_shield_ptr[0] & csc_b1;
+							inc(csc_shield_ptr);
+							csc_shield_ptr[0] := csc_shield_ptr[0] & csc_b2;
 
-					// Schedule repaint — bullet keeps moving (state stays 1)
-					shield_collision_hit := csc_shield_hit;
+							if csc_shield_row = 0 then
+								csc_erase_idx := 8   // hit top of shield, stop early
+							else
+								dec(csc_shield_row);
+							if csc_expl_row > 0 then dec(csc_expl_row);
+							inc(csc_erase_idx);
+						end;
+
+						// Schedule repaint
+						shield_collision_hit := csc_shield_hit;
+
+						// Stop bullet with enemy-shot explosion (state 3)
+						player_bullet_active := 3;
+						explosion_frame_counter := 0;
+					end;
 				end;
 			end;
 end;
