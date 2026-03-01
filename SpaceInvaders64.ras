@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 1;
+	const DEBUG_ENABLE : byte = 0;
 	// Shot-vs-shot lockout toggle:
 	//   0 = player bullet resets immediately, enemy shot shows explosion (current default)
 	//   1 = player bullet locked out (shows explosion), enemy shot resets immediately (arcade-like)
@@ -110,6 +110,8 @@ var
 	const SHIELD2_DST : integer = $3398; // char 115 ($3000+115*8)
 	const SHIELD3_DST : integer = $33C8; // char 121 ($3000+121*8)
 	const SHIELD4_DST : integer = $33F8; // char 127 ($3000+127*8)
+	// Per-shield charset destination base addresses — mirrors SHIELD_BASE for source side.
+	SHIELD_DST : array[4] of integer = (SHIELD1_DST, SHIELD2_DST, SHIELD3_DST, SHIELD4_DST);
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
 	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
@@ -132,8 +134,8 @@ var
 	const SHIELD_Y_MIN : byte = 152 + 17 + 16;  // 135
 	const SHIELD_Y_MAX : byte = 167 + 17 + 16;  // 150
 	
-	// Shield collision tracking (per-frame state to prevent retriggering)
-	shield_collision_hit : byte = 0;    // 1-4 = shield 1-4 hit this frame, 0 = no collision
+	// shield_collision_hit replaced by pending_shield_paint (set by ApplyShieldErosion after sprite data is modified).
+	//shield_collision_hit : byte = 0;
 	// Per-column erosion depth: 4 shields x 3 byte columns.
 	// Index = shield_idx*3 + byte_col (0-2).
 	// Value = sprite row of the BOTTOM of the next erase zone (starts at 15 = bottom of top 16 pixel rows).
@@ -147,7 +149,9 @@ var
 	pending_col_idx : byte = 0;         // Precomputed shield_idx * 3 + byte_col
 	pending_erase_top : byte = 0;       // Erosion depth to start from
 	shield_erosion_frame_skip : byte = 0;  // Alternates 0/1 to defer erosion to every other frame
-	
+	// Set by ApplyShieldErosion (value = pending_shield_idx + 1); cleared by MainRasterChain after painting.
+	pending_shield_paint : byte = 0;       // 1-4 = shield needs column repaint; 0 = none
+
 	// --- Hitbox / explosion tuning ---
 	// Explosion sprite X alignment: subtracted from block_x + col*18 (increase = moves left)
 	const EXPLOSION_X_OFFSET : byte = 6;
@@ -305,6 +309,7 @@ var
 	procedure TickEnemyShotFiring();
 	procedure CopyShieldSprites();
 	procedure CheckShieldCollision();
+	procedure PaintShieldColumn();
 	procedure PaintShield1();
 	procedure PaintShield2();
 	procedure PaintShield3();
@@ -1317,7 +1322,6 @@ begin
 					pending_byte_col       := csc_byte_col;
 					pending_col_idx        := csc_byte_col;
 					pending_erase_top      := csc_col_depth;
-					shield_collision_hit   := 1;
 					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1334,7 +1338,6 @@ begin
 					pending_byte_col       := csc_byte_col;
 					pending_col_idx        := 3 + csc_byte_col;
 					pending_erase_top      := csc_col_depth;
-					shield_collision_hit   := 2;
 					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1351,7 +1354,6 @@ begin
 					pending_byte_col       := csc_byte_col;
 					pending_col_idx        := 6 + csc_byte_col;
 					pending_erase_top      := csc_col_depth;
-					shield_collision_hit   := 3;
 					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1368,7 +1370,6 @@ begin
 					pending_byte_col       := csc_byte_col;
 					pending_col_idx        := 9 + csc_byte_col;
 					pending_erase_top      := csc_col_depth;
-					shield_collision_hit   := 4;
 					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1459,6 +1460,10 @@ begin
 		else
 			shield_col_top[pending_col_idx] := pending_erase_top - 4;
 
+		// Signal that this shield's affected column needs its charset glyphs repainted.
+		// MainRasterChain will call PaintShieldColumn on the next pass, keeping
+		// erosion and paint in separate IRQ frames.
+		pending_shield_paint := pending_shield_idx + 1;
 		// Clear pending flag
 		pending_shield_erosion := 0;
 	end;
@@ -1511,6 +1516,34 @@ begin
 		shield_col_top[css_i] := 15;
 		inc(css_i);
 	end;
+end;
+
+// ---------------------------------------------------------------------------
+// PaintShieldColumn
+//   Repaints only the two charset glyphs (top + bottom row-band) for byte
+//   column pending_byte_col within shield pending_shield_idx.
+//   Called by MainRasterChain after ApplyShieldErosion has modified sprite data.
+//   2 CopyShieldGlyph calls instead of 6 — 3x cheaper than a full PaintShieldN.
+// ---------------------------------------------------------------------------
+procedure PaintShieldColumn();
+var
+	psc_src_base : integer;
+	psc_dst_base : integer;
+	psc_src      : integer;
+	psc_dst      : integer;
+	psc_bc_off   : byte;   // pending_byte_col * 8  (0, 8, or 16)
+begin
+	psc_src_base := SHIELD_BASE[pending_shield_idx];
+	psc_dst_base := SHIELD_DST[pending_shield_idx];
+	psc_bc_off   := pending_byte_col << 3;
+	// Top row-band glyph for this byte column
+	psc_src := psc_src_base + pending_byte_col;
+	psc_dst := psc_dst_base + psc_bc_off;
+	CopyShieldGlyph(psc_src, psc_dst);
+	// Bottom row-band glyph (glyph index = byte_col + 3, dst offset + 24)
+	psc_src := psc_src_base + 22 + pending_byte_col;
+	psc_dst := psc_dst_base + 24 + psc_bc_off;
+	CopyShieldGlyph(psc_src, psc_dst);
 end;
 
 // ---------------------------------------------------------------------------
@@ -2106,10 +2139,11 @@ begin
 	ShowBullet();
 	
 	
-	// Apply erosion work on alternating frames to spread CPU load
-	/*if shield_erosion_frame_skip = 0 then
+	// Apply erosion on alternating frames.  Paint follows on the NEXT MainRasterChain
+	// pass via pending_shield_paint — erosion and paint never land in the same IRQ.
+	if shield_erosion_frame_skip = 0 then
 		ApplyShieldErosion();
-	shield_erosion_frame_skip := 1 - shield_erosion_frame_skip;  // Toggle 0<->1*/
+	shield_erosion_frame_skip := 1 - shield_erosion_frame_skip;  // Toggle 0<->1
 	
 	//peek(^$D01F, 0);
 	
@@ -2192,30 +2226,22 @@ begin
 	else
 		previous_fire_state := 0;
 
-	// Check collisions AFTER all sprite rows have been displayed
-	// Only check when bullet is actively moving (not exploding)
-	if player_bullet_active = 1 then
+	// Repaint only the eroded byte column after ApplyShieldErosion (alternating frame)
+	// has modified the sprite data.  2 glyph copies instead of 6 — 3x cheaper.
+	if pending_shield_paint <> 0 then
 	begin
-		CheckBulletCollision();
-		
-	end;
+		PaintShieldColumn();
+		pending_shield_paint := 0;
+	end;	
+
+	
 
 	// Check player bullet vs enemy bullets (shot-vs-shot collision)
 	// Must run after both UpdatePlayerBullet and UpdateUFOBullet so positions are current.
 	// Rolling/Teflon shot (slot 1) is immune; Plunger and Squiggly are destroyable.
 	CheckShotVsShotCollision();
 	
-	// Repaint affected shield if collision occurred
-	if shield_collision_hit <> 0 then
-	begin
-		case shield_collision_hit of
-			1: PaintShield1();
-			2: PaintShield2();
-			3: PaintShield3();
-			4: PaintShield4();
-		end;
-		shield_collision_hit := 0;  // Clear flag
-	end;
+	
 
 	
 	/*if player_bullet_active <> 0 then
@@ -2375,7 +2401,14 @@ begin
 	//border_debug_color := peek($D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
 	UpdateTick();
+	
+	// Check collisions AFTER all sprite rows have been displayed
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
+	begin
+		CheckBulletCollision();
 		
+	end;	
 
 	
 	
