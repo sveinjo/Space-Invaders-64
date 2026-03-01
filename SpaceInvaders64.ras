@@ -1,4 +1,4 @@
-﻿program SpaceInvaders64;
+program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -43,18 +43,18 @@ var
 	const USE_SPEED_TABLE : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
-	border_debug_color : byte = 2;
+	//border_debug_color : byte = 2;          // unused — only in commented-out debug lines
 	// Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
-    debug_last_cleared : byte = 0;
-    // Number of enemies to keep alive when auto-clearing in debug mode
-	const DEBUG_KEEP_ALIVE : byte = 3;
+	//debug_last_cleared : byte = 0;           // unused — DebugClearNextMonster is never called
+	// Number of enemies to keep alive when auto-clearing in debug mode
+	//const DEBUG_KEEP_ALIVE : byte = 3;       // unused — same reason
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	current_speed_delay : byte = 50; // frames per march step (table or linear)
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 	const MONSTER_DROP_AMOUNT : byte = 6;
-	const MONSTER_DROP_AMOUNT2 : byte = 10;
+	//const MONSTER_DROP_AMOUNT2 : byte = 10;  // unused
 	
 	const MONSTER_START_Y : byte = 102 ; // Initial monster base Y (was 71 base + 41 adjustment)
 
@@ -92,7 +92,7 @@ var
 	ufo_bullet_sprite : array[3] of byte = (6, 5, 7);      // HW sprite: Plunger=6, Rolling=5, Squiggly=7
 	ufo_bullet_anim_start : array[3] of byte = (13, 9, 5); // First frame: Plunger=13, Rolling=9, Squiggly=5
 
-	ufo_bullet_stagger_counter : integer = 6500;  // Countdown to fire next bullet
+	ufo_bullet_stagger_counter : byte = 0;  // Countdown to fire next bullet
 
 	// Shield erosion system: 4 charset glyph ranges, painted once at startup from the template.
 	// Sprite 17 ($2440) is the pristine template; erosion operates directly on charset bytes.
@@ -121,7 +121,7 @@ var
 	player_bullet_y : byte;
 	explosion_frame_counter : byte = 0;  // Counts frames for explosion animation
 	previous_fire_state : byte = 0;  // Track previous fire button state for debounce
-	player_bullet_color_toggle : byte = 0;  // Alternates 0/1 each frame to toggle bullet color white<->cyan
+	//player_bullet_color_toggle : byte = 0;  // unused — color toggle code is commented out
 	const BULLET_SPEED : byte = 4;  // Pixels per frame
 	//const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
 	const EXPLOSION_DURATION : byte = 16;  // Frames to show explosion
@@ -133,7 +133,7 @@ var
 	//   CONTACT_Y_NUDGE — added to SHIELD_Y_MIN for the per-sub-column Y test.
 	//                      Increase to delay contact       (enemy must descend further).
 	const CONTACT_X_NUDGE : byte = 6;
-	const CONTACT_Y_NUDGE : byte = 18;
+	const CONTACT_Y_NUDGE : byte = 8;
 	// Erosion stencil shape (4 bytes, applied hit-row first, widening inward then narrowing).
 	// AND-NOT'd into the sprite byte at each row: pixel = pixel & (stencil xor $FF).
 	const ERODE_STENCIL_0 : byte = $FF;   // hit row:    11111111  (full clear — prevents stuck edge bits)
@@ -207,7 +207,7 @@ var
 	const monsterSprite4:byte = 4;
 	
 	// joystick_dir is used to display either left or right-pointing sprite
-	player_joystick_direction : byte;
+	//player_joystick_direction : byte;        // unused — sprite direction code is commented out
 	// monster_animation_frame controls monster sprite animation independently
 	monster_animation_frame : byte;
 	// sprite location is where we keep the sprite in the memory.
@@ -230,38 +230,32 @@ var
 
 	// Enemy-shot globals (prefixed es_ to avoid global namespace collisions)
 	// Support 3 simultaneous hardware-shot slots with staggered firing
-	es_shot_active : array[3] of byte = (0,0,0); // 0=inactive,1=moving,2=exploding
-	es_shot_x : array[3] of byte = (0,0,0);
-	es_shot_y : array[3] of byte = (0,0,0);  // screen Y position while moving (state 1)
-	es_shot_anim_index : array[3] of byte = (0,0,0);
-	// Single shared movement tick — all shots advance together each tick.
-	es_move_tick : byte = 0;
-	// Single shared animation tick — controls when anim frame advances.
-	es_anim_tick : byte = 0;
-	// Per-shot explosion counter to track individual explosion duration
-	es_explode_counter : array[3] of byte = (0, 0, 0);
-
-	// Sequence/stagger scheduler
-	es_shot_sequence_active : byte = 0; // 0 = idle, 1 = firing sequence active
-	es_shot_next_to_fire : byte = 0; // 0..2 index of next shot to spawn
-	es_shot_stagger_counter : byte = 0; // countdown frames between staggered shots
-
-	// simple PRNG seed for enemy-shot X generation
-	es_rand_seed : byte = $55;
+	// Legacy es_shot_* parallel shot system — superseded by ufo_bullet_* — all unused:
+	//es_shot_active : array[3] of byte = (0,0,0);
+	//es_shot_x : array[3] of byte = (0,0,0);
+	//es_shot_y : array[3] of byte = (0,0,0);
+	//es_shot_anim_index : array[3] of byte = (0,0,0);
+	//es_move_tick : byte = 0;
+	//es_anim_tick : byte = 0;
+	//es_explode_counter : array[3] of byte = (0, 0, 0);
+	//es_shot_sequence_active : byte = 0;
+	//es_shot_next_to_fire : byte = 0;
+	//es_shot_stagger_counter : byte = 0;
+	//es_rand_seed : byte = $55;
 	
 	// Shot sprite hardware indices (use remaining hardware sprites).
 	// Stored as a lookup array so ShowEnemyShot can index by slot without if/else.
 	const ES_SHOT_SPRITE1:byte = 6;
 	const ES_SHOT_SPRITE2:byte = 5;
 	const ES_SHOT_SPRITE3:byte = 7;
-	es_shot_sprite_num : array[3] of byte = (6, 5, 7); // matches SPRITE1/2/3 order
+	//es_shot_sprite_num : array[3] of byte = (6, 5, 7); // unused — use ES_SHOT_SPRITE1/2/3 consts
 
-	const ES_SHOT_ANIM_START:byte = 13; // image indices 5..8
+	//const ES_SHOT_ANIM_START:byte = 13;     // unused
 	const ES_SHOT_ANIM_FRAMES:byte = 4;
 	const ES_SHOT_MOVE_FRAMES:byte = 3;   // every Nth frame an extra pixel is added to movement
 	const ES_SHOT_ANIM_HOLD_FRAMES:byte = 3; // frames each animation image is shown before advancing
 	const ES_SHOT_EXPLODE_DURATION:byte = 4; // frames enemy-shot explosion stays on screen
-	const ES_SHOT_STAGGER_FRAMES:byte = 1; // ~1 second at 50Hz
+	//const ES_SHOT_STAGGER_FRAMES:byte = 1; // unused — use UFO_BULLET_STAGGER_FRAMES instead
 	const UFO_BULLET_STAGGER_FRAMES:byte = 1; // frames between UFO bullet fires
 
 	// ---------------------------------------------------------------------------
@@ -884,7 +878,7 @@ begin
 end;
 	
 
-procedure DebugClearNextMonster();
+/*procedure DebugClearNextMonster();
 var
 	block_idx: byte;
 	enemy_idx: byte;
@@ -918,7 +912,7 @@ begin
 		inc(block_idx);
 	end;
 	end;
-end;
+end;*/
 
 	
 procedure MakeSprites();
@@ -1276,39 +1270,29 @@ end;
 // ---------------------------------------------------------------------------
 // CheckEnemyShieldContact
 //   Called once per march step (gated on enemy_march_tick).
-//   Scans formation rows bottom-to-top; for each alive enemy column whose
-//   actual sprite pixels overlap the shield band AND whose X overlaps a shield,
-//   queues one top-down erosion event (dir=1) via the pending_* pipeline.
-//   Stops after queuing the first event to stay within the single pending slot.
-//
-//   Y precision: each sub-column uses the real pixel bottom of its alive enemies:
-//     bottom sub-row (odd indices 1/3/5) alive → bottom pixel at row 20
-//     top sub-row only (even indices 0/2/4) alive → bottom pixel at row 7
-//   This prevents pre-cleared bottom-row enemies from triggering early erosion.
-//
-//   X precision: each sub-column is 12px wide within the 48px block.
-//   Overlap detection uses both left and right edges of the sub-column:
-//     contact when (cesc_enemy_x + 11 >= SHIELD_X_MIN) and (cesc_enemy_x < SHIELD_X_MAX)
-//   byte_col of the eroded char is clamped to 0 when the left edge is still left of the shield.
+//   Scans formation rows bottom-to-top; for each alive enemy sub-column whose
+//   actual pixels overlap the tuned shield band, queues one top-down erosion
+//   event via the pending_* pipeline and exits.
+//   Y: bottom sub-row alive -> row 20;  top-only -> row 7.
+//      Row fast skip uses row 20; per-sub-col refines for top-only enemies.
+//   X: sub-col 12px wide. right edge (X+11) >= SHIELD_X_MIN, left edge < SHIELD_X_MAX.
+//      CONTACT_X_NUDGE shifts X left; shield matched via SHIELD_X_MIN/MAX arrays.
 // ---------------------------------------------------------------------------
 procedure CheckEnemyShieldContact();
 var
-	cesc_form_row        : byte;  // formation row 2..0 (scan bottom-to-top)
-	cesc_block_col       : byte;  // block column 0-3
-	cesc_enemy_col       : byte;  // enemy sub-column within block 0-2
-	cesc_row_offset      : byte;  // Y pixel offset for this formation row
-	cesc_row_y_bot_max   : byte;  // conservative row bottom (row 20) for fast skip
-	cesc_in_band         : byte;  // 1 if full sprite-box can reach shield band (fast skip)
-	cesc_col_mask        : byte;  // block_enemies alive mask for this sub-column (bits pair)
-	cesc_bot_alive_mask  : byte;  // bit for the bottom sub-row enemy of this sub-col
-	cesc_eff_y_bot       : byte;  // actual bottom pixel Y of alive enemies in this sub-col
-	cesc_enemy_x         : byte;  // pixel X of this enemy sub-column's left edge
-	cesc_shield_s        : byte;  // matched shield index 0-3; 255 = no match
-	cesc_byte_col        : byte;  // byte column within shield (0-2)
-	cesc_col_idx         : byte;  // cache index = shield_s*3 + byte_col
-	cesc_done            : byte;  // 1 = erosion queued, exit all loops
+	cesc_form_row   : byte;  // formation row 2..0
+	cesc_block_col  : byte;  // block column 0-3
+	cesc_enemy_col  : byte;  // enemy sub-column within block 0-2
+	cesc_row_offset : byte;  // Y pixel offset for this formation row
+	cesc_block_byte : byte;  // cached block_enemies[row*4+col]
+	cesc_col_mask   : byte;  // alive mask for both sub-rows of this sub-column
+	cesc_bot_mask   : byte;  // alive mask for bottom sub-row only
+	cesc_enemy_x    : byte;  // nudged pixel X of sub-column left edge
+	cesc_shield_s   : byte;  // shield index 0-3 (loop variable)
+	cesc_byte_col   : byte;  // byte column within shield (0-2)
+	cesc_col_idx    : byte;  // cache index = shield_s*3 + byte_col
+	cesc_done       : byte;  // 1 = erosion queued, exit all loops
 begin
-	// Gate: only fire on march ticks; reset the flag here.
 	if enemy_march_tick <> 0 then
 	begin
 		enemy_march_tick := 0;
@@ -1326,113 +1310,63 @@ begin
 			else
 				cesc_row_offset := MONSTER_ROW_OFFSET * 2;
 
-			// Conservative fast skip: if even the very bottom pixel of the sprite box
-			// (row 20) can't reach SHIELD_Y_MIN, no sub-column in this row can either.
-			cesc_row_y_bot_max := monster_base_y + cesc_row_offset + 20;
-			if ((cesc_row_y_bot_max >= SHIELD_Y_MIN) and
+			// Row fast skip: row-20 bottom must reach the tuned shield band.
+			if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE) and
 			    (monster_base_y + cesc_row_offset <= SHIELD_Y_MAX)) then
-				cesc_in_band := 1
-			else
-				cesc_in_band := 0;
-
-			if cesc_in_band <> 0 then
 			begin
 				cesc_block_col := 0;
 				while ((cesc_block_col <= 3) and (cesc_done = 0)) do
 				begin
-					// Quick skip: any alive enemies in this block at all?
-					if block_enemies[cesc_form_row * 4 + cesc_block_col] <> 0 then
+					cesc_block_byte := block_enemies[cesc_form_row * 4 + cesc_block_col];
+					if cesc_block_byte <> 0 then
 					begin
 						cesc_enemy_col := 0;
 						while ((cesc_enemy_col <= 2) and (cesc_done = 0)) do
 						begin
-							// Alive masks for this sub-column.
-							//   Full pair:   col 0=$03, col 1=$0C, col 2=$30
-							//   Bottom only: col 0=$02, col 1=$08, col 2=$20  (odd enemy index)
+							// col 0: pair=$03 bot=$02  col 1: pair=$0C bot=$08  col 2: pair=$30 bot=$20
 							if cesc_enemy_col = 0 then
 							begin
-								cesc_col_mask       := $03;
-								cesc_bot_alive_mask := $02;
+								cesc_col_mask := $03;
+								cesc_bot_mask := $02;
 							end
 							else if cesc_enemy_col = 1 then
 							begin
-								cesc_col_mask       := $0C;
-								cesc_bot_alive_mask := $08;
+								cesc_col_mask := $0C;
+								cesc_bot_mask := $08;
 							end
 							else
 							begin
-								cesc_col_mask       := $30;
-								cesc_bot_alive_mask := $20;
+								cesc_col_mask := $30;
+								cesc_bot_mask := $20;
 							end;
 
-							if (block_enemies[cesc_form_row * 4 + cesc_block_col] & cesc_col_mask) <> 0 then
+							if (cesc_block_byte & cesc_col_mask) <> 0 then
 							begin
-								// Determine the actual bottom pixel of alive enemies in this sub-col:
-								//   bottom sub-row enemy (odd index) alive  → sprite rows 13-20, bottom = row 20
-								//   only top sub-row enemy (even index) alive → sprite rows  0-7, bottom = row 7
-								if (block_enemies[cesc_form_row * 4 + cesc_block_col] & cesc_bot_alive_mask) <> 0 then
-									cesc_eff_y_bot := monster_base_y + cesc_row_offset + 20
-								else
-									cesc_eff_y_bot := monster_base_y + cesc_row_offset + 7;
-
-								// Only proceed if the real pixel bottom reaches the (tuned) shield band.
-								if cesc_eff_y_bot >= SHIELD_Y_MIN + CONTACT_Y_NUDGE then
+								// Y precision: top-only enemy (row 7) may not yet reach the band.
+								// Bottom sub-row alive -> row 20, already covered by row fast skip.
+								if (((cesc_block_byte & cesc_bot_mask) <> 0) or
+								   (monster_base_y + cesc_row_offset + 7 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE)) then
 								begin
-									// Left edge of this 12-px-wide sub-column (sprite is double-width:
-									// three sub-cols at offsets 0, 18, 36 within the 48px block).
 									cesc_enemy_x := monster_base_x + cesc_block_col * MONSTER_SPACING + cesc_enemy_col * 18;
-									// Shift X left by nudge amount before shield lookup.
 									if cesc_enemy_x >= CONTACT_X_NUDGE then
 										cesc_enemy_x := cesc_enemy_x - CONTACT_X_NUDGE
 									else
 										cesc_enemy_x := 0;
 
-									// Overlap test: sub-col occupies [X, X+11]; shield spans [MIN, MAX).
-									// Contact when right edge (X+11) >= MIN  AND  left edge (X) < MAX.
-									cesc_shield_s := 255;
-									if ((cesc_enemy_x + 11 >= 45) and (cesc_enemy_x < 69)) then
+									// Match X against each shield via the SHIELD_X_MIN/MAX arrays.
+									cesc_shield_s := 0;
+									while ((cesc_shield_s <= 3) and (cesc_done = 0)) do
 									begin
-										cesc_shield_s := 0;
-										if cesc_enemy_x >= 45 then
-											cesc_byte_col := (cesc_enemy_x - 45) >> 3
-										else
-											cesc_byte_col := 0;
-										cesc_col_idx  := cesc_byte_col;
-									end
-									else if ((cesc_enemy_x + 11 >= 93) and (cesc_enemy_x < 117)) then
-									begin
-										cesc_shield_s := 1;
-										if cesc_enemy_x >= 93 then
-											cesc_byte_col := (cesc_enemy_x - 93) >> 3
-										else
-											cesc_byte_col := 0;
-										cesc_col_idx  := 3 + cesc_byte_col;
-									end
-									else if ((cesc_enemy_x + 11 >= 141) and (cesc_enemy_x < 165)) then
-									begin
-										cesc_shield_s := 2;
-										if cesc_enemy_x >= 141 then
-											cesc_byte_col := (cesc_enemy_x - 141) >> 3
-										else
-											cesc_byte_col := 0;
-										cesc_col_idx  := 6 + cesc_byte_col;
-									end
-									else if ((cesc_enemy_x + 11 >= 189) and (cesc_enemy_x < 213)) then
-									begin
-										cesc_shield_s := 3;
-										if cesc_enemy_x >= 189 then
-											cesc_byte_col := (cesc_enemy_x - 189) >> 3
-										else
-											cesc_byte_col := 0;
-										cesc_col_idx  := 9 + cesc_byte_col;
-									end;
-
-									// Queue top-down erosion if shield column is not yet fully eroded.
-									if cesc_shield_s <> 255 then
-									begin
-										if shield_surface_bot[cesc_col_idx] <> 255 then
+										if ((cesc_enemy_x + 11 >= SHIELD_X_MIN[cesc_shield_s]) and
+										    (cesc_enemy_x < SHIELD_X_MAX[cesc_shield_s])) then
 										begin
-											if pending_shield_erosion = 0 then
+											if cesc_enemy_x >= SHIELD_X_MIN[cesc_shield_s] then
+												cesc_byte_col := (cesc_enemy_x - SHIELD_X_MIN[cesc_shield_s]) >> 3
+											else
+												cesc_byte_col := 0;
+											cesc_col_idx := cesc_shield_s * 3 + cesc_byte_col;
+											if ((shield_surface_bot[cesc_col_idx] <> 255) and
+											   (pending_shield_erosion = 0)) then
 											begin
 												pending_shield_erosion := 1;
 												pending_erosion_dir    := 1;
@@ -1442,6 +1376,7 @@ begin
 												cesc_done              := 1;
 											end;
 										end;
+										inc(cesc_shield_s);
 									end;
 								end;
 							end;
@@ -2589,12 +2524,12 @@ begin
 	CloseIRQ();
 end;
 
-procedure BorderDebug();
+/*procedure BorderDebug();
 begin
 	border_debug_color := peek(^$D01E, 0);
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := border_debug_color;
-end;
+end;*/
 
 interrupt MainRasterRow3();
 begin	
