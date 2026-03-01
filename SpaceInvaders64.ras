@@ -13,8 +13,8 @@ var
 	const useKernal:byte=0;
 	
 	
-	Score : Integer = 0;
-	//Score2 : Integer = 0;
+	Score : integer = 0;    // Player score (integer — byte overflows at a 300pt saucer hit)
+	score_dirty : byte = 1; // 1 = score changed this frame; DisplayScore will refresh the screen
 	
 	
 	
@@ -82,9 +82,13 @@ var
 
 	// UFO hit / explosion state (active = 2)
 	const UFO_EXPLODE_DURATION : byte = 60; // ~1 s at 60 Hz — how long score sprite is shown
-	const UFO_HIT_HALF_WIDTH   : byte = 8;  // X: 16px hitbox / 2 — centred on sprite (24px wide, centre at +12)
-	const UFO_HIT_Y_ABS_TOP    : byte = 57; // Y top of 8px hitbox  = UFO_Y(44) + 13
-	const UFO_HIT_Y_ABS_BOT    : byte = 64; // Y bot of 8px hitbox  = UFO_Y(44) + 20 (sprite bottom)
+	// UFO AABB hit window — derived from 16×8 hitbox at sprite bottom.
+	// UFO sprite: 24px wide, 21px tall.  Hitbox: X offsets [4..19], Y offsets [13..20].
+	// Player bullet active pixel: sprite-local X=11, Y=17..20.
+	// X overlap: px+11 in [ux+4..ux+19]  →  px in [ux-7 .. ux+8]
+	// Y overlap: py+20>=ux_y+13 AND py+17<=ux_y+20  →  py in [37..47]  (UFO_Y=44 fixed)
+	const UFO_HIT_PX_LO : byte = 37; // min player_bullet_y for Y overlap  (UFO_Y+13-20 = 37)
+	const UFO_HIT_PX_HI : byte = 47; // max player_bullet_y for Y overlap  (UFO_Y+20-17 = 47)
 	const UFO_SCORE_SPRITE_50  : byte = 19; // sprite image shown for   50 pts
 	const UFO_SCORE_SPRITE_100 : byte = 20; //                         100 pts
 	const UFO_SCORE_SPRITE_150 : byte = 21; //                         150 pts
@@ -475,57 +479,63 @@ end;
 
 // ---------------------------------------------------------------------------
 // CheckUFOCollision
-//   Tests whether the player bullet (active = 1) overlaps the UFO (active = 1).
-//   Hitbox: 16 × 8 px, horizontally centred on the sprite, at the bottom.
-//     X: sprite is 24px wide → centre = ufo_x+12; half-width = 8 (±8 = 16px total)
-//     Y: 8px band at sprite bottom → absolute [UFO_HIT_Y_ABS_TOP .. UFO_HIT_Y_ABS_BOT]
-//         = [UFO_Y+13 .. UFO_Y+20] = [57 .. 64] with UFO_Y=44
+//   AABB overlap: same style as CheckShotVsShotCollision.
+//
+//   UFO hitbox   — 16×8 px at sprite bottom:
+//     X offsets [ufo_x+4  ..  ufo_x+19]     (centred in 24px sprite)
+//     Y offsets [UFO_Y+13 ..  UFO_Y+20]  =  [57 .. 64]  (UFO_Y=44, fixed)
+//
+//   Player bullet active area (identical to shot-vs-shot convention):
+//     X offset  px+11  (1 px)
+//     Y offsets py+17 .. py+20  (4 px, bottom-aligned)
+//
+//   Reduced overlap conditions:
+//     X:  px+11 in [ux+4, ux+19]  →  px in [ux-7, ux+8]
+//         written as  NOT (px+7 < ux)  AND  NOT (px > ux+8)
+//         (px+7 form avoids byte underflow; UFO_X_MIN=24 so ux-7>=17 always)
+//     Y:  py+20 >= 57 AND py+17 <= 64  →  py in [37, 47]  (UFO_HIT_PX_LO / _HI)
+//
 //   On hit:
-//     • player_bullet_active reset to 0  (immediately ready to fire again)
-//     • Score increased by the earned saucer value (uc_score_raw × 10)
-//     • ufo_score_sprite set from GetArcadeSaucerScore / score table
-//     • ufo_active set to 2 (score-display state; frozen at current ufo_x)
-//     • ufo_explode_counter set to UFO_EXPLODE_DURATION
+//     • player_bullet_active := 0  (immediately ready to fire again)
+//     • Score += uc_score_raw * 10
+//     • ufo_score_sprite set from score table
+//     • ufo_active := 2, ufo_explode_counter := UFO_EXPLODE_DURATION
 // ---------------------------------------------------------------------------
 procedure CheckUFOCollision();
 var
-	uc_score_raw   : byte;  // GetArcadeSaucerScore result (points / 10)
-	uc_ufo_center  : byte;  // ufo_x + 12  (sprite horizontal centre)
-	uc_dx          : byte;  // abs X distance between bullet and UFO centre
-	uc_hit         : byte;  // 1 when all overlap conditions are met
+	uc_score_raw : byte;
+	uc_overlap   : byte;
 begin
-	uc_hit := 0;
-	if player_bullet_active = 1 then
+	uc_overlap := 1;
+	if player_bullet_active <> 1 then uc_overlap := 0;
+	if ufo_active <> 1           then uc_overlap := 0;
+
+	if uc_overlap = 1 then
 	begin
-		if ufo_active = 1 then
-		begin
-			// --- X overlap: 16px hitbox centred on sprite (sprite is 24px wide) ---
-			uc_ufo_center := ufo_x + 12;
-			if player_bullet_x >= uc_ufo_center then
-				uc_dx := player_bullet_x - uc_ufo_center
-			else
-				uc_dx := uc_ufo_center - player_bullet_x;
-			if uc_dx <= UFO_HIT_HALF_WIDTH then
-			begin
-				// --- Y overlap: 8px hitbox at the bottom of the 21px sprite frame ---
-				// UFO_HIT_Y_ABS_TOP = UFO_Y+13 = 57,  UFO_HIT_Y_ABS_BOT = UFO_Y+20 = 64
-				if player_bullet_y >= UFO_HIT_Y_ABS_TOP then
-				begin
-					if player_bullet_y <= UFO_HIT_Y_ABS_BOT then
-						uc_hit := 1;
-				end;
-			end;
-		end;
+		// ---- Y overlap (early exit — cheapest check, UFO Y is constant) ----
+		// Equivalent to: py+20 >= 57 AND py+17 <= 64
+		if player_bullet_y < UFO_HIT_PX_LO then uc_overlap := 0;
+		if player_bullet_y > UFO_HIT_PX_HI then uc_overlap := 0;
 	end;
 
-	if uc_hit = 1 then
+	if uc_overlap = 1 then
 	begin
-		// Reset player bullet — immediately ready to fire again
+		// ---- X overlap ----
+		// px+11 must be in [ufo_x+4 .. ufo_x+19]
+		//   left  edge: px+7 < ufo_x  →  miss left
+		//   right edge: px > ufo_x+8  →  miss right
+		if player_bullet_x + 7 < ufo_x then uc_overlap := 0;
+		if player_bullet_x > ufo_x + 8  then uc_overlap := 0;
+	end;
+
+	if uc_overlap = 1 then
+	begin
+		// Hit!
 		player_bullet_active := 0;
 
-		// Determine score, add to player total, and select score-display sprite
 		uc_score_raw := Helpers::GetArcadeSaucerScore(player_shot_count);
-		Score := Score + uc_score_raw * 10;
+		Score := Score + (uc_score_raw * 10);
+		score_dirty := 1;
 		if uc_score_raw >= 30 then
 			ufo_score_sprite := UFO_SCORE_SPRITE_300
 		else if uc_score_raw >= 15 then
@@ -535,7 +545,6 @@ begin
 		else
 			ufo_score_sprite := UFO_SCORE_SPRITE_50;
 
-		// Freeze UFO in place and enter score-display state
 		ufo_active := 2;
 		ufo_explode_counter := UFO_EXPLODE_DURATION;
 	end;
@@ -968,6 +977,9 @@ Begin
 		// Defer edge-cache refresh to the next UpdateTick so the scan loops
 		// don't land on the same frame as the sprite clear.
 		pending_edge_rescan := 1;
+		// Award points for the kill and flag the display for refresh.
+		Score := Score + 12;
+		score_dirty := 1;
 	end;
 end;
 
@@ -1139,17 +1151,21 @@ begin
 end;
 
 
+// ---------------------------------------------------------------------------
+// DisplayScore
+//   Refreshes the score display only when score_dirty = 1 (i.e. score just
+//   changed).  Cost when unchanged: 1 branch = ~4 cycles.  Cost on a kill
+//   frame: moveto + PrintDecimal, which is fine since kills are infrequent.
+//   Position: row 3, col 35 — 5-char field at the far right of the screen.
+// ---------------------------------------------------------------------------
 Procedure DisplayScore();
-Begin	
-	//moveto(30,3,hi(screen_char_loc));
-	//PrintDecimal(Score2,4);
-	//moveto(34,3,hi(screen_char_loc));
-	//PrintDecimal(Score,3);
-	//PrintNumber(border_debug_color);
-	
-	/*moveto(34,3,hi(screen_char_loc));
-	poke(^$D019, 0, 0);
-	PrintNumber(peek(^$d01e, 0));*/
+Begin
+	if score_dirty <> 0 then
+	begin
+		moveto(33, 3, hi(screen_char_loc));
+		PrintDecimal(Score, 5);
+		score_dirty := 0;
+	end;
 end;
 
 procedure initializeMonsters();
@@ -1263,6 +1279,8 @@ begin
 		
 		SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
 		SpritePos(player_bullet_x, player_bullet_y, useSprite);		
+		// Update score display after all score-changing events this frame.
+		DisplayScore();
 	end;
 end;
 
@@ -2564,6 +2582,7 @@ begin
 	// Must run after both UpdatePlayerBullet and UpdateUFOBullet so positions are current.
 	// Rolling/Teflon shot (slot 1) is immune; Plunger and Squiggly are destroyable.
 	CheckShotVsShotCollision();
+
 	
 	
 
