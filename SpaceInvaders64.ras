@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 1;
+	const DEBUG_ENABLE : byte = 0;
 	// Shot-vs-shot lockout toggle:
 	//   0 = player bullet resets immediately, enemy shot shows explosion (current default)
 	//   1 = player bullet locked out (shows explosion), enemy shot resets immediately (arcade-like)
@@ -183,6 +183,9 @@ var
 	// Updated in ClearMonster whenever an enemy dies. Read-only in UpdateTick.
 	cached_rightmost_offset : byte = 198; // 3*54+36 = full formation default
 	cached_leftmost_offset : byte = 0;   // leftmost enemy at offset 0
+	// Set to 1 by ClearMonster; drained by UpdateTick before reading cached edges.
+	// Keeps the expensive dual-scan out of the kill frame.
+	pending_edge_rescan : byte = 0;
 	
 	// Track which enemies are alive in each block (12 blocks, 6 enemies per block)
 	// Each bit 0-5 represents an enemy: bit set = alive, bit clear = dead
@@ -822,10 +825,9 @@ Begin
 		block_enemies[blockIndex] := block_enemies[blockIndex] & (enemy_mask xor $FF);
 		if (numberOfEnemies < INITIAL_INVADER_COUNT) then
 			inc(numberOfEnemies);
-		// Refresh cached edge offsets so UpdateTick always reads a valid value
-		// without scanning every frame. Cost is one scan per kill event only.
-		cached_rightmost_offset := GetRightmostEnemyOffset();
-		cached_leftmost_offset := GetLeftmostEnemyOffset();
+		// Defer edge-cache refresh to the next UpdateTick so the scan loops
+		// don't land on the same frame as the sprite clear.
+		pending_edge_rescan := 1;
 	end;
 end;
 
@@ -1968,6 +1970,15 @@ var
 	left_edge : byte;
 	prev_direction : byte;
 begin
+	// Drain deferred edge rescan from the previous kill frame.
+	// Running here means the cached values are fresh before right_edge/left_edge are read below.
+	if pending_edge_rescan <> 0 then
+	begin
+		cached_rightmost_offset := GetRightmostEnemyOffset();
+		cached_leftmost_offset  := GetLeftmostEnemyOffset();
+		pending_edge_rescan := 0;
+	end;
+
 	enemy_count_diff := INITIAL_INVADER_COUNT - numberOfEnemies;
 	should_move_enemy := 0;
 	
