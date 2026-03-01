@@ -92,7 +92,7 @@ var
 	ufo_bullet_sprite : array[3] of byte = (6, 5, 7);      // HW sprite: Plunger=6, Rolling=5, Squiggly=7
 	ufo_bullet_anim_start : array[3] of byte = (13, 9, 5); // First frame: Plunger=13, Rolling=9, Squiggly=5
 
-	ufo_bullet_stagger_counter : byte = 50;  // Countdown to fire next bullet
+	ufo_bullet_stagger_counter : integer = 2500;  // Countdown to fire next bullet
 
 	// Shield erosion system: 4 charset glyph ranges, painted once at startup from the template.
 	// Sprite 17 ($2440) is the pristine template; erosion operates directly on charset bytes.
@@ -146,6 +146,9 @@ var
 	pending_byte_col : byte = 0;        // Which byte column (0-2)
 	pending_erase_top : byte = 0;       // Erosion start row found by pixel scan
 	pending_erosion_dir : byte = 0;     // 0 = bottom-up (player bullet), 1 = top-down (enemy bullet)
+	// Set to 1 by UpdateTick on every enemy march step; consumed by CheckEnemyShieldContact.
+	// Throttles contact erosion to one event per march tick instead of once per frame.
+	enemy_march_tick : byte = 0;
 
 	// --- Hitbox / explosion tuning ---
 	// Explosion sprite X alignment: subtracted from block_x + col*18 (increase = moves left)
@@ -311,6 +314,7 @@ var
 	//procedure CopyShieldSprites();
 	//procedure CheckShieldCollision();
 	//procedure CheckEnemyShieldCollision();
+	//procedure CheckEnemyShieldContact();
 	//procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
 	//procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
 	//procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
@@ -1262,6 +1266,141 @@ end;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// CheckEnemyShieldContact
+//   Called once per march step (gated on enemy_march_tick).
+//   Scans formation rows bottom-to-top; for each alive enemy column whose
+//   sprite-box Y overlaps the shield band AND whose X overlaps a shield,
+//   queues one top-down erosion event (dir=1) via the pending_* pipeline.
+//   Stops after queuing the first event to stay within the single pending slot.
+//   Only the lowest formation row that still reaches the shield Y band is
+//   processed per step — upper rows are tested as lower ones are destroyed.
+// ---------------------------------------------------------------------------
+procedure CheckEnemyShieldContact();
+var
+	cesc_form_row      : byte;  // formation row 2..0 (scan bottom-to-top)
+	cesc_block_col     : byte;  // block column 0-3
+	cesc_enemy_col     : byte;  // enemy sub-column within block 0-2
+	cesc_row_offset    : byte;  // Y pixel offset for this formation row
+	cesc_enemy_y_bot   : byte;  // bottom pixel Y of this row's sprite-box
+	cesc_in_band       : byte;  // 1 if sprite-box overlaps shield Y band
+	cesc_enemy_x       : byte;  // pixel X of this enemy column (left edge)
+	cesc_col_mask      : byte;  // block_enemies alive mask for this sub-column
+	cesc_shield_s      : byte;  // matched shield index 0-3; 255 = no match
+	cesc_byte_col      : byte;  // byte column within shield (0-2)
+	cesc_col_idx       : byte;  // cache index = shield_s*3 + byte_col
+	cesc_done          : byte;  // 1 = erosion queued, exit all loops
+begin
+	// Gate: only fire on march ticks; reset the flag here.
+	if enemy_march_tick <> 0 then
+	begin
+		enemy_march_tick := 0;
+		cesc_done := 0;
+		cesc_form_row := 2;
+		// Scan rows from bottom (2) upward.
+		// Decrement past 0 wraps to 255 (byte underflow) which exits the <= 2 guard.
+		while ((cesc_form_row <= 2) and (cesc_done = 0)) do
+		begin
+			// Compute Y offset and bottom edge for this formation row
+			if cesc_form_row = 0 then
+				cesc_row_offset := 0
+			else if cesc_form_row = 1 then
+				cesc_row_offset := MONSTER_ROW_OFFSET
+			else
+				cesc_row_offset := MONSTER_ROW_OFFSET * 2;
+
+			// Bottom pixel of sprite-box = monster_base_y + row_offset + (SPRITE_HEIGHT-1)
+			cesc_enemy_y_bot := monster_base_y + cesc_row_offset + SPRITE_HEIGHT - 1;
+
+			// Sprite-box overlaps shield band when:
+			//   bot >= SHIELD_Y_MIN  AND  top <= SHIELD_Y_MAX
+			// Top = monster_base_y + cesc_row_offset; skip if bot < min.
+			if ((cesc_enemy_y_bot >= SHIELD_Y_MIN) and
+			   (monster_base_y + cesc_row_offset <= SHIELD_Y_MAX)) then
+				cesc_in_band := 1
+			else
+				cesc_in_band := 0;
+
+			if cesc_in_band <> 0 then
+			begin
+				cesc_block_col := 0;
+				while ((cesc_block_col <= 3) and (cesc_done = 0)) do
+				begin
+					// Quick skip: any alive enemies in this block at all?
+					if block_enemies[cesc_form_row * 4 + cesc_block_col] <> 0 then
+					begin
+						cesc_enemy_col := 0;
+						while ((cesc_enemy_col <= 2) and (cesc_done = 0)) do
+						begin
+							// Alive mask for this sub-column:
+							//   col 0 = bits 0+1 ($03), col 1 = bits 2+3 ($0C), col 2 = bits 4+5 ($30)
+							if cesc_enemy_col = 0 then
+								cesc_col_mask := $03
+							else if cesc_enemy_col = 1 then
+								cesc_col_mask := $0C
+							else
+								cesc_col_mask := $30;
+
+							if (block_enemies[cesc_form_row * 4 + cesc_block_col] & cesc_col_mask) <> 0 then
+							begin
+								// Pixel X of this enemy column's left edge
+								cesc_enemy_x := monster_base_x + cesc_block_col * MONSTER_SPACING + cesc_enemy_col * 18;
+
+								// Map X to shield index and byte column (same ranges as CheckEnemyShieldCollision)
+								cesc_shield_s := 255;
+								if ((cesc_enemy_x >= 45) and (cesc_enemy_x < 69)) then
+								begin
+									cesc_shield_s := 0;
+									cesc_byte_col := (cesc_enemy_x - 45) >> 3;
+									cesc_col_idx  := cesc_byte_col;
+								end
+								else if ((cesc_enemy_x >= 93) and (cesc_enemy_x < 117)) then
+								begin
+									cesc_shield_s := 1;
+									cesc_byte_col := (cesc_enemy_x - 93) >> 3;
+									cesc_col_idx  := 3 + cesc_byte_col;
+								end
+								else if ((cesc_enemy_x >= 141) and (cesc_enemy_x < 165)) then
+								begin
+									cesc_shield_s := 2;
+									cesc_byte_col := (cesc_enemy_x - 141) >> 3;
+									cesc_col_idx  := 6 + cesc_byte_col;
+								end
+								else if ((cesc_enemy_x >= 189) and (cesc_enemy_x < 213)) then
+								begin
+									cesc_shield_s := 3;
+									cesc_byte_col := (cesc_enemy_x - 189) >> 3;
+									cesc_col_idx  := 9 + cesc_byte_col;
+								end;
+
+								// Queue top-down erosion if shield column is not yet fully eroded
+								if cesc_shield_s <> 255 then
+								begin
+									if shield_surface_bot[cesc_col_idx] <> 255 then
+									begin
+										if pending_shield_erosion = 0 then
+										begin
+											pending_shield_erosion := 1;
+											pending_erosion_dir    := 1;
+											pending_shield_idx     := cesc_shield_s;
+											pending_byte_col       := cesc_byte_col;
+											pending_erase_top      := shield_surface_bot[cesc_col_idx];
+											cesc_done              := 1;
+										end;
+									end;
+								end;
+							end;
+							inc(cesc_enemy_col);
+						end;
+					end;
+					inc(cesc_block_col);
+				end;
+			end;
+			dec(cesc_form_row);  // byte underflow at 0 -> 255, exits while cesc_form_row <= 2
+		end;
+	end;
+end;
+
 // CheckEnemyShieldCollision
 //   Checks all 3 enemy bullet slots against the 4 shields.
 //   Enemy bullets travel downward so they erode from the top (dir=1).
@@ -2138,6 +2277,8 @@ begin
 					dec(monster_base_x);
 			end;
 		end;
+		// Signal contact-erosion check: run once per march step, not per frame.
+		enemy_march_tick := 1;
 	end;
 end;
 
@@ -2218,6 +2359,7 @@ begin
 	ShowUFOBullet();
 	UpdateUFOBullet();
 	CheckEnemyShieldCollision();
+	CheckEnemyShieldContact();
 
 	// Fire enemy shots from alien positions (column-table / player-tracking logic)
 	TickEnemyShotFiring();
