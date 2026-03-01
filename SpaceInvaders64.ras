@@ -1292,73 +1292,87 @@ end;
 //   4. Queue erosion work if needed
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
+var
+	csc_byte_col   : byte;  // (bullet_x - shield_base) >> 3, computed once
+	csc_col_depth  : byte;  // cached shield_col_top value, avoids double array lookup
 begin
 	if player_bullet_active = 1 then
 	begin
-		// Determine which shield to check based on X position (only check one)
-		if ((player_bullet_x >= 45) and (player_bullet_x < 69)) then
+		// Y check ONCE at the top — bullet spends most of its travel above the
+		// shield band, so this bails out cheaply before any X work is done.
+		if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
 		begin
-			// Shield 1
-			if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
-				if shield_col_top[0 + ((player_bullet_x - 45) >> 3)] <> 255 then
+			// Determine which shield to check based on X position (only one can match).
+			// csc_byte_col: byte column within the shield sprite (0-2).
+			// csc_col_depth: shield_col_top value read once, reused for pending_erase_top.
+			if ((player_bullet_x >= 45) and (player_bullet_x < 69)) then
+			begin
+				// Shield 1
+				csc_byte_col  := (player_bullet_x - 45) >> 3;
+				csc_col_depth := shield_col_top[csc_byte_col];
+				if csc_col_depth <> 255 then
 				begin
 					pending_shield_erosion := 1;
-					pending_shield_idx := 0;
-					pending_byte_col := (player_bullet_x - 45) >> 3;
-					pending_col_idx := 0 + pending_byte_col;
-					pending_erase_top := shield_col_top[pending_col_idx];
-					shield_collision_hit := 1;
-					player_bullet_active := 3;
+					pending_shield_idx     := 0;
+					pending_byte_col       := csc_byte_col;
+					pending_col_idx        := csc_byte_col;
+					pending_erase_top      := csc_col_depth;
+					shield_collision_hit   := 1;
+					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
-		end
-		else if ((player_bullet_x >= 93) and (player_bullet_x < 117)) then
-		begin
-			// Shield 2
-			if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
-				if shield_col_top[3 + ((player_bullet_x - 93) >> 3)] <> 255 then
+			end
+			else if ((player_bullet_x >= 93) and (player_bullet_x < 117)) then
+			begin
+				// Shield 2
+				csc_byte_col  := (player_bullet_x - 93) >> 3;
+				csc_col_depth := shield_col_top[3 + csc_byte_col];
+				if csc_col_depth <> 255 then
 				begin
 					pending_shield_erosion := 1;
-					pending_shield_idx := 1;
-					pending_byte_col := (player_bullet_x - 93) >> 3;
-					pending_col_idx := 3 + pending_byte_col;
-					pending_erase_top := shield_col_top[pending_col_idx];
-					shield_collision_hit := 2;
-					player_bullet_active := 3;
+					pending_shield_idx     := 1;
+					pending_byte_col       := csc_byte_col;
+					pending_col_idx        := 3 + csc_byte_col;
+					pending_erase_top      := csc_col_depth;
+					shield_collision_hit   := 2;
+					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
-		end
-		else if ((player_bullet_x >= 141) and (player_bullet_x < 165)) then
-		begin
-			// Shield 3
-			if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
-				if shield_col_top[6 + ((player_bullet_x - 141) >> 3)] <> 255 then
+			end
+			else if ((player_bullet_x >= 141) and (player_bullet_x < 165)) then
+			begin
+				// Shield 3
+				csc_byte_col  := (player_bullet_x - 141) >> 3;
+				csc_col_depth := shield_col_top[6 + csc_byte_col];
+				if csc_col_depth <> 255 then
 				begin
 					pending_shield_erosion := 1;
-					pending_shield_idx := 2;
-					pending_byte_col := (player_bullet_x - 141) >> 3;
-					pending_col_idx := 6 + pending_byte_col;
-					pending_erase_top := shield_col_top[pending_col_idx];
-					shield_collision_hit := 3;
-					player_bullet_active := 3;
+					pending_shield_idx     := 2;
+					pending_byte_col       := csc_byte_col;
+					pending_col_idx        := 6 + csc_byte_col;
+					pending_erase_top      := csc_col_depth;
+					shield_collision_hit   := 3;
+					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
-		end
-		else if ((player_bullet_x >= 189) and (player_bullet_x < 213)) then
-		begin
-			// Shield 4
-			if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
-				if shield_col_top[9 + ((player_bullet_x - 189) >> 3)] <> 255 then
+			end
+			else if ((player_bullet_x >= 189) and (player_bullet_x < 213)) then
+			begin
+				// Shield 4
+				csc_byte_col  := (player_bullet_x - 189) >> 3;
+				csc_col_depth := shield_col_top[9 + csc_byte_col];
+				if csc_col_depth <> 255 then
 				begin
 					pending_shield_erosion := 1;
-					pending_shield_idx := 3;
-					pending_byte_col := (player_bullet_x - 189) >> 3;
-					pending_col_idx := 9 + pending_byte_col;
-					pending_erase_top := shield_col_top[pending_col_idx];
-					shield_collision_hit := 4;
-					player_bullet_active := 3;
+					pending_shield_idx     := 3;
+					pending_byte_col       := csc_byte_col;
+					pending_col_idx        := 9 + csc_byte_col;
+					pending_erase_top      := csc_col_depth;
+					shield_collision_hit   := 4;
+					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
+			end;
 		end;
 	end;
 end;
