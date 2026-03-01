@@ -1273,19 +1273,20 @@ end;
 // ---------------------------------------------------------------------------
 procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
 var
-	csg_row     : byte;
 	csg_src_ptr : pointer of integer;
 	csg_dst_ptr : pointer of integer;
 begin
+	// Fully unrolled — no loop counter, no compare, no branch.
 	csg_src_ptr := csg_src;
 	csg_dst_ptr := csg_dst;
-	csg_row := 0;
-	while csg_row <= 7 do begin
-		csg_dst_ptr[0] := csg_src_ptr[0];
-		inc(csg_dst_ptr);
-		inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-		inc(csg_row);
-	end;
+	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+	csg_dst_ptr[0] := csg_src_ptr[0];
 end;
 
 // ---------------------------------------------------------------------------
@@ -1385,69 +1386,43 @@ end;
 // ---------------------------------------------------------------------------
 procedure ApplyShieldErosion();
 var
-	ase_shield_base : integer;
-	ase_shield_row : byte;
-	ase_expl_row : byte;
 	ase_shield_addr : integer;
-	ase_expl_addr : integer;
-	ase_shield_ptr : pointer of byte;
-	ase_expl_ptr : pointer of byte;
+	ase_shield_ptr  : pointer of byte;
+	ase_row         : byte;
 begin
 	if pending_shield_erosion = 1 then
 	begin
-		// Get shield base address from lookup table
-		ase_shield_base := SHIELD_BASE[pending_shield_idx];
-
-		// Erase 4 rows of the bullet's byte column upward from pending_erase_top.
-		// UNROLLED: Erase rows directly instead of loop for speed
-		ase_shield_row := pending_erase_top;
-		ase_expl_row := 20;
+		// Compute the address of the deepest row to erase once.
+		// Subsequent rows are 3 bytes earlier (sprite rows are 3 bytes wide).
+		// The explosion-mask AND that was here previously was dead code:
+		// its result was immediately overwritten by the ':= 0' below it.
+		ase_shield_addr := SHIELD_BASE[pending_shield_idx]
+		                 + pending_erase_top * 3
+		                 + pending_byte_col;
+		ase_row         := pending_erase_top;
+		ase_shield_ptr  := ase_shield_addr;
 
 		// Row 1
-		ase_expl_addr := $20C0 + ase_expl_row * 3 + pending_byte_col;
-		ase_shield_addr := ase_shield_base + ase_shield_row * 3 + pending_byte_col;
-		ase_expl_ptr := ase_expl_addr;
-		ase_shield_ptr := ase_shield_addr;
-		ase_shield_ptr[0] := ase_shield_ptr[0] & (ase_expl_ptr[0] xor $FF);
 		ase_shield_ptr[0] := 0;
-
-		if ase_shield_row > 0 then
+		if ase_row > 0 then
 		begin
-			dec(ase_shield_row);
-			if ase_expl_row > 0 then dec(ase_expl_row);
-
+			ase_shield_addr := ase_shield_addr - 3;
+			ase_shield_ptr  := ase_shield_addr;
+			dec(ase_row);
 			// Row 2
-			ase_expl_addr := $20C0 + ase_expl_row * 3 + pending_byte_col;
-			ase_shield_addr := ase_shield_base + ase_shield_row * 3 + pending_byte_col;
-			ase_expl_ptr := ase_expl_addr;
-			ase_shield_ptr := ase_shield_addr;
-			ase_shield_ptr[0] := ase_shield_ptr[0] & (ase_expl_ptr[0] xor $FF);
 			ase_shield_ptr[0] := 0;
-
-			if ase_shield_row > 0 then
+			if ase_row > 0 then
 			begin
-				dec(ase_shield_row);
-				if ase_expl_row > 0 then dec(ase_expl_row);
-
+				ase_shield_addr := ase_shield_addr - 3;
+				ase_shield_ptr  := ase_shield_addr;
+				dec(ase_row);
 				// Row 3
-				ase_expl_addr := $20C0 + ase_expl_row * 3 + pending_byte_col;
-				ase_shield_addr := ase_shield_base + ase_shield_row * 3 + pending_byte_col;
-				ase_expl_ptr := ase_expl_addr;
-				ase_shield_ptr := ase_shield_addr;
-				ase_shield_ptr[0] := ase_shield_ptr[0] & (ase_expl_ptr[0] xor $FF);
 				ase_shield_ptr[0] := 0;
-
-				if ase_shield_row > 0 then
+				if ase_row > 0 then
 				begin
-					dec(ase_shield_row);
-					if ase_expl_row > 0 then dec(ase_expl_row);
-
+					ase_shield_addr := ase_shield_addr - 3;
+					ase_shield_ptr  := ase_shield_addr;
 					// Row 4
-					ase_expl_addr := $20C0 + ase_expl_row * 3 + pending_byte_col;
-					ase_shield_addr := ase_shield_base + ase_shield_row * 3 + pending_byte_col;
-					ase_expl_ptr := ase_expl_addr;
-					ase_shield_ptr := ase_shield_addr;
-					ase_shield_ptr[0] := ase_shield_ptr[0] & (ase_expl_ptr[0] xor $FF);
 					ase_shield_ptr[0] := 0;
 				end;
 			end;
@@ -1460,10 +1435,10 @@ begin
 		else
 			shield_col_top[pending_col_idx] := pending_erase_top - 4;
 
-		// Signal that this shield's affected column needs its charset glyphs repainted.
-		// MainRasterChain will call PaintShieldColumn on the next pass, keeping
-		// erosion and paint in separate IRQ frames.
-		pending_shield_paint := pending_shield_idx + 1;
+		// Start the 2-step paint countdown: 2 = top glyph (next frame),
+		// 1 = bottom glyph (frame after), 0 = done.
+		// pending_shield_idx / pending_byte_col remain valid until the next hit.
+		pending_shield_paint := 2;
 		// Clear pending flag
 		pending_shield_erosion := 0;
 	end;
@@ -1520,30 +1495,34 @@ end;
 
 // ---------------------------------------------------------------------------
 // PaintShieldColumn
-//   Repaints only the two charset glyphs (top + bottom row-band) for byte
-//   column pending_byte_col within shield pending_shield_idx.
-//   Called by MainRasterChain after ApplyShieldErosion has modified sprite data.
-//   2 CopyShieldGlyph calls instead of 6 — 3x cheaper than a full PaintShieldN.
+//   Paints ONE glyph per call, driven by pending_shield_paint:
+//     2 = paint top row-band glyph  (frame B after erosion)
+//     1 = paint bottom row-band glyph (frame C)
+//   Decrements pending_shield_paint after each call so it reaches 0
+//   automatically after both glyphs are done.
+//   This limits each MainRasterChain frame to 8 byte copies instead of 16.
 // ---------------------------------------------------------------------------
 procedure PaintShieldColumn();
 var
-	psc_src_base : integer;
-	psc_dst_base : integer;
-	psc_src      : integer;
-	psc_dst      : integer;
-	psc_bc_off   : byte;   // pending_byte_col * 8  (0, 8, or 16)
+	psc_src : integer;
+	psc_dst : integer;
+	psc_bc_off : byte;   // pending_byte_col * 8  (0, 8, or 16)
 begin
-	psc_src_base := SHIELD_BASE[pending_shield_idx];
-	psc_dst_base := SHIELD_DST[pending_shield_idx];
-	psc_bc_off   := pending_byte_col << 3;
-	// Top row-band glyph for this byte column
-	psc_src := psc_src_base + pending_byte_col;
-	psc_dst := psc_dst_base + psc_bc_off;
+	psc_bc_off := pending_byte_col << 3;
+	if pending_shield_paint = 2 then
+	begin
+		// Top row-band glyph for this byte column
+		psc_src := SHIELD_BASE[pending_shield_idx] + pending_byte_col;
+		psc_dst := SHIELD_DST[pending_shield_idx] + psc_bc_off;
+	end
+	else
+	begin
+		// Bottom row-band glyph (sprite row-band 1 starts at +22, dst offset +24)
+		psc_src := SHIELD_BASE[pending_shield_idx] + 22 + pending_byte_col;
+		psc_dst := SHIELD_DST[pending_shield_idx] + 24 + psc_bc_off;
+	end;
 	CopyShieldGlyph(psc_src, psc_dst);
-	// Bottom row-band glyph (glyph index = byte_col + 3, dst offset + 24)
-	psc_src := psc_src_base + 22 + pending_byte_col;
-	psc_dst := psc_dst_base + 24 + psc_bc_off;
-	CopyShieldGlyph(psc_src, psc_dst);
+	dec(pending_shield_paint);  // 2 -> 1 -> 0
 end;
 
 // ---------------------------------------------------------------------------
@@ -2226,13 +2205,10 @@ begin
 	else
 		previous_fire_state := 0;
 
-	// Repaint only the eroded byte column after ApplyShieldErosion (alternating frame)
-	// has modified the sprite data.  2 glyph copies instead of 6 — 3x cheaper.
+	// PaintShieldColumn paints 1 glyph per call and decrements the counter itself
+	// (2 = top glyph, 1 = bottom glyph, 0 = done), so just call it once per frame.
 	if pending_shield_paint <> 0 then
-	begin
 		PaintShieldColumn();
-		pending_shield_paint := 0;
-	end;	
 
 	
 
