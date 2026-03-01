@@ -138,16 +138,18 @@ var
 	//shield_collision_hit : byte = 0;
 	// Per-column erosion depth: 4 shields x 3 byte columns.
 	// Index = shield_idx*3 + byte_col (0-2).
-	// Value = sprite row of the BOTTOM of the next erase zone (starts at 15 = bottom of top 16 pixel rows).
-	// 255 = this column is fully eroded (bullet passes through).
+	// shield_col_top: next bottom-up erase start row (starts 15, -4 per hit, 255=tunnelled).
+	// shield_col_bot: next top-down erase start row  (starts  0, +4 per hit, 255=tunnelled).
 	shield_col_top : array[12] of byte = (15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15);
+	shield_col_bot : array[12] of byte = ( 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0);
 	
 	// Pending shield erosion state (for deferred/split processing)
 	pending_shield_erosion : byte = 0;  // 1 = erosion work pending, 0 = none
 	pending_shield_idx : byte = 0;      // Which shield (0-3)
 	pending_byte_col : byte = 0;        // Which byte column (0-2)
 	pending_col_idx : byte = 0;         // Precomputed shield_idx * 3 + byte_col
-	pending_erase_top : byte = 0;       // Erosion depth to start from
+	pending_erase_top : byte = 0;       // Erosion start row (high=bottom-up, low=top-down)
+	pending_erosion_dir : byte = 0;     // 0 = bottom-up (player bullet), 1 = top-down (enemy bullet)
 	shield_erosion_frame_skip : byte = 0;  // Alternates 0/1 to defer erosion to every other frame
 	// Set by ApplyShieldErosion (value = pending_shield_idx + 1); cleared by MainRasterChain after painting.
 	pending_shield_paint : byte = 0;       // 1-4 = shield needs column repaint; 0 = none
@@ -312,6 +314,7 @@ var
 	procedure TickEnemyShotFiring();
 	procedure CopyShieldSprites();
 	procedure CheckShieldCollision();
+	procedure CheckEnemyShieldCollision();
 	procedure PaintShieldColumn();
 	procedure PaintShield1();
 	procedure PaintShield2();
@@ -1268,7 +1271,114 @@ end;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-// CopyShieldGlyph
+// CheckEnemyShieldCollision
+//   Checks all 3 enemy bullet slots against the 4 shields.
+//   Enemy bullets travel downward so they erode from the top (dir=1).
+//   On hit: bullet transitions to explode state; erosion queued for
+//   ApplyShieldErosion to drain next frame (if no prior erosion pending).
+// ---------------------------------------------------------------------------
+procedure CheckEnemyShieldCollision();
+var
+	esc_i         : byte;  // bullet slot 0-2
+	esc_byte_col  : byte;  // (bullet_x - shield_base) >> 3
+	esc_col_depth : byte;  // cached shield_col_bot value
+	esc_col_idx   : byte;  // shield_idx*3 + byte_col
+begin
+	esc_i := 0;
+	while esc_i <= 2 do
+	begin
+		if ufo_bullet_active[esc_i] = 1 then
+		begin
+			// Y check first — bullets spend most travel outside the shield band.
+			if ((ufo_bullet_y[esc_i] >= SHIELD_Y_MIN) and (ufo_bullet_y[esc_i] <= SHIELD_Y_MAX)) then
+			begin
+				if ((ufo_bullet_x[esc_i] >= 45) and (ufo_bullet_x[esc_i] < 69)) then
+				begin
+					esc_byte_col  := (ufo_bullet_x[esc_i] - 45) >> 3;
+					esc_col_idx   := esc_byte_col;
+					esc_col_depth := shield_col_bot[esc_col_idx];
+					if esc_col_depth <> 255 then
+					begin
+						if pending_shield_erosion = 0 then
+						begin
+							pending_shield_erosion := 1;
+							pending_erosion_dir    := 1;
+							pending_shield_idx     := 0;
+							pending_byte_col       := esc_byte_col;
+							pending_col_idx        := esc_col_idx;
+							pending_erase_top      := esc_col_depth;
+						end;
+						ufo_bullet_active[esc_i]          := 2;
+						ufo_bullet_explode_counter[esc_i] := 0;
+					end;
+				end
+				else if ((ufo_bullet_x[esc_i] >= 93) and (ufo_bullet_x[esc_i] < 117)) then
+				begin
+					esc_byte_col  := (ufo_bullet_x[esc_i] - 93) >> 3;
+					esc_col_idx   := 3 + esc_byte_col;
+					esc_col_depth := shield_col_bot[esc_col_idx];
+					if esc_col_depth <> 255 then
+					begin
+						if pending_shield_erosion = 0 then
+						begin
+							pending_shield_erosion := 1;
+							pending_erosion_dir    := 1;
+							pending_shield_idx     := 1;
+							pending_byte_col       := esc_byte_col;
+							pending_col_idx        := esc_col_idx;
+							pending_erase_top      := esc_col_depth;
+						end;
+						ufo_bullet_active[esc_i]          := 2;
+						ufo_bullet_explode_counter[esc_i] := 0;
+					end;
+				end
+				else if ((ufo_bullet_x[esc_i] >= 141) and (ufo_bullet_x[esc_i] < 165)) then
+				begin
+					esc_byte_col  := (ufo_bullet_x[esc_i] - 141) >> 3;
+					esc_col_idx   := 6 + esc_byte_col;
+					esc_col_depth := shield_col_bot[esc_col_idx];
+					if esc_col_depth <> 255 then
+					begin
+						if pending_shield_erosion = 0 then
+						begin
+							pending_shield_erosion := 1;
+							pending_erosion_dir    := 1;
+							pending_shield_idx     := 2;
+							pending_byte_col       := esc_byte_col;
+							pending_col_idx        := esc_col_idx;
+							pending_erase_top      := esc_col_depth;
+						end;
+						ufo_bullet_active[esc_i]          := 2;
+						ufo_bullet_explode_counter[esc_i] := 0;
+					end;
+				end
+				else if ((ufo_bullet_x[esc_i] >= 189) and (ufo_bullet_x[esc_i] < 213)) then
+				begin
+					esc_byte_col  := (ufo_bullet_x[esc_i] - 189) >> 3;
+					esc_col_idx   := 9 + esc_byte_col;
+					esc_col_depth := shield_col_bot[esc_col_idx];
+					if esc_col_depth <> 255 then
+					begin
+						if pending_shield_erosion = 0 then
+						begin
+							pending_shield_erosion := 1;
+							pending_erosion_dir    := 1;
+							pending_shield_idx     := 3;
+							pending_byte_col       := esc_byte_col;
+							pending_col_idx        := esc_col_idx;
+							pending_erase_top      := esc_col_depth;
+						end;
+						ufo_bullet_active[esc_i]          := 2;
+						ufo_bullet_explode_counter[esc_i] := 0;
+					end;
+				end;
+			end;
+		end;
+		inc(esc_i);
+	end;
+end;
+
+// ---------------------------------------------------------------------------
 //   Copies 8 rows of one charset glyph from sprite data.
 //   csg_src: address of the first byte of the sprite column to read.
 //   csg_dst: address of the first byte of the 8-byte charset glyph to write.
@@ -1322,11 +1432,15 @@ begin
 				csc_col_depth := shield_col_top[csc_byte_col];
 				if csc_col_depth <> 255 then
 				begin
-					pending_shield_erosion := 1;
-					pending_shield_idx     := 0;
-					pending_byte_col       := csc_byte_col;
-					pending_col_idx        := csc_byte_col;
-					pending_erase_top      := csc_col_depth;
+					if pending_shield_erosion = 0 then
+					begin
+						pending_shield_erosion := 1;
+						pending_erosion_dir    := 0;
+						pending_shield_idx     := 0;
+						pending_byte_col       := csc_byte_col;
+						pending_col_idx        := csc_byte_col;
+						pending_erase_top      := csc_col_depth;
+					end;
 					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1338,11 +1452,15 @@ begin
 				csc_col_depth := shield_col_top[3 + csc_byte_col];
 				if csc_col_depth <> 255 then
 				begin
-					pending_shield_erosion := 1;
-					pending_shield_idx     := 1;
-					pending_byte_col       := csc_byte_col;
-					pending_col_idx        := 3 + csc_byte_col;
-					pending_erase_top      := csc_col_depth;
+					if pending_shield_erosion = 0 then
+					begin
+						pending_shield_erosion := 1;
+						pending_erosion_dir    := 0;
+						pending_shield_idx     := 1;
+						pending_byte_col       := csc_byte_col;
+						pending_col_idx        := 3 + csc_byte_col;
+						pending_erase_top      := csc_col_depth;
+					end;
 					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1354,11 +1472,15 @@ begin
 				csc_col_depth := shield_col_top[6 + csc_byte_col];
 				if csc_col_depth <> 255 then
 				begin
-					pending_shield_erosion := 1;
-					pending_shield_idx     := 2;
-					pending_byte_col       := csc_byte_col;
-					pending_col_idx        := 6 + csc_byte_col;
-					pending_erase_top      := csc_col_depth;
+					if pending_shield_erosion = 0 then
+					begin
+						pending_shield_erosion := 1;
+						pending_erosion_dir    := 0;
+						pending_shield_idx     := 2;
+						pending_byte_col       := csc_byte_col;
+						pending_col_idx        := 6 + csc_byte_col;
+						pending_erase_top      := csc_col_depth;
+					end;
 					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1370,11 +1492,15 @@ begin
 				csc_col_depth := shield_col_top[9 + csc_byte_col];
 				if csc_col_depth <> 255 then
 				begin
-					pending_shield_erosion := 1;
-					pending_shield_idx     := 3;
-					pending_byte_col       := csc_byte_col;
-					pending_col_idx        := 9 + csc_byte_col;
-					pending_erase_top      := csc_col_depth;
+					if pending_shield_erosion = 0 then
+					begin
+						pending_shield_erosion := 1;
+						pending_erosion_dir    := 0;
+						pending_shield_idx     := 3;
+						pending_byte_col       := csc_byte_col;
+						pending_col_idx        := 9 + csc_byte_col;
+						pending_erase_top      := csc_col_depth;
+					end;
 					player_bullet_active   := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1392,52 +1518,48 @@ procedure ApplyShieldErosion();
 var
 	ase_charset_addr : integer;
 	ase_charset_ptr  : pointer of byte;
-	ase_bc_shift     : byte;  // pending_byte_col << 3
-	ase_row          : byte;
+	ase_bc_shift     : byte;
 begin
 	if pending_shield_erosion = 1 then
 	begin
-		// Write directly to charset — no sprite copy needed.
-		// Charset byte address for sprite row r, byte column bc, shield s:
-		//   r < 8  (top glyph):    SHIELD_DST[s] + bc*8 + r
-		//   r >= 8 (bottom glyph): SHIELD_DST[s] + 24 + bc*8 + (r-8)
-		//                        = SHIELD_DST[s] + 16 + bc*8 + r
-		// Batches of 4 rows never cross the top/bottom glyph boundary,
-		// so consecutive erased rows are simply consecutive charset bytes.
+		// Compute charset address for the starting row.
+		// Rows 0-7  live in the top glyph:    SHIELD_DST[s] + bc*8 + row
+		// Rows 8-15 live in the bottom glyph: SHIELD_DST[s] + 16 + bc*8 + row
+		// Each 4-row batch stays within one glyph band (0-3, 4-7, 8-11, 12-15),
+		// so simple ±1 byte steps are always valid.
 		ase_bc_shift := pending_byte_col << 3;
 		if pending_erase_top >= 8 then
 			ase_charset_addr := SHIELD_DST[pending_shield_idx] + 16 + ase_bc_shift + pending_erase_top
 		else
 			ase_charset_addr := SHIELD_DST[pending_shield_idx] + ase_bc_shift + pending_erase_top;
 		ase_charset_ptr := ase_charset_addr;
-		ase_row := pending_erase_top;
 
-		// Erase up to 4 rows upward (each step = -1 byte in charset).
-		ase_charset_ptr[0] := 0;
-		if ase_row > 0 then
+		if pending_erosion_dir = 0 then
 		begin
-			dec(ase_charset_ptr); dec(ase_row);
+			// Bottom-up (player bullet): erase 4 rows upward.
+			ase_charset_ptr[0] := 0; dec(ase_charset_ptr);
+			ase_charset_ptr[0] := 0; dec(ase_charset_ptr);
+			ase_charset_ptr[0] := 0; dec(ase_charset_ptr);
 			ase_charset_ptr[0] := 0;
-			if ase_row > 0 then
-			begin
-				dec(ase_charset_ptr); dec(ase_row);
-				ase_charset_ptr[0] := 0;
-				if ase_row > 0 then
-				begin
-					dec(ase_charset_ptr);
-					ase_charset_ptr[0] := 0;
-				end;
-			end;
+			if pending_erase_top < 4 then
+				shield_col_top[pending_col_idx] := 255
+			else
+				shield_col_top[pending_col_idx] := pending_erase_top - 4;
+		end
+		else
+		begin
+			// Top-down (enemy bullet): erase 4 rows downward.
+			ase_charset_ptr[0] := 0; inc(ase_charset_ptr);
+			ase_charset_ptr[0] := 0; inc(ase_charset_ptr);
+			ase_charset_ptr[0] := 0; inc(ase_charset_ptr);
+			ase_charset_ptr[0] := 0;
+			if pending_erase_top + 4 >= 16 then
+				shield_col_bot[pending_col_idx] := 255
+			else
+				shield_col_bot[pending_col_idx] := pending_erase_top + 4;
 		end;
 
-		// Advance depth: next hit starts 4 rows higher.
-		if pending_erase_top < 4 then
-			shield_col_top[pending_col_idx] := 255  // fully tunnelled
-		else
-			shield_col_top[pending_col_idx] := pending_erase_top - 4;
-
 		pending_shield_erosion := 0;
-		// No pending_shield_paint needed: charset was written directly.
 	end;
 end;
 //   Copies the pristine shield sprite (17 at $2440) to sprites 18-21.
@@ -1482,10 +1604,11 @@ begin
 		css_dst_ptr[0] := css_src_ptr[0];
 		inc(css_src_ptr); inc(css_dst_ptr); inc(css_i);
 	end;
-	// Reset per-column erosion depths to row 15 (bottom of the 16 lit pixel rows).
+	// Reset per-column erosion depths at startup.
 	css_i := 0;
 	while css_i < 12 do begin
-		shield_col_top[css_i] := 15;
+		shield_col_top[css_i] := 15;  // bottom-up: start at row 15
+		shield_col_bot[css_i] := 0;   // top-down:  start at row 0
 		inc(css_i);
 	end;
 end;
@@ -2142,6 +2265,7 @@ begin
 	UpdateUFO();
 	ShowUFOBullet();
 	UpdateUFOBullet();
+	CheckEnemyShieldCollision();
 
 	// Fire enemy shots from alien positions (column-table / player-tracking logic)
 	TickEnemyShotFiring();
