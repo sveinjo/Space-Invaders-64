@@ -92,7 +92,7 @@ var
 	ufo_bullet_sprite : array[3] of byte = (6, 5, 7);      // HW sprite: Plunger=6, Rolling=5, Squiggly=7
 	ufo_bullet_anim_start : array[3] of byte = (13, 9, 5); // First frame: Plunger=13, Rolling=9, Squiggly=5
 
-	ufo_bullet_stagger_counter : byte = 0;  // Countdown to fire next bullet
+	ufo_bullet_stagger_counter : byte = 50;  // Countdown to fire next bullet
 
 	// Shield erosion system: 4 charset glyph ranges, painted once at startup from the template.
 	// Sprite 17 ($2440) is the pristine template; erosion operates directly on charset bytes.
@@ -101,10 +101,10 @@ var
 	// Optimized shield lookup table: (x_min, x_max) for each shield
 	SHIELD_X_MIN : array[4] of byte = (45, 93, 141, 189);
 	SHIELD_X_MAX : array[4] of byte = (69, 117, 165, 213);
-	const SHIELD1_DST : integer = $3368; // char 109 ($3000+109*8)
-	const SHIELD2_DST : integer = $3398; // char 115 ($3000+115*8)
-	const SHIELD3_DST : integer = $33C8; // char 121 ($3000+121*8)
-	const SHIELD4_DST : integer = $33F8; // char 127 ($3000+127*8)
+	const SHIELD1_DST : integer = $3380; // char 112 ($3000+112*8)
+	const SHIELD2_DST : integer = $33B0; // char 118 ($3000+118*8)
+	const SHIELD3_DST : integer = $33E0; // char 124 ($3000+124*8)
+	const SHIELD4_DST : integer = $3410; // char 130 ($3000+130*8)
 	SHIELD_DST : array[4] of integer = (SHIELD1_DST, SHIELD2_DST, SHIELD3_DST, SHIELD4_DST);
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
@@ -1565,6 +1565,13 @@ begin
 				ase_new_surface := 255
 			else
 				ase_new_surface := pending_erase_top - 2;
+			// Cross-check: if the updated bottom surface is now above the enemy's top
+			// surface, the two erosion fronts have met — column is fully tunnelled.
+			if ase_new_surface <> 255 then
+			begin
+				if shield_surface_bot[ase_col_idx] > ase_new_surface then
+					ase_new_surface := 255;
+			end;
 			shield_surface_top[ase_col_idx] := ase_new_surface;
 			if ase_new_surface = 255 then
 				shield_surface_bot[ase_col_idx] := 255;
@@ -1576,6 +1583,13 @@ begin
 				ase_new_surface := 255
 			else
 				ase_new_surface := pending_erase_top + 2;
+			// Cross-check: if the updated top surface is now below the player's bottom
+			// surface, the two erosion fronts have met — column is fully tunnelled.
+			if ase_new_surface <> 255 then
+			begin
+				if shield_surface_top[ase_col_idx] < ase_new_surface then
+					ase_new_surface := 255;
+			end;
 			shield_surface_bot[ase_col_idx] := ase_new_surface;
 			if ase_new_surface = 255 then
 				shield_surface_top[ase_col_idx] := 255;
@@ -1759,13 +1773,13 @@ begin
 
 	// Place all 4 shield blocks using independent charset glyph ranges for erosion.
 	// Shield 1: row 19 col 4,  chars 109-114 (from sprite 18)
-	PlaceShieldBlock($06FC, 109);
-	// Shield 2: row 19 col 10, chars 115-120 (from sprite 19)
-	PlaceShieldBlock($0702, 115);
-	// Shield 3: row 19 col 16, chars 121-126 (from sprite 20)
-	PlaceShieldBlock($0708, 121);
-	// Shield 4: row 19 col 22, chars 127-132 (from sprite 21)
-	PlaceShieldBlock($070E, 127);
+	PlaceShieldBlock($06FC, 112);
+	// Shield 2: row 19 col 10, chars 118-123 (from template)
+	PlaceShieldBlock($0702, 118);
+	// Shield 3: row 19 col 16, chars 124-129 (from template)
+	PlaceShieldBlock($0708, 124);
+	// Shield 4: row 19 col 22, chars 130-135 (from template)
+	PlaceShieldBlock($070E, 130);
 
 	// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
 	CopyShieldSprites();
@@ -1781,7 +1795,7 @@ begin
 	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 1
 	test_ptr[0] := 0;                 // row 5 col 2*/
 	
-	//Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
+	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
 
 procedure ClearEnemyAtCounter();
