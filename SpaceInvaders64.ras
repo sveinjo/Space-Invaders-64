@@ -1283,6 +1283,7 @@ var
 	esc_byte_col  : byte;  // (bullet_x - shield_base) >> 3
 	esc_col_depth : byte;  // cached shield_col_bot value
 	esc_col_idx   : byte;  // shield_idx*3 + byte_col
+	esc_col_top   : byte;  // cached shield_col_top value for cross-check
 begin
 	esc_i := 0;
 	while esc_i <= 2 do
@@ -1297,7 +1298,8 @@ begin
 					esc_byte_col  := (ufo_bullet_x[esc_i] - 45) >> 3;
 					esc_col_idx   := esc_byte_col;
 					esc_col_depth := shield_col_bot[esc_col_idx];
-					if esc_col_depth <> 255 then
+					esc_col_top   := shield_col_top[esc_col_idx];
+					if ((esc_col_depth <> 255) and (esc_col_top >= esc_col_depth)) then
 					begin
 						if pending_shield_erosion = 0 then
 						begin
@@ -1317,7 +1319,8 @@ begin
 					esc_byte_col  := (ufo_bullet_x[esc_i] - 93) >> 3;
 					esc_col_idx   := 3 + esc_byte_col;
 					esc_col_depth := shield_col_bot[esc_col_idx];
-					if esc_col_depth <> 255 then
+					esc_col_top   := shield_col_top[esc_col_idx];
+					if ((esc_col_depth <> 255) and (esc_col_top >= esc_col_depth)) then
 					begin
 						if pending_shield_erosion = 0 then
 						begin
@@ -1337,7 +1340,8 @@ begin
 					esc_byte_col  := (ufo_bullet_x[esc_i] - 141) >> 3;
 					esc_col_idx   := 6 + esc_byte_col;
 					esc_col_depth := shield_col_bot[esc_col_idx];
-					if esc_col_depth <> 255 then
+					esc_col_top   := shield_col_top[esc_col_idx];
+					if ((esc_col_depth <> 255) and (esc_col_top >= esc_col_depth)) then
 					begin
 						if pending_shield_erosion = 0 then
 						begin
@@ -1357,7 +1361,8 @@ begin
 					esc_byte_col  := (ufo_bullet_x[esc_i] - 189) >> 3;
 					esc_col_idx   := 9 + esc_byte_col;
 					esc_col_depth := shield_col_bot[esc_col_idx];
-					if esc_col_depth <> 255 then
+					esc_col_top   := shield_col_top[esc_col_idx];
+					if ((esc_col_depth <> 255) and (esc_col_top >= esc_col_depth)) then
 					begin
 						if pending_shield_erosion = 0 then
 						begin
@@ -1415,6 +1420,7 @@ procedure CheckShieldCollision();
 var
 	csc_byte_col   : byte;  // (bullet_x - shield_base) >> 3, computed once
 	csc_col_depth  : byte;  // cached shield_col_top value, avoids double array lookup
+	csc_col_bot    : byte;  // cached shield_col_bot value for cross-check
 begin
 	if player_bullet_active = 1 then
 	begin
@@ -1430,7 +1436,8 @@ begin
 				// Shield 1
 				csc_byte_col  := (player_bullet_x - 45) >> 3;
 				csc_col_depth := shield_col_top[csc_byte_col];
-				if csc_col_depth <> 255 then
+				csc_col_bot   := shield_col_bot[csc_byte_col];
+				if ((csc_col_depth <> 255) and (csc_col_bot <= csc_col_depth)) then
 				begin
 					if pending_shield_erosion = 0 then
 					begin
@@ -1450,7 +1457,8 @@ begin
 				// Shield 2
 				csc_byte_col  := (player_bullet_x - 93) >> 3;
 				csc_col_depth := shield_col_top[3 + csc_byte_col];
-				if csc_col_depth <> 255 then
+				csc_col_bot   := shield_col_bot[3 + csc_byte_col];
+				if ((csc_col_depth <> 255) and (csc_col_bot <= csc_col_depth)) then
 				begin
 					if pending_shield_erosion = 0 then
 					begin
@@ -1470,7 +1478,8 @@ begin
 				// Shield 3
 				csc_byte_col  := (player_bullet_x - 141) >> 3;
 				csc_col_depth := shield_col_top[6 + csc_byte_col];
-				if csc_col_depth <> 255 then
+				csc_col_bot   := shield_col_bot[6 + csc_byte_col];
+				if ((csc_col_depth <> 255) and (csc_col_bot <= csc_col_depth)) then
 				begin
 					if pending_shield_erosion = 0 then
 					begin
@@ -1490,7 +1499,8 @@ begin
 				// Shield 4
 				csc_byte_col  := (player_bullet_x - 189) >> 3;
 				csc_col_depth := shield_col_top[9 + csc_byte_col];
-				if csc_col_depth <> 255 then
+				csc_col_bot   := shield_col_bot[9 + csc_byte_col];
+				if ((csc_col_depth <> 255) and (csc_col_bot <= csc_col_depth)) then
 				begin
 					if pending_shield_erosion = 0 then
 					begin
