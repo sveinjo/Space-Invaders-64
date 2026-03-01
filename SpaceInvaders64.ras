@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 0;
+	const DEBUG_ENABLE : byte = 1;
 	// Shot-vs-shot lockout toggle:
 	//   0 = player bullet resets immediately, enemy shot shows explosion (current default)
 	//   1 = player bullet locked out (shows explosion), enemy shot resets immediately (arcade-like)
@@ -1100,7 +1100,7 @@ begin
 		if player_bullet_active = 2 then
 		begin
 			// Alternate color each frame while showing alien-hit explosion
-			if player_bullet_color_toggle = 0 then
+			/*if player_bullet_color_toggle = 0 then
 				bullet_color := light_blue
 			else
 				bullet_color := cyan;
@@ -1111,7 +1111,7 @@ begin
 			if player_bullet_color_toggle = 0 then
 				player_bullet_color_toggle := 1
 			else
-				player_bullet_color_toggle := 0;
+				player_bullet_color_toggle := 0;*/
 			bullet_sprite_index := 2   // Alien-hit explosion sprite
 		end
 		else if player_bullet_active = 3 then
@@ -1156,20 +1156,21 @@ end;
 
 procedure CheckBulletCollision();
 var
-	block_row : byte;
-	block_col : byte;
-	block_index : byte;
-	enemy_alive : byte;
-	block_x : byte;
-	block_y : byte;
-	rel_x : byte;
-	rel_y : byte;
-	enemy_col : byte;
-	enemy_row : byte;
+	block_row       : byte;
+	block_col       : byte;
+	block_index     : byte;
+	enemy_alive     : byte;
+	block_x         : byte;
+	block_y         : byte;
+	rel_x           : byte;
+	rel_y           : byte;
+	enemy_col       : byte;
+	enemy_row       : byte;
 	hit_enemy_index : byte;
-	cbc_enemy_mask : byte;
-	should_check : byte;
-	found_hit : byte;
+	cbc_enemy_mask  : byte;
+	should_check    : byte;
+	found_hit       : byte;
+	block_row_base  : byte;  // block_row << 2, precomputed once
 begin
 	should_check := 1;
 	found_hit := 0;
@@ -1195,28 +1196,29 @@ begin
 		else
 			block_row := 2;
 
-		// Scan the 4 block columns in this row. Skip empty blocks immediately.
+		// Precompute row-constant values ONCE before the column scan.
+		// Eliminates block_col*MONSTER_SPACING (x54, non-power-of-2) and
+		// block_row*MONSTER_ROW_OFFSET (x26) from the inner loop.
+		block_row_base := block_row << 2;                            // block_row * 4
+		block_y        := monster_base_y + block_row * MONSTER_ROW_OFFSET;
+		rel_y          := player_bullet_y + BULLET_Y_CONTACT_OFFSET - block_y;
+
+		// Scan the 4 block columns; accumulate block_x by addition (no multiply).
 		block_col := 0;
+		block_x   := monster_base_x;
 		while (block_col <= 3 and found_hit = 0) do
 		begin
-			block_index := block_row * 4 + block_col;
+			block_index := block_row_base + block_col;
 			enemy_alive := block_enemies[block_index];
 
 			if enemy_alive <> 0 then
 			begin
-				block_x := monster_base_x + block_col * MONSTER_SPACING;
-
-
-				// Horizontal range check: contact point must fall within [block_x, block_x+48).
+				// Horizontal range check: contact point within [block_x, block_x+48).
 				if player_bullet_x >= block_x - BULLET_X_CONTACT_REACH then
 					if player_bullet_x < block_x + 48 - BULLET_X_CONTACT_REACH then
 					begin
 						rel_x := player_bullet_x - block_x + BULLET_X_CONTACT_REACH;
-
-						block_y := monster_base_y + block_row * MONSTER_ROW_OFFSET;
-						rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - block_y;
-						
-						
+						// rel_y already precomputed above — no recalculation here.
 
 						// Enemy column within block (0-2): 12px wide, 6px gaps.
 						if rel_x < 12 then
@@ -1231,7 +1233,6 @@ begin
 							enemy_col := 2;
 
 						// Enemy row within block (0=top, 1=bottom).
-						// Extended bottom zone (rel_y >= 8) closes the dead zone at high BULLET_SPEED.
 						enemy_row := $FF;
 						if rel_y <= 7 + BULLET_Y_CONTACT_REACH then
 							enemy_row := 0
@@ -1253,11 +1254,12 @@ begin
 								found_hit := 1;
 							end;
 						end;
-						
+
 					end;
 			end;
 
 			inc(block_col);
+			block_x := block_x + MONSTER_SPACING;  // accumulate — no multiply
 		end;
 	end;
 end;
@@ -1386,61 +1388,54 @@ end;
 // ---------------------------------------------------------------------------
 procedure ApplyShieldErosion();
 var
-	ase_shield_addr : integer;
-	ase_shield_ptr  : pointer of byte;
-	ase_row         : byte;
+	ase_charset_addr : integer;
+	ase_charset_ptr  : pointer of byte;
+	ase_bc_shift     : byte;  // pending_byte_col << 3
+	ase_row          : byte;
 begin
 	if pending_shield_erosion = 1 then
 	begin
-		// Compute the address of the deepest row to erase once.
-		// Subsequent rows are 3 bytes earlier (sprite rows are 3 bytes wide).
-		// The explosion-mask AND that was here previously was dead code:
-		// its result was immediately overwritten by the ':= 0' below it.
-		ase_shield_addr := SHIELD_BASE[pending_shield_idx]
-		                 + pending_erase_top * 3
-		                 + pending_byte_col;
-		ase_row         := pending_erase_top;
-		ase_shield_ptr  := ase_shield_addr;
+		// Write directly to charset — no sprite copy needed.
+		// Charset byte address for sprite row r, byte column bc, shield s:
+		//   r < 8  (top glyph):    SHIELD_DST[s] + bc*8 + r
+		//   r >= 8 (bottom glyph): SHIELD_DST[s] + 24 + bc*8 + (r-8)
+		//                        = SHIELD_DST[s] + 16 + bc*8 + r
+		// Batches of 4 rows never cross the top/bottom glyph boundary,
+		// so consecutive erased rows are simply consecutive charset bytes.
+		ase_bc_shift := pending_byte_col << 3;
+		if pending_erase_top >= 8 then
+			ase_charset_addr := SHIELD_DST[pending_shield_idx] + 16 + ase_bc_shift + pending_erase_top
+		else
+			ase_charset_addr := SHIELD_DST[pending_shield_idx] + ase_bc_shift + pending_erase_top;
+		ase_charset_ptr := ase_charset_addr;
+		ase_row := pending_erase_top;
 
-		// Row 1
-		ase_shield_ptr[0] := 0;
+		// Erase up to 4 rows upward (each step = -1 byte in charset).
+		ase_charset_ptr[0] := 0;
 		if ase_row > 0 then
 		begin
-			ase_shield_addr := ase_shield_addr - 3;
-			ase_shield_ptr  := ase_shield_addr;
-			dec(ase_row);
-			// Row 2
-			ase_shield_ptr[0] := 0;
+			dec(ase_charset_ptr); dec(ase_row);
+			ase_charset_ptr[0] := 0;
 			if ase_row > 0 then
 			begin
-				ase_shield_addr := ase_shield_addr - 3;
-				ase_shield_ptr  := ase_shield_addr;
-				dec(ase_row);
-				// Row 3
-				ase_shield_ptr[0] := 0;
+				dec(ase_charset_ptr); dec(ase_row);
+				ase_charset_ptr[0] := 0;
 				if ase_row > 0 then
 				begin
-					ase_shield_addr := ase_shield_addr - 3;
-					ase_shield_ptr  := ase_shield_addr;
-					// Row 4
-					ase_shield_ptr[0] := 0;
+					dec(ase_charset_ptr);
+					ase_charset_ptr[0] := 0;
 				end;
 			end;
 		end;
 
-		// Advance the depth: next shot starts 4 rows higher.
-		// Replace 4x dec() with single subtraction
+		// Advance depth: next hit starts 4 rows higher.
 		if pending_erase_top < 4 then
 			shield_col_top[pending_col_idx] := 255  // fully tunnelled
 		else
 			shield_col_top[pending_col_idx] := pending_erase_top - 4;
 
-		// Start the 2-step paint countdown: 2 = top glyph (next frame),
-		// 1 = bottom glyph (frame after), 0 = done.
-		// pending_shield_idx / pending_byte_col remain valid until the next hit.
-		pending_shield_paint := 2;
-		// Clear pending flag
 		pending_shield_erosion := 0;
+		// No pending_shield_paint needed: charset was written directly.
 	end;
 end;
 //   Copies the pristine shield sprite (17 at $2440) to sprites 18-21.
@@ -2118,11 +2113,8 @@ begin
 	ShowBullet();
 	
 	
-	// Apply erosion on alternating frames.  Paint follows on the NEXT MainRasterChain
-	// pass via pending_shield_paint — erosion and paint never land in the same IRQ.
-	if shield_erosion_frame_skip = 0 then
-		ApplyShieldErosion();
-	shield_erosion_frame_skip := 1 - shield_erosion_frame_skip;  // Toggle 0<->1
+	// Apply erosion every frame — now just a charset write, fast enough to run unconditionally.
+	ApplyShieldErosion();
 	
 	//peek(^$D01F, 0);
 	
@@ -2204,13 +2196,6 @@ begin
 	end
 	else
 		previous_fire_state := 0;
-
-	// PaintShieldColumn paints 1 glyph per call and decrements the counter itself
-	// (2 = top glyph, 1 = bottom glyph, 0 = done), so just call it once per frame.
-	if pending_shield_paint <> 0 then
-		PaintShieldColumn();
-
-	
 
 	// Check player bullet vs enemy bullets (shot-vs-shot collision)
 	// Must run after both UpdatePlayerBullet and UpdateUFOBullet so positions are current.
