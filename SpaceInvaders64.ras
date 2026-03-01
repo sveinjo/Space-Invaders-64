@@ -2368,6 +2368,13 @@ begin
 		SCREEN_BG_COL := BLACK;
 		
 	StartIRQ(@useKernal);
+
+	// Schedule MainRasterChain FIRST — same logic as the RasterIRQ-before-heavy-work
+	// pattern in MainRasterChain.  CheckBulletCollision (kill frame), UpdateTick
+	// (edge-rescan frame), and DoStarfield can all overrun.  If the latch is written
+	// after line 0 has passed the beam we lose a full frame on the chain.
+	RasterIRQ(MainRasterChain(), 0, @useKernal);
+
 	CheckShieldCollision();	
 	
 	//border_debug_color := peek($D01E, 0);
@@ -2407,9 +2414,6 @@ begin
 	preventirq();  
 	//poke(^$D019, 0, 0);  
 	
-		
-	
-	RasterIRQ(MainRasterChain(), 0, @useKernal);	
 	CloseIRQ();
 end;
 
