@@ -34,7 +34,7 @@ var
 	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 0;
+	const DEBUG_ENABLE : byte = 1;
 	// Shot-vs-shot lockout toggle:
 	//   0 = player bullet resets immediately, enemy shot shows explosion (current default)
 	//   1 = player bullet locked out (shows explosion), enemy shot resets immediately (arcade-like)
@@ -1292,71 +1292,75 @@ end;
 //   4. Queue erosion work if needed
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
-var
-	csc_shield_idx : byte;
-	csc_px_offset : byte;
-	csc_byte_col : byte;
-	csc_col_idx : byte;
-	csc_erase_top : byte;
 begin
-
 	if player_bullet_active = 1 then
-		if player_bullet_y >= SHIELD_Y_MIN then
-			if player_bullet_y <= SHIELD_Y_MAX then
-			begin
-				// Determine which shield using direct if/else (no loop overhead)
-				// Also compute offset from shield start in same pass
-				csc_shield_idx := 255;
-				csc_px_offset := 0;
-				
-				if ((player_bullet_x >= 45) and (player_bullet_x < 69)) then
+	begin
+		// Determine which shield to check based on X position (only check one)
+		if ((player_bullet_x >= 45) and (player_bullet_x < 69)) then
+		begin
+			// Shield 1
+			if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
+				if shield_col_top[0 + ((player_bullet_x - 45) >> 3)] <> 255 then
 				begin
-					csc_shield_idx := 0;
-					csc_px_offset := player_bullet_x - 45;
-				end
-				else if ((player_bullet_x >= 93) and (player_bullet_x < 117)) then
-				begin
-					csc_shield_idx := 1;
-					csc_px_offset := player_bullet_x - 93;
-				end
-				else if ((player_bullet_x >= 141) and (player_bullet_x < 165)) then
-				begin
-					csc_shield_idx := 2;
-					csc_px_offset := player_bullet_x - 141;
-				end
-				else if ((player_bullet_x >= 189) and (player_bullet_x < 213)) then
-				begin
-					csc_shield_idx := 3;
-					csc_px_offset := player_bullet_x - 189;
+					pending_shield_erosion := 1;
+					pending_shield_idx := 0;
+					pending_byte_col := (player_bullet_x - 45) >> 3;
+					pending_col_idx := 0 + pending_byte_col;
+					pending_erase_top := shield_col_top[pending_col_idx];
+					shield_collision_hit := 1;
+					player_bullet_active := 3;
+					explosion_frame_counter := 0;
 				end;
-
-				// If found a shield (csc_shield_idx < 4)
-				if csc_shield_idx < 4 then
+		end
+		else if ((player_bullet_x >= 93) and (player_bullet_x < 117)) then
+		begin
+			// Shield 2
+			if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
+				if shield_col_top[3 + ((player_bullet_x - 93) >> 3)] <> 255 then
 				begin
-					// Which byte column (0-2) is the bullet in? Use bit shift for speed
-					csc_byte_col := (csc_px_offset >> 3);  // Divide by 8 using bit shift
-
-					// Look up per-column erosion depth.
-					csc_col_idx := csc_shield_idx * 3 + csc_byte_col;
-					csc_erase_top := shield_col_top[csc_col_idx];
-
-					// 255 = this column is already fully tunnelled through.
-					if csc_erase_top <> 255 then
-					begin
-						// Queue erosion work for deferred processing
-						pending_shield_erosion := 1;
-						pending_shield_idx := csc_shield_idx;
-						pending_byte_col := csc_byte_col;
-						pending_col_idx := csc_col_idx;
-						pending_erase_top := csc_erase_top;
-						
-						// Set immediate flags
-						shield_collision_hit := csc_shield_idx + 1;  // 1-4 for display
-						player_bullet_active := 3;
-						explosion_frame_counter := 0;
-					end;
+					pending_shield_erosion := 1;
+					pending_shield_idx := 1;
+					pending_byte_col := (player_bullet_x - 93) >> 3;
+					pending_col_idx := 3 + pending_byte_col;
+					pending_erase_top := shield_col_top[pending_col_idx];
+					shield_collision_hit := 2;
+					player_bullet_active := 3;
+					explosion_frame_counter := 0;
 				end;
-			end;
+		end
+		else if ((player_bullet_x >= 141) and (player_bullet_x < 165)) then
+		begin
+			// Shield 3
+			if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
+				if shield_col_top[6 + ((player_bullet_x - 141) >> 3)] <> 255 then
+				begin
+					pending_shield_erosion := 1;
+					pending_shield_idx := 2;
+					pending_byte_col := (player_bullet_x - 141) >> 3;
+					pending_col_idx := 6 + pending_byte_col;
+					pending_erase_top := shield_col_top[pending_col_idx];
+					shield_collision_hit := 3;
+					player_bullet_active := 3;
+					explosion_frame_counter := 0;
+				end;
+		end
+		else if ((player_bullet_x >= 189) and (player_bullet_x < 213)) then
+		begin
+			// Shield 4
+			if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
+				if shield_col_top[9 + ((player_bullet_x - 189) >> 3)] <> 255 then
+				begin
+					pending_shield_erosion := 1;
+					pending_shield_idx := 3;
+					pending_byte_col := (player_bullet_x - 189) >> 3;
+					pending_col_idx := 9 + pending_byte_col;
+					pending_erase_top := shield_col_top[pending_col_idx];
+					shield_collision_hit := 4;
+					player_bullet_active := 3;
+					explosion_frame_counter := 0;
+				end;
+		end;
+	end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -2086,12 +2090,12 @@ begin
 	StartIRQ(@useKernal);	
 	
 	ShowBullet();
-	CheckShieldCollision();
+	
 	
 	// Apply erosion work on alternating frames to spread CPU load
-	if shield_erosion_frame_skip = 0 then
+	/*if shield_erosion_frame_skip = 0 then
 		ApplyShieldErosion();
-	shield_erosion_frame_skip := 1 - shield_erosion_frame_skip;  // Toggle 0<->1
+	shield_erosion_frame_skip := 1 - shield_erosion_frame_skip;  // Toggle 0<->1*/
 	
 	//peek(^$D01F, 0);
 	
@@ -2351,7 +2355,9 @@ begin
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLACK;
 		
-	StartIRQ(@useKernal);	
+	StartIRQ(@useKernal);
+	CheckShieldCollision();	
+	
 	//border_debug_color := peek($D01E, 0);
 	//SCREEN_BG_COL := border_debug_color;
 	UpdateTick();
