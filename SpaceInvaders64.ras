@@ -1,4 +1,4 @@
-﻿program SpaceInvaders64;
+program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -1512,49 +1512,39 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// ApplyShieldErosion - EROSION PHASE (can be deferred/split)
-//   Applies the queued shield erosion work.
-//   AND-NOTs an explosion-shaped stencil into the sprite pixel data
-//   (sprite memory is the ground truth), then copies each affected row
-//   directly to the corresponding charset glyph byte for immediate display.
+// ApplyShieldErosion - EROSION PHASE
+//   AND-NOTs the stencil directly into charset bytes (the display IS the
+//   ground truth — no sprite intermediary) and advances the surface caches
+//   deterministically: stencils 0+1 are always $FF (full clear), so the
+//   surface always moves exactly 2 rows inward. No rescan needed.
 // ---------------------------------------------------------------------------
 procedure ApplyShieldErosion();
 var
-	ase_sprite_base  : integer;
 	ase_charset_base : integer;
-	ase_sprite_addr  : integer;
 	ase_charset_addr : integer;
-	ase_spr_ptr      : pointer of byte;
 	ase_chr_ptr      : pointer of byte;
 	ase_row          : byte;
 	ase_stencil      : byte;
-	ase_bc_off       : byte;   // pending_byte_col * 8, for charset address
-	ase_row_adj      : byte;   // ase_row - 8, for bottom charset band
-	ase_i            : byte;   // loop counter 0-3
-	ase_col_idx      : byte;   // pending_shield_idx*3 + pending_byte_col (cache index)
-	ase_hit_row      : byte;   // rescan result
+	ase_bc_off       : byte;   // pending_byte_col * 8
+	ase_row_adj      : byte;   // ase_row - 8 for bottom charset band
+	ase_i            : byte;
+	ase_col_idx      : byte;   // pending_shield_idx*3 + pending_byte_col
+	ase_new_surface  : byte;
 begin
 	if pending_shield_erosion = 1 then
 	begin
-		ase_sprite_base  := SHIELD_BASE[pending_shield_idx];
 		ase_charset_base := SHIELD_DST[pending_shield_idx];
 		ase_bc_off       := pending_byte_col << 3;
 		ase_row          := pending_erase_top;
 		ase_i            := 0;
 		while ase_i < 4 do
 		begin
-			// Pick stencil byte for this iteration (hit row first, then inward)
 			if ase_i = 0 then ase_stencil := ERODE_STENCIL_0;
 			if ase_i = 1 then ase_stencil := ERODE_STENCIL_1;
 			if ase_i = 2 then ase_stencil := ERODE_STENCIL_2;
 			if ase_i = 3 then ase_stencil := ERODE_STENCIL_3;
 
-			// AND-NOT stencil into sprite pixel data (sprite is ground truth)
-			ase_sprite_addr := ase_sprite_base + ase_row * 3 + pending_byte_col;
-			ase_spr_ptr     := ase_sprite_addr;
-			ase_spr_ptr[0]  := ase_spr_ptr[0] & (ase_stencil xor $FF);
-
-			// Copy updated sprite byte directly to the charset glyph cell
+			// AND-NOT stencil directly into the charset byte (no sprite round-trip)
 			// Rows 0-7:  SHIELD_DST[s] + bc*8 + row
 			// Rows 8-15: SHIELD_DST[s] + 24 + bc*8 + (row-8)
 			if ase_row < 8 then
@@ -1565,73 +1555,46 @@ begin
 				ase_charset_addr := ase_charset_base + 24 + ase_bc_off + ase_row_adj;
 			end;
 			ase_chr_ptr    := ase_charset_addr;
-			ase_chr_ptr[0] := ase_spr_ptr[0];
+			ase_chr_ptr[0] := ase_chr_ptr[0] & (ase_stencil xor $FF);
 
-			// Advance row inward; clamp at sprite boundary
+			// Advance row inward; clamp at boundary
 			if pending_erosion_dir = 0 then
 			begin
-				// Player bullet: erode upward (row decreases)
-				if ase_row = 0 then
-					ase_i := 4
-				else
-					dec(ase_row);
+				if ase_row = 0 then ase_i := 4 else dec(ase_row);
 			end
 			else
 			begin
-				// Enemy bullet: erode downward (row increases)
-				if ase_row >= 15 then
-					ase_i := 4
-				else
-					inc(ase_row);
+				if ase_row >= 15 then ase_i := 4 else inc(ase_row);
 			end;
 			inc(ase_i);
 		end;
 
-		// Rescan the affected column to update the O(1) surface caches.
-		// This is O(16) but only runs once per actual hit, not every frame.
+		// Update caches deterministically: stencils 0+1 are $FF so surface
+		// always advances by exactly 2 rows — no pixel rescan needed.
 		ase_col_idx := pending_shield_idx + pending_shield_idx + pending_shield_idx + pending_byte_col;
-		// Bottom-up scan → shield_surface_top (player bullet target)
-		ase_row     := 15;
-		ase_hit_row := 255;
-		while ase_hit_row = 255 do
+		if pending_erosion_dir = 0 then
 		begin
-			ase_sprite_addr := ase_sprite_base + ase_row * 3 + pending_byte_col;
-			ase_spr_ptr     := ase_sprite_addr;
-			if ase_spr_ptr[0] <> 0 then
-				ase_hit_row := ase_row
+			// Player bullet (bottom-up): surface moves toward row 0
+			if pending_erase_top <= 1 then
+				ase_new_surface := 255
 			else
-			begin
-				if ase_row = 0 then
-					ase_hit_row := 254
-				else
-					dec(ase_row);
-			end;
-		end;
-		if ase_hit_row < 16 then
-			shield_surface_top[ase_col_idx] := ase_hit_row
+				ase_new_surface := pending_erase_top - 2;
+			shield_surface_top[ase_col_idx] := ase_new_surface;
+			if ase_new_surface = 255 then
+				shield_surface_bot[ase_col_idx] := 255;
+		end
 		else
-			shield_surface_top[ase_col_idx] := 255;
-		// Top-down scan → shield_surface_bot (enemy bullet target)
-		ase_row     := 0;
-		ase_hit_row := 255;
-		while ase_hit_row = 255 do
 		begin
-			ase_sprite_addr := ase_sprite_base + ase_row * 3 + pending_byte_col;
-			ase_spr_ptr     := ase_sprite_addr;
-			if ase_spr_ptr[0] <> 0 then
-				ase_hit_row := ase_row
+			// Enemy bullet (top-down): surface moves toward row 15
+			if pending_erase_top >= 14 then
+				ase_new_surface := 255
 			else
-			begin
-				if ase_row >= 15 then
-					ase_hit_row := 254
-				else
-					inc(ase_row);
-			end;
+				ase_new_surface := pending_erase_top + 2;
+			shield_surface_bot[ase_col_idx] := ase_new_surface;
+			if ase_new_surface = 255 then
+				shield_surface_top[ase_col_idx] := 255;
 		end;
-		if ase_hit_row < 16 then
-			shield_surface_bot[ase_col_idx] := ase_hit_row
-		else
-			shield_surface_bot[ase_col_idx] := 255;
+
 		pending_shield_erosion := 0;
 	end;
 end;
