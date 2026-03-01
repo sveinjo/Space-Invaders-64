@@ -1,4 +1,4 @@
-program SpaceInvaders64;
+﻿program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -140,6 +140,12 @@ var
 	const ERODE_STENCIL_2 : byte = $3C;   // 2 rows in:  00111100  (4 wide taper)
 	const ERODE_STENCIL_3 : byte = $18;   // 3 rows in:  00011000  (2 wide taper)
 	
+	// Per-column surface caches — updated by ApplyShieldErosion after each hit (O(1) detection).
+	// Index = shield_idx*3 + byte_col (0-11).
+	// shield_surface_top: bottommost row (15..0) with any pixels — player bullet target. 255=eroded.
+	// shield_surface_bot: topmost row (0..15) with any pixels — enemy bullet target. 255=eroded.
+	shield_surface_top : array[12] of byte = (15,15,15,15,15,15,15,15,15,15,15,15);
+	shield_surface_bot : array[12] of byte = ( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 	// Pending shield erosion state (for deferred/split processing)
 	pending_shield_erosion : byte = 0;  // 1 = erosion work pending, 0 = none
 	pending_shield_idx : byte = 0;      // Which shield (0-3)
@@ -1278,12 +1284,10 @@ end;
 // ---------------------------------------------------------------------------
 procedure CheckEnemyShieldCollision();
 var
-	esc_i         : byte;  // bullet slot 0-2
-	esc_byte_col  : byte;  // (bullet_x - shield_base) >> 3
-	esc_scan_row  : byte;  // row counter for pixel scan (0 to 15)
-	esc_scan_addr : integer;
-	esc_scan_ptr  : pointer of byte;
-	esc_hit_row   : byte;  // scan result: 0-15 = surface row, 254 = fully eroded
+	esc_i        : byte;  // bullet slot 0-2
+	esc_byte_col : byte;  // (bullet_x - shield_base) >> 3
+	esc_col_idx  : byte;  // shield_idx*3 + byte_col
+	esc_hit_row  : byte;  // surface cache result; 255 = fully eroded
 begin
 	esc_i := 0;
 	while esc_i <= 2 do
@@ -1296,23 +1300,9 @@ begin
 				if ((ufo_bullet_x[esc_i] >= 45) and (ufo_bullet_x[esc_i] < 69)) then
 				begin
 					esc_byte_col := (ufo_bullet_x[esc_i] - 45) >> 3;
-					esc_scan_row := 0;
-					esc_hit_row  := 255;
-					while esc_hit_row = 255 do
-					begin
-						esc_scan_addr := SHIELD1_SRC + esc_scan_row * 3 + esc_byte_col;
-						esc_scan_ptr  := esc_scan_addr;
-						if esc_scan_ptr[0] <> 0 then
-							esc_hit_row := esc_scan_row
-						else
-						begin
-							if esc_scan_row >= 15 then
-								esc_hit_row := 254
-							else
-								inc(esc_scan_row);
-						end;
-					end;
-					if esc_hit_row < 16 then
+					esc_col_idx  := esc_byte_col;
+					esc_hit_row  := shield_surface_bot[esc_col_idx];
+					if esc_hit_row <> 255 then
 					begin
 						if pending_shield_erosion = 0 then
 						begin
@@ -1329,23 +1319,9 @@ begin
 				else if ((ufo_bullet_x[esc_i] >= 93) and (ufo_bullet_x[esc_i] < 117)) then
 				begin
 					esc_byte_col := (ufo_bullet_x[esc_i] - 93) >> 3;
-					esc_scan_row := 0;
-					esc_hit_row  := 255;
-					while esc_hit_row = 255 do
-					begin
-						esc_scan_addr := SHIELD2_SRC + esc_scan_row * 3 + esc_byte_col;
-						esc_scan_ptr  := esc_scan_addr;
-						if esc_scan_ptr[0] <> 0 then
-							esc_hit_row := esc_scan_row
-						else
-						begin
-							if esc_scan_row >= 15 then
-								esc_hit_row := 254
-							else
-								inc(esc_scan_row);
-						end;
-					end;
-					if esc_hit_row < 16 then
+					esc_col_idx  := 3 + esc_byte_col;
+					esc_hit_row  := shield_surface_bot[esc_col_idx];
+					if esc_hit_row <> 255 then
 					begin
 						if pending_shield_erosion = 0 then
 						begin
@@ -1362,23 +1338,9 @@ begin
 				else if ((ufo_bullet_x[esc_i] >= 141) and (ufo_bullet_x[esc_i] < 165)) then
 				begin
 					esc_byte_col := (ufo_bullet_x[esc_i] - 141) >> 3;
-					esc_scan_row := 0;
-					esc_hit_row  := 255;
-					while esc_hit_row = 255 do
-					begin
-						esc_scan_addr := SHIELD3_SRC + esc_scan_row * 3 + esc_byte_col;
-						esc_scan_ptr  := esc_scan_addr;
-						if esc_scan_ptr[0] <> 0 then
-							esc_hit_row := esc_scan_row
-						else
-						begin
-							if esc_scan_row >= 15 then
-								esc_hit_row := 254
-							else
-								inc(esc_scan_row);
-						end;
-					end;
-					if esc_hit_row < 16 then
+					esc_col_idx  := 6 + esc_byte_col;
+					esc_hit_row  := shield_surface_bot[esc_col_idx];
+					if esc_hit_row <> 255 then
 					begin
 						if pending_shield_erosion = 0 then
 						begin
@@ -1395,23 +1357,9 @@ begin
 				else if ((ufo_bullet_x[esc_i] >= 189) and (ufo_bullet_x[esc_i] < 213)) then
 				begin
 					esc_byte_col := (ufo_bullet_x[esc_i] - 189) >> 3;
-					esc_scan_row := 0;
-					esc_hit_row  := 255;
-					while esc_hit_row = 255 do
-					begin
-						esc_scan_addr := SHIELD4_SRC + esc_scan_row * 3 + esc_byte_col;
-						esc_scan_ptr  := esc_scan_addr;
-						if esc_scan_ptr[0] <> 0 then
-							esc_hit_row := esc_scan_row
-						else
-						begin
-							if esc_scan_row >= 15 then
-								esc_hit_row := 254
-							else
-								inc(esc_scan_row);
-						end;
-					end;
-					if esc_hit_row < 16 then
+					esc_col_idx  := 9 + esc_byte_col;
+					esc_hit_row  := shield_surface_bot[esc_col_idx];
+					if esc_hit_row <> 255 then
 					begin
 						if pending_shield_erosion = 0 then
 						begin
@@ -1466,11 +1414,9 @@ end;
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
 var
-	csc_byte_col  : byte;    // (bullet_x - shield_base) >> 3
-	csc_scan_row  : byte;    // row counter for pixel scan (15 downto 0)
-	csc_scan_addr : integer; // address of sprite byte being scanned
-	csc_scan_ptr  : pointer of byte;
-	csc_hit_row   : byte;    // scan result: 0-15 = surface row, 254 = fully eroded
+	csc_byte_col : byte;  // (bullet_x - shield_base) >> 3
+	csc_col_idx  : byte;  // shield_idx*3 + byte_col (index into surface cache)
+	csc_hit_row  : byte;  // surface cache result; 255 = fully eroded
 begin
 	if player_bullet_active = 1 then
 	begin
@@ -1485,23 +1431,9 @@ begin
 			begin
 				// Shield 1
 				csc_byte_col := (player_bullet_x - 45) >> 3;
-				csc_scan_row := 15;
-				csc_hit_row  := 255;
-				while csc_hit_row = 255 do
-				begin
-					csc_scan_addr := SHIELD1_SRC + csc_scan_row * 3 + csc_byte_col;
-					csc_scan_ptr  := csc_scan_addr;
-					if csc_scan_ptr[0] <> 0 then
-						csc_hit_row := csc_scan_row
-					else
-					begin
-						if csc_scan_row = 0 then
-							csc_hit_row := 254
-						else
-							dec(csc_scan_row);
-					end;
-				end;
-				if csc_hit_row < 16 then
+				csc_col_idx  := csc_byte_col;
+				csc_hit_row  := shield_surface_top[csc_col_idx];
+				if csc_hit_row <> 255 then
 				begin
 					if pending_shield_erosion = 0 then
 					begin
@@ -1519,23 +1451,9 @@ begin
 			begin
 				// Shield 2
 				csc_byte_col := (player_bullet_x - 93) >> 3;
-				csc_scan_row := 15;
-				csc_hit_row  := 255;
-				while csc_hit_row = 255 do
-				begin
-					csc_scan_addr := SHIELD2_SRC + csc_scan_row * 3 + csc_byte_col;
-					csc_scan_ptr  := csc_scan_addr;
-					if csc_scan_ptr[0] <> 0 then
-						csc_hit_row := csc_scan_row
-					else
-					begin
-						if csc_scan_row = 0 then
-							csc_hit_row := 254
-						else
-							dec(csc_scan_row);
-					end;
-				end;
-				if csc_hit_row < 16 then
+				csc_col_idx  := 3 + csc_byte_col;
+				csc_hit_row  := shield_surface_top[csc_col_idx];
+				if csc_hit_row <> 255 then
 				begin
 					if pending_shield_erosion = 0 then
 					begin
@@ -1553,23 +1471,9 @@ begin
 			begin
 				// Shield 3
 				csc_byte_col := (player_bullet_x - 141) >> 3;
-				csc_scan_row := 15;
-				csc_hit_row  := 255;
-				while csc_hit_row = 255 do
-				begin
-					csc_scan_addr := SHIELD3_SRC + csc_scan_row * 3 + csc_byte_col;
-					csc_scan_ptr  := csc_scan_addr;
-					if csc_scan_ptr[0] <> 0 then
-						csc_hit_row := csc_scan_row
-					else
-					begin
-						if csc_scan_row = 0 then
-							csc_hit_row := 254
-						else
-							dec(csc_scan_row);
-					end;
-				end;
-				if csc_hit_row < 16 then
+				csc_col_idx  := 6 + csc_byte_col;
+				csc_hit_row  := shield_surface_top[csc_col_idx];
+				if csc_hit_row <> 255 then
 				begin
 					if pending_shield_erosion = 0 then
 					begin
@@ -1587,23 +1491,9 @@ begin
 			begin
 				// Shield 4
 				csc_byte_col := (player_bullet_x - 189) >> 3;
-				csc_scan_row := 15;
-				csc_hit_row  := 255;
-				while csc_hit_row = 255 do
-				begin
-					csc_scan_addr := SHIELD4_SRC + csc_scan_row * 3 + csc_byte_col;
-					csc_scan_ptr  := csc_scan_addr;
-					if csc_scan_ptr[0] <> 0 then
-						csc_hit_row := csc_scan_row
-					else
-					begin
-						if csc_scan_row = 0 then
-							csc_hit_row := 254
-						else
-							dec(csc_scan_row);
-					end;
-				end;
-				if csc_hit_row < 16 then
+				csc_col_idx  := 9 + csc_byte_col;
+				csc_hit_row  := shield_surface_top[csc_col_idx];
+				if csc_hit_row <> 255 then
 				begin
 					if pending_shield_erosion = 0 then
 					begin
@@ -1641,6 +1531,8 @@ var
 	ase_bc_off       : byte;   // pending_byte_col * 8, for charset address
 	ase_row_adj      : byte;   // ase_row - 8, for bottom charset band
 	ase_i            : byte;   // loop counter 0-3
+	ase_col_idx      : byte;   // pending_shield_idx*3 + pending_byte_col (cache index)
+	ase_hit_row      : byte;   // rescan result
 begin
 	if pending_shield_erosion = 1 then
 	begin
@@ -1695,6 +1587,51 @@ begin
 			inc(ase_i);
 		end;
 
+		// Rescan the affected column to update the O(1) surface caches.
+		// This is O(16) but only runs once per actual hit, not every frame.
+		ase_col_idx := pending_shield_idx + pending_shield_idx + pending_shield_idx + pending_byte_col;
+		// Bottom-up scan → shield_surface_top (player bullet target)
+		ase_row     := 15;
+		ase_hit_row := 255;
+		while ase_hit_row = 255 do
+		begin
+			ase_sprite_addr := ase_sprite_base + ase_row * 3 + pending_byte_col;
+			ase_spr_ptr     := ase_sprite_addr;
+			if ase_spr_ptr[0] <> 0 then
+				ase_hit_row := ase_row
+			else
+			begin
+				if ase_row = 0 then
+					ase_hit_row := 254
+				else
+					dec(ase_row);
+			end;
+		end;
+		if ase_hit_row < 16 then
+			shield_surface_top[ase_col_idx] := ase_hit_row
+		else
+			shield_surface_top[ase_col_idx] := 255;
+		// Top-down scan → shield_surface_bot (enemy bullet target)
+		ase_row     := 0;
+		ase_hit_row := 255;
+		while ase_hit_row = 255 do
+		begin
+			ase_sprite_addr := ase_sprite_base + ase_row * 3 + pending_byte_col;
+			ase_spr_ptr     := ase_sprite_addr;
+			if ase_spr_ptr[0] <> 0 then
+				ase_hit_row := ase_row
+			else
+			begin
+				if ase_row >= 15 then
+					ase_hit_row := 254
+				else
+					inc(ase_row);
+			end;
+		end;
+		if ase_hit_row < 16 then
+			shield_surface_bot[ase_col_idx] := ase_hit_row
+		else
+			shield_surface_bot[ase_col_idx] := 255;
 		pending_shield_erosion := 0;
 	end;
 end;
@@ -1739,6 +1676,13 @@ begin
 	while css_i < 64 do begin
 		css_dst_ptr[0] := css_src_ptr[0];
 		inc(css_src_ptr); inc(css_dst_ptr); inc(css_i);
+	end;
+	// Reset surface caches: pristine shield has pixels at all rows 0-15.
+	css_i := 0;
+	while css_i < 12 do begin
+		shield_surface_top[css_i] := 15;
+		shield_surface_bot[css_i] := 0;
+		inc(css_i);
 	end;
 end;
 
