@@ -13,7 +13,7 @@ var
 	const useKernal:byte=0;
 	
 	
-	//Score : Integer = 9950;
+	Score : Integer = 0;
 	//Score2 : Integer = 0;
 	
 	
@@ -79,6 +79,18 @@ var
 	ufo_active : byte = 0;              // 0 = not on screen, 1 = crossing screen
 	ufo_spawn_timer : integer = 1536;   // Frames until next spawn attempt
 	player_shot_count : byte = 0;       // Player shots fired; parity determines saucer entry direction
+
+	// UFO hit / explosion state (active = 2)
+	const UFO_EXPLODE_DURATION : byte = 60; // ~1 s at 60 Hz — how long score sprite is shown
+	const UFO_HIT_HALF_WIDTH   : byte = 8;  // X: 16px hitbox / 2 — centred on sprite (24px wide, centre at +12)
+	const UFO_HIT_Y_ABS_TOP    : byte = 57; // Y top of 8px hitbox  = UFO_Y(44) + 13
+	const UFO_HIT_Y_ABS_BOT    : byte = 64; // Y bot of 8px hitbox  = UFO_Y(44) + 20 (sprite bottom)
+	const UFO_SCORE_SPRITE_50  : byte = 19; // sprite image shown for   50 pts
+	const UFO_SCORE_SPRITE_100 : byte = 20; //                         100 pts
+	const UFO_SCORE_SPRITE_150 : byte = 21; //                         150 pts
+	const UFO_SCORE_SPRITE_300 : byte = 22; //                         300 pts
+	ufo_explode_counter : byte = 0;         // frames remaining in score-display phase
+	ufo_score_sprite    : byte = 19;        // which score sprite to show (set on hit)
 
 	// UFO bullets (3 staggered bullets fired in sequence)
 	// Slot 0 = Plunger (anim 13-16, HW sprite 6) — column-table targeting, destroyable
@@ -356,9 +368,17 @@ var
 
 procedure ShowUFO();
 begin
-	if ufo_active <> 0 then
+	if ufo_active = 1 then
 	begin
+		// Normal crossing — show UFO sprite
 		SetSpriteLoc(UFO_HW_SPRITE, @spriteLoc/64 + UFO_SPRITE_IMG, useBank);
+		SpritePos(ufo_x, UFO_Y, UFO_HW_SPRITE);
+		togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 0);
+	end
+	else if ufo_active = 2 then
+	begin
+		// Exploding — show score display sprite frozen at hit position
+		SetSpriteLoc(UFO_HW_SPRITE, @spriteLoc/64 + ufo_score_sprite, useBank);
 		SpritePos(ufo_x, UFO_Y, UFO_HW_SPRITE);
 		togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 0);
 	end
@@ -370,7 +390,18 @@ procedure UpdateUFO();
 var
 	ufo_aliens_alive : byte;
 begin
-	if ufo_active = 1 then
+	if ufo_active = 2 then
+	begin
+		// Score-display phase: count down then deactivate
+		if ufo_explode_counter > 0 then
+			dec(ufo_explode_counter)
+		else
+		begin
+			ufo_active := 0;
+			ufo_spawn_timer := UFO_SPAWN_TIMER_RESET;
+		end;
+	end
+	else if ufo_active = 1 then
 	begin
 		// Active: move across screen; exit (deactivate) when edge reached.
 		ufo_move_skip_counter := ufo_move_skip_counter + 1;
@@ -404,7 +435,7 @@ begin
 	end
 	else
 	begin
-		// Inactive: count down spawn timer.
+		// Inactive (ufo_active = 0): count down spawn timer.
 		ufo_spawn_timer := ufo_spawn_timer - 1;
 		if ufo_spawn_timer <= 0 then
 		begin
@@ -440,6 +471,74 @@ begin
 	ufo_bullet_anim_index[bullet_index] := 0;
 	ufo_bullet_move_tick[bullet_index] := 0;
 	ufo_bullet_anim_tick[bullet_index] := 0;
+end;
+
+// ---------------------------------------------------------------------------
+// CheckUFOCollision
+//   Tests whether the player bullet (active = 1) overlaps the UFO (active = 1).
+//   Hitbox: 16 × 8 px, horizontally centred on the sprite, at the bottom.
+//     X: sprite is 24px wide → centre = ufo_x+12; half-width = 8 (±8 = 16px total)
+//     Y: 8px band at sprite bottom → absolute [UFO_HIT_Y_ABS_TOP .. UFO_HIT_Y_ABS_BOT]
+//         = [UFO_Y+13 .. UFO_Y+20] = [57 .. 64] with UFO_Y=44
+//   On hit:
+//     • player_bullet_active reset to 0  (immediately ready to fire again)
+//     • Score increased by the earned saucer value (uc_score_raw × 10)
+//     • ufo_score_sprite set from GetArcadeSaucerScore / score table
+//     • ufo_active set to 2 (score-display state; frozen at current ufo_x)
+//     • ufo_explode_counter set to UFO_EXPLODE_DURATION
+// ---------------------------------------------------------------------------
+procedure CheckUFOCollision();
+var
+	uc_score_raw   : byte;  // GetArcadeSaucerScore result (points / 10)
+	uc_ufo_center  : byte;  // ufo_x + 12  (sprite horizontal centre)
+	uc_dx          : byte;  // abs X distance between bullet and UFO centre
+	uc_hit         : byte;  // 1 when all overlap conditions are met
+begin
+	uc_hit := 0;
+	if player_bullet_active = 1 then
+	begin
+		if ufo_active = 1 then
+		begin
+			// --- X overlap: 16px hitbox centred on sprite (sprite is 24px wide) ---
+			uc_ufo_center := ufo_x + 12;
+			if player_bullet_x >= uc_ufo_center then
+				uc_dx := player_bullet_x - uc_ufo_center
+			else
+				uc_dx := uc_ufo_center - player_bullet_x;
+			if uc_dx <= UFO_HIT_HALF_WIDTH then
+			begin
+				// --- Y overlap: 8px hitbox at the bottom of the 21px sprite frame ---
+				// UFO_HIT_Y_ABS_TOP = UFO_Y+13 = 57,  UFO_HIT_Y_ABS_BOT = UFO_Y+20 = 64
+				if player_bullet_y >= UFO_HIT_Y_ABS_TOP then
+				begin
+					if player_bullet_y <= UFO_HIT_Y_ABS_BOT then
+						uc_hit := 1;
+				end;
+			end;
+		end;
+	end;
+
+	if uc_hit = 1 then
+	begin
+		// Reset player bullet — immediately ready to fire again
+		player_bullet_active := 0;
+
+		// Determine score, add to player total, and select score-display sprite
+		uc_score_raw := Helpers::GetArcadeSaucerScore(player_shot_count);
+		Score := Score + uc_score_raw * 10;
+		if uc_score_raw >= 30 then
+			ufo_score_sprite := UFO_SCORE_SPRITE_300
+		else if uc_score_raw >= 15 then
+			ufo_score_sprite := UFO_SCORE_SPRITE_150
+		else if uc_score_raw >= 10 then
+			ufo_score_sprite := UFO_SCORE_SPRITE_100
+		else
+			ufo_score_sprite := UFO_SCORE_SPRITE_50;
+
+		// Freeze UFO in place and enter score-display state
+		ufo_active := 2;
+		ufo_explode_counter := UFO_EXPLODE_DURATION;
+	end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -2457,6 +2556,9 @@ begin
 	end
 	else
 		previous_fire_state := 0;
+
+	// Check player bullet vs UFO — must run after UpdatePlayerBullet so bullet position is current.
+	CheckUFOCollision();
 
 	// Check player bullet vs enemy bullets (shot-vs-shot collision)
 	// Must run after both UpdatePlayerBullet and UpdateUFOBullet so positions are current.
