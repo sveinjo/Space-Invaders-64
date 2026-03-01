@@ -135,10 +135,10 @@ var
 	const SHIELD_Y_MAX : byte = 167 + 17 + 16;  // 150
 	// Erosion stencil shape (4 bytes, applied hit-row first, widening inward then narrowing).
 	// AND-NOT'd into the sprite byte at each row: pixel = pixel & (stencil xor $FF).
-	const ERODE_STENCIL_0 : byte = $7E;   // hit row:    01111110  (6 wide)
+	const ERODE_STENCIL_0 : byte = $FF;   // hit row:    11111111  (full clear — prevents stuck edge bits)
 	const ERODE_STENCIL_1 : byte = $FF;   // 1 row in:   11111111  (full)
-	const ERODE_STENCIL_2 : byte = $3C;   // 2 rows in:  00111100  (4 wide)
-	const ERODE_STENCIL_3 : byte = $18;   // 3 rows in:  00011000  (2 wide)
+	const ERODE_STENCIL_2 : byte = $3C;   // 2 rows in:  00111100  (4 wide taper)
+	const ERODE_STENCIL_3 : byte = $18;   // 3 rows in:  00011000  (2 wide taper)
 	
 	// Pending shield erosion state (for deferred/split processing)
 	pending_shield_erosion : byte = 0;  // 1 = erosion work pending, 0 = none
