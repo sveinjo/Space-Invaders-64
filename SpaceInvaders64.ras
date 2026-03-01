@@ -300,7 +300,10 @@ var
 	const SHOT_VS_SHOT_Y_ABOVE : byte = 6; // player can be up to 6px above enemy
 	const SHOT_VS_SHOT_Y_BELOW : byte = 3; // player can be up to 3px below enemy
 	
-	// Declarations (commented out where no longer needed)
+	// Interrupt forward declarations — required because the raster chain is circular
+	// (each handler schedules the next via RasterIRQ, so all must be declared up-front).
+	// No procedure forward declarations needed: every procedure is defined before its
+	// first call site.
 	
 	interrupt MainRasterRow1();
 	interrupt MainRasterRow2();
@@ -308,21 +311,21 @@ var
 	interrupt MainRasterJoystick();
 	interrupt MainRasterPlayer();
 	//interrupt MainRasterStarfield();
-	function GetRightmostEnemyOffset() : byte;
-	function GetLeftmostEnemyOffset() : byte;
-	procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
-	procedure TickEnemyShotFiring();
-	procedure CopyShieldSprites();
-	procedure CheckShieldCollision();
-	procedure CheckEnemyShieldCollision();
-	procedure PaintShieldColumn();
-	procedure PaintShield1();
-	procedure PaintShield2();
-	procedure PaintShield3();
-	procedure PaintShield4();
-	procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
-	procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
-	procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
+	//function GetRightmostEnemyOffset() : byte;
+	//function GetLeftmostEnemyOffset() : byte;
+	//procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
+	//procedure TickEnemyShotFiring();
+	//procedure CopyShieldSprites();
+	//procedure CheckShieldCollision();
+	//procedure CheckEnemyShieldCollision();
+	//procedure PaintShieldColumn();
+	//procedure PaintShield1();
+	//procedure PaintShield2();
+	//procedure PaintShield3();
+	//procedure PaintShield4();
+	//procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
+	//procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
+	//procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 	//procedure AnimateMonsters(enemyRow: byte);
 	//procedure UpdateMonsters(rowOffset: byte);
@@ -1752,67 +1755,6 @@ begin
 	CopyShieldGlyph(ps4_src, ps4_dst);                   // char 132
 end;
 
-Procedure DisplayText();
-var
-	test_ptr : pointer of byte;
-begin	
-	//moveto(29,1,hi(screen_char_loc));
-	Screen::PrintString(" ",29,0,#Screen::screen0);
-	
-	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
-	
-	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
-	Screen::PrintString("      1740",29,13,#Screen::screen0);
-	
-	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
-	Screen::PrintString("      1740",29,23,#Screen::screen0);
-
-	//Screen::PrintString("¤¤¤",4,18,#Screen::screen0);
-	//Screen::PrintString("lmn",4,19,#Screen::screen0);
-	//Screen::PrintString("opq",4,20,#Screen::screen0);
-	
-	//Screen::PrintString("rst",10,19,#Screen::screen0);
-	//Screen::PrintString("uvw",10,20,#Screen::screen0);
-	
-	//Screen::PrintString("xyz",16,19,#Screen::screen0);
-	//Screen::PrintString("!#¤",16,20,#Screen::screen0);
-	
-	//Screen::PrintString("¤%&",22,19,#Screen::screen0);
-	//Screen::PrintString("/+*",22,20,#Screen::screen0);
-	
-	// Place all 4 shield blocks using independent charset glyph ranges for erosion.
-	// Shield 1: row 19 col 4,  chars 109-114 (from sprite 18)
-	PlaceShieldBlock($06FC, 109);
-	// Shield 2: row 19 col 10, chars 115-120 (from sprite 19)
-	PlaceShieldBlock($0702, 115);
-	// Shield 3: row 19 col 16, chars 121-126 (from sprite 20)
-	PlaceShieldBlock($0708, 121);
-	// Shield 4: row 19 col 22, chars 127-132 (from sprite 21)
-	PlaceShieldBlock($070E, 127);
-
-	// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
-	CopyShieldSprites();
-	
-	// === TEST EROSION: Remove a chunk from shield 1 to verify dynamic repaint ===
-	// Zero out bytes in sprite 18 using a pointer (poke causes compiler errors).
-	test_ptr := #SHIELD1_SRC;
-	test_ptr := test_ptr + 12;  // row 4 offset (4 * 3)
-	test_ptr[0] := 0; inc(test_ptr);  // col 0
-	test_ptr[0] := 0; inc(test_ptr);  // col 1
-	test_ptr[0] := 0; inc(test_ptr);  // col 2
-	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 0
-	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 1
-	test_ptr[0] := 0;                 // row 5 col 2
-	
-	// Paint all 4 shields once after test erosion
-	PaintShield1();
-	PaintShield2();
-	PaintShield3();
-	PaintShield4();
-	
-	//Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
-end;
-
 // ---------------------------------------------------------------------------
 // WriteShieldRow
 //   Writes three consecutive char codes (c0, c1, c2) into screen RAM
@@ -1854,6 +1796,67 @@ begin
 	// Bottom row: one screen row lower = +40 bytes
 	psb_addr := psb_base_addr + 40;
 	WriteShieldRow(psb_addr, psb_char_base + 3, psb_char_base + 4, psb_char_base + 5);
+end;
+
+Procedure DisplayText();
+var
+	test_ptr : pointer of byte;
+begin	
+	//moveto(29,1,hi(screen_char_loc));
+	Screen::PrintString(" ",29,0,#Screen::screen0);
+	
+	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
+	
+	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
+	Screen::PrintString("      1740",29,13,#Screen::screen0);
+	
+	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
+	Screen::PrintString("      1740",29,23,#Screen::screen0);
+	
+	//Screen::PrintString("¤¤¤",4,18,#Screen::screen0);
+	//Screen::PrintString("lmn",4,19,#Screen::screen0);
+	//Screen::PrintString("opq",4,20,#Screen::screen0);
+	
+	//Screen::PrintString("rst",10,19,#Screen::screen0);
+	//Screen::PrintString("uvw",10,20,#Screen::screen0);
+	
+	//Screen::PrintString("xyz",16,19,#Screen::screen0);
+	//Screen::PrintString("!#¤",16,20,#Screen::screen0);
+	
+	//Screen::PrintString("¤%&",22,19,#Screen::screen0);
+	//Screen::PrintString("/+*",22,20,#Screen::screen0);
+
+	// Place all 4 shield blocks using independent charset glyph ranges for erosion.
+	// Shield 1: row 19 col 4,  chars 109-114 (from sprite 18)
+	PlaceShieldBlock($06FC, 109);
+	// Shield 2: row 19 col 10, chars 115-120 (from sprite 19)
+	PlaceShieldBlock($0702, 115);
+	// Shield 3: row 19 col 16, chars 121-126 (from sprite 20)
+	PlaceShieldBlock($0708, 121);
+	// Shield 4: row 19 col 22, chars 127-132 (from sprite 21)
+	PlaceShieldBlock($070E, 127);
+
+	// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
+	CopyShieldSprites();
+	
+	// === TEST EROSION: Remove a chunk from shield 1 to verify dynamic repaint ===
+	// Zero out bytes in sprite 18 using a pointer (poke causes compiler errors).
+	/*test_ptr := #SHIELD1_SRC;
+	test_ptr := test_ptr + 12;  // row 4 offset (4 * 3)
+	test_ptr[0] := 0; inc(test_ptr);  // col 0
+	test_ptr[0] := 0; inc(test_ptr);  // col 1
+	test_ptr[0] := 0; inc(test_ptr);  // col 2
+	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 0
+	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 1
+	test_ptr[0] := 0;                 // row 5 col 2*/
+	
+	// Paint all 4 shields once after test erosion
+	PaintShield1();
+	PaintShield2();
+	PaintShield3();
+	PaintShield4();
+	
+	//Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
 
 procedure ClearEnemyAtCounter();
