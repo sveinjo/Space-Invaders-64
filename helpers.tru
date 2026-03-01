@@ -159,11 +159,24 @@ var
 //  CAN be destroyed by the player's bullet (mutual destruction).
 //
 //  All three shot types share the same speed: 1 pixel per frame (4 px/step,
-//  with steps every 4 frames). Each has 4 animation frames that cycle.
+//  with steps every 4 frames at 60 Hz).  The C64 version runs at 60 Hz NTSC,
+//  identical to the arcade, so shots also move exactly 1 px/frame with no
+//  speed adjustment needed.  No bonus pixel is added; the movement code is
+//  simply: bullet_y += 1 once per frame.
 //
-//  Fire rate is controlled by a reload timer that shortens as aliens are
-//  destroyed.  The reload value = $30 (48 frames) at the start, decreasing
-//  through a lookup table as the rack empties.
+//  CAUTION: Do NOT apply a 50 Hz PAL correction here — this game targets NTSC.
+//
+//  Fire rate — arcade reload timer (RAM $206F, decremented each frame):
+//    Reload value at full rack = $30 = 48 frames @ 60 Hz — ~0.8 s between shots.
+//    Decreases as aliens die; the C64 version approximates this with the formula:
+//      reload = alive - ES_SHOT_RELOAD_OFFSET (= 7)
+//    giving 48 frames at 55 enemies and scaling linearly to ES_SHOT_RELOAD_MIN
+//    (8 frames) as the rack empties.
+//
+//  IMPORTANT: INITIAL_INVADER_COUNT in the main program is 71 (array-sizing
+//    convenience) but the game pre-clears 16 enemies at startup, so only 55
+//    aliens are alive at round start.  ALL fire-rate and speed calibrations
+//    must use 55 as the full-rack count, never 71.
 //
 //  ---- Shot-vs-Shot Collision Hitboxes ----
 //  Active pixels are positioned at the BOTTOM of the 24×21 sprite box,
