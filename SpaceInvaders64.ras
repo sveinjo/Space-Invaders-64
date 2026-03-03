@@ -43,7 +43,7 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 1;   // 1-9; set to any value before startup to test that level
+	current_level : byte = 3;   // 1-9; set to any value before startup to test that level
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -863,7 +863,7 @@ var
 	hgrt_ptr : pointer of byte;
 	hgrt_color_ptr : pointer of byte;
 	hgrt_i : byte;
-begin
+begin	
 	// Restore line 1 (13 chars + colors) from GET_READY_LINE1_COL
 	hgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
 	hgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
@@ -903,7 +903,7 @@ end;
 // ---------------------------------------------------------------------------
 procedure StartLevel();
 begin
-	HideGetReadyText();
+	HideGetReadyText();	
 	
 		// Do all level setup in the background during intermission.
 	// This includes sprite initialization, shield setup (if applicable),
@@ -2549,9 +2549,10 @@ begin
 	//SCREEN_BG_COL := border_debug_color;
 	//DisplayScore();
 	inc(StarField_RasterCount);
+	
 	StarField::DoStarfield();	
 	preventirq();  
-	//poke(^$D019, 0, 0);  
+	//poke(^$D019, 0, 0);  	
 	
 	CloseIRQ();
 end;
@@ -2833,9 +2834,13 @@ end;
 //   the new level (each level starts LEVEL_Y_STEP pixels lower).
 // ---------------------------------------------------------------------------
 procedure AdvanceLevel();
+var
+	advancelevel_palette_level : byte;
 begin
 	// Disable all sprites IMMEDIATELY to prevent flicker when entering intermission
 	sprite_bitmask := 0;
+	preventirq();  
+	//poke(^$D019, 0, 0);  
 	
 	// Disable interrupts during heavy initialization to prevent sound hickup
 	//disableirq();
@@ -2845,6 +2850,44 @@ begin
 	inc(current_level);
 	if current_level > LEVEL_LAST then
 		current_level := 1;
+
+	// Pick starfield palette for the incoming level, repeating every 10 levels.
+	// Mapping: 1..10 where 1 and 2 are the default palette.
+	advancelevel_palette_level := current_level;
+	while advancelevel_palette_level > 10 do begin
+		advancelevel_palette_level := advancelevel_palette_level - 10;
+	end;
+
+	if advancelevel_palette_level = 1 then begin
+		StarField::SetStarfieldColors(BLUE,PURPLE,GREY,LIGHT_GREY,LIGHT_BLUE,DARK_GREY); // Default (Purple Haze)
+	end
+	else if advancelevel_palette_level = 2 then begin
+		StarField::SetStarfieldColors(RED,PURPLE,GREY,LIGHT_GREY,LIGHT_RED,BROWN); // Red
+	end
+	else if advancelevel_palette_level = 3 then begin
+		StarField::SetStarfieldColors(DARK_GREY,LIGHT_BLUE,GREY,WHITE,LIGHT_GREY,DARK_GREY); // Christmas		
+	end
+	else if advancelevel_palette_level = 4 then begin
+		StarField::SetStarfieldColors(BROWN,GREEN,GREY,LIGHT_GREY,LIGHT_GREEN,DARK_GREY); // Jungle Green
+	end
+	else if advancelevel_palette_level = 5 then begin
+		StarField::SetStarfieldColors(RED,ORANGE,WHITE,YELLOW,YELLOW,BROWN); // Gold	
+	end
+	else if advancelevel_palette_level = 6 then begin
+		StarField::SetStarfieldColors(BLUE,LIGHT_BLUE,GREY,WHITE,CYAN,DARK_GREY); // Ice Blue
+	end
+	else if advancelevel_palette_level = 7 then begin
+		StarField::SetStarfieldColors(RED,ORANGE,GREY,WHITE,YELLOW,BROWN); // Lava
+	end
+	else if advancelevel_palette_level = 8 then begin
+		StarField::SetStarfieldColors(DARK_GREY,ORANGE,GREY,WHITE,LIGHT_GREY,BROWN); // Bronze
+	end
+	else if advancelevel_palette_level = 9 then begin
+		StarField::SetStarfieldColors(RED,PURPLE,YELLOW,WHITE,LIGHT_BLUE,BLUE); // Various
+	end
+	else if advancelevel_palette_level = 10 then begin		
+		StarField::SetStarfieldColors(RED,GREEN,LIGHT_BLUE,WHITE,YELLOW,BLUE); // RGB
+	end;
 
 	// Reset enemy grid to full rack
 	block_enemies[0]  := $3F;
@@ -2928,18 +2971,9 @@ begin
 	// Clear sprite collision registers to remove garbage data
 	asm(" lda $D01E");
 	asm(" lda $D01F");
-	
 		
-	StarField::SetStarfieldColors(BLUE,PURPLE,GREY,LIGHT_GREY,LIGHT_BLUE,DARK_GREY); //Default
-	//StarField::SetStarfieldColors(RED,PURPLE,ORANGE,WHITE,LIGHT_BLUE,BLUE); //Purple Haze
-	//StarField::SetStarfieldColors(RED,PURPLE,GREY,LIGHT_GREY,LIGHT_RED,BROWN); //Red
-	//StarField::SetStarfieldColors(BROWN,GREEN,GREY,LIGHT_GREY,LIGHT_GREEN,DARK_GREY); //Jungle Green
-	//StarField::SetStarfieldColors(BLUE,LIGHT_BLUE,GREY,WHITE,CYAN,DARK_GREY); //Ice Blue
-	//StarField::SetStarfieldColors(RED,ORANGE,GREY,WHITE,YELLOW,BROWN); //Lava
+	
 	StarField::CreateStarScreen();	
-	//StarField::SetStarfieldColors(RED,ORANGE,GREY,WHITE,YELLOW,BROWN); //Lava
-	
-	
 	/*const StarColour1 : byte = 6;   // Blue
 	const StarColour2 : byte = 4;   // Purple
 	const StarColour3 : byte = 12;  // Grey 
@@ -2956,7 +2990,7 @@ begin
 	
 	// Show "Get Ready" screen for the first level before starting play.
 	// AdvanceLevel will increment current_level from 0 to 1 and display the intermission screen.
-	current_level := 0;
+	dec(current_level);
 	AdvanceLevel();
 	
 	RasterIRQ(MainRasterRow1(),0,0);
