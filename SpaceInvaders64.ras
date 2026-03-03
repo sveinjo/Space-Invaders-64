@@ -13,7 +13,10 @@ var
 	Score : integer = 0;    // Player score (integer — byte overflows at a 300pt saucer hit)
 	score_dirty : byte = 1; // 1 = score changed this frame; DisplayScore will refresh the screen
 
-	
+	const GET_READY_ROW : byte = 12;  // screen row for text
+	const GET_READY_LINE1_COL : byte = 8;   // "GET READY FOR" (13 chars) centered on 29-char playfield
+	const GET_READY_LINE2_COL : byte = 11;  // "LEVEL X" (7 chars) centered on 29-char playfield
+	const GET_READY_COLOR : byte = light_blue;  // text color
 	
 	// Game constants
 	// IMPORTANT: INITIAL_INVADER_COUNT = 71 is the storage array size (0-based index 0-70).
@@ -44,6 +47,13 @@ var
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
+
+	// Get Ready intermission state
+	get_ready_mode : byte = 0;  // 0 = normal play, 1 = showing "Get ready" screen
+	get_ready_prev_fire : byte = 0;  // Track fire button state in get-ready mode
+	// Buffer for screen chars and colors replaced by "Get ready" text (50 chars + 50 colors)
+	get_ready_char_buffer : array[50] of byte;
+	get_ready_color_buffer : array[50] of byte;
 
 	// UFO constants
 	const UFO_HW_SPRITE : byte = 1;   // Hardware sprite index — shared with monsterSprite1 via raster mux
@@ -205,7 +215,10 @@ var
 	interrupt MainRasterChain();
 	procedure PreclearLeftmostAndBottomEnemies();
 	procedure AdvanceLevel();
+	procedure CopyShieldSprites();
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
+	procedure initializeMonsters();
+	procedure MakeMonsters();
 
 
 // ---------------------------------------------------------------------------
@@ -837,6 +850,80 @@ begin
 	// The sprite is already enabled by MakeMonsters via monsterSprite2, but set
 	// its color here so it is distinct at the top of the screen.
 	//sprite_color[UFO_HW_SPRITE] := light_red;
+end;
+
+// ---------------------------------------------------------------------------
+// HideGetReadyText
+//   Restores the buffered starfield characters and colors to remove the "Get ready" text.
+// ---------------------------------------------------------------------------
+procedure HideGetReadyText();
+var
+	hgrt_screen_addr : integer;
+	hgrt_color_addr : integer;
+	hgrt_ptr : pointer of byte;
+	hgrt_color_ptr : pointer of byte;
+	hgrt_i : byte;
+begin
+	// Restore line 1 (13 chars + colors) from GET_READY_LINE1_COL
+	hgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
+	hgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
+	hgrt_ptr := hgrt_screen_addr;
+	hgrt_color_ptr := hgrt_color_addr;
+	hgrt_i := 0;
+	while hgrt_i < 13 do
+	begin
+		hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
+		hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
+		inc(hgrt_i);
+		inc(hgrt_ptr);
+		inc(hgrt_color_ptr);
+	end;
+
+	// Restore line 2 (8 chars + colors) from GET_READY_LINE2_COL
+	hgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+	hgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+	hgrt_ptr := hgrt_screen_addr;
+	hgrt_color_ptr := hgrt_color_addr;
+	while hgrt_i < 21 do  // hgrt_i continues from 13
+	begin
+		hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
+		hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
+		inc(hgrt_i);
+		inc(hgrt_ptr);
+		inc(hgrt_color_ptr);
+	end;
+end;
+
+// ---------------------------------------------------------------------------
+// StartLevel
+//   Called when player presses fire in get-ready mode.
+//   Hides the get-ready text, regenerates shields (if level < 6),
+//   re-enables sprites, and returns to normal play mode.
+//   (Level setup happens in background during intermission via AdvanceLevel)
+// ---------------------------------------------------------------------------
+procedure StartLevel();
+begin
+	HideGetReadyText();
+
+	// Only regenerate shields for levels 1-5; skip for 6+
+	if current_level < 6 then
+		CopyShieldSprites();
+
+	// Re-enable all sprites for gameplay
+	// Player sprite
+	togglebit(sprite_bitmask, useSprite, 1);
+	// Monster sprites
+	togglebit(sprite_bitmask, monsterSprite1, 1);
+	togglebit(sprite_bitmask, monsterSprite2, 1);
+	togglebit(sprite_bitmask, monsterSprite3, 1);
+	togglebit(sprite_bitmask, monsterSprite4, 1);
+	// Enemy shot sprites
+	togglebit(sprite_bitmask, ES_SHOT_SPRITE1, 1);
+	togglebit(sprite_bitmask, ES_SHOT_SPRITE2, 1);
+	togglebit(sprite_bitmask, ES_SHOT_SPRITE3, 1);
+
+	// Now ready to play — exit intermission mode
+	get_ready_mode := 0;
 end;
 
 procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
@@ -1990,6 +2077,86 @@ begin
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
 
+// ---------------------------------------------------------------------------
+// ShowGetReadyText
+//   Displays "GET READY FOR LEVEL X" centered on screen row 12.
+//   Buffers the starfield characters underneath and stores them in
+//   get_ready_char_buffer for later restoration.
+// ---------------------------------------------------------------------------
+procedure ShowGetReadyText();
+var	
+	sgrt_screen_addr : integer;
+	sgrt_color_addr : integer;
+	sgrt_ptr : pointer of byte;
+	sgrt_color_ptr : pointer of byte;
+	sgrt_i : byte;
+	sgrt_text_msg1 : string = ("GET READY FOR");
+	sgrt_text_msg2 : string = ("LEVEL ");
+	sgrt_level_char : byte;
+begin
+	// Disable all sprites to hide them during intermission
+	sprite_bitmask := 0;
+
+	// Buffer and replace line 1: "GET READY FOR" (13 chars) at column 8
+	sgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
+	sgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
+	sgrt_ptr := sgrt_screen_addr;
+	sgrt_color_ptr := sgrt_color_addr;
+	sgrt_i := 0;
+	while sgrt_i < 13 do
+	begin
+		get_ready_char_buffer[sgrt_i] := sgrt_ptr[0];
+		get_ready_color_buffer[sgrt_i] := sgrt_color_ptr[0];
+		inc(sgrt_i);
+		inc(sgrt_ptr);
+		inc(sgrt_color_ptr);
+	end;
+	Screen::PrintString(#sgrt_text_msg1, GET_READY_LINE1_COL, GET_READY_ROW, #Screen::screen0);
+	// Set color for line 1
+	sgrt_color_ptr := sgrt_color_addr;
+	sgrt_i := 0;
+	while sgrt_i < 13 do
+	begin
+		sgrt_color_ptr[0] := GET_READY_COLOR;
+		inc(sgrt_i);
+		inc(sgrt_color_ptr);
+	end;
+
+	// Buffer and replace line 2: "LEVEL X" (7 chars) at column 11
+	sgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+	sgrt_ptr := sgrt_screen_addr;
+	sgrt_color_ptr := sgrt_color_addr;
+	while sgrt_i < 21 do  // sgrt_i continues from 13, so buffer 8 more chars
+	begin
+		get_ready_char_buffer[sgrt_i] := sgrt_ptr[0];
+		get_ready_color_buffer[sgrt_i] := sgrt_color_ptr[0];
+		inc(sgrt_i);
+		inc(sgrt_ptr);
+		inc(sgrt_color_ptr);
+	end;
+	Screen::PrintString(#sgrt_text_msg2, GET_READY_LINE2_COL, GET_READY_ROW + 1, #Screen::screen0);
+	// Write level digit (convert byte to screen code: add $30 for digits 0-9)
+	sgrt_level_char := current_level + $30;
+	sgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL + 6;
+	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL + 6;
+	sgrt_ptr := sgrt_screen_addr;
+	sgrt_color_ptr := sgrt_color_addr;
+	sgrt_ptr[0] := sgrt_level_char;
+	sgrt_color_ptr[0] := GET_READY_COLOR;
+	// Set color for line 2
+	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+	sgrt_color_ptr := sgrt_color_addr;
+	sgrt_i := 13;
+	while sgrt_i < 21 do
+	begin
+		sgrt_color_ptr[0] := GET_READY_COLOR;
+		inc(sgrt_i);
+		inc(sgrt_color_ptr);
+	end;
+end;
+
+
 // Find the rightmost occupied enemy column offset (0-172)
 // Returns pixel offset from monster_base_x to the rightmost enemy
 function GetRightmostEnemyOffset() : byte;
@@ -2338,18 +2505,19 @@ begin
 	// after line 0 has passed the beam we lose a full frame on the chain.
 	RasterIRQ(MainRasterChain(), 0, 0);
 
-	CheckShieldCollision();	
-	
-	//border_debug_color := peek($D01E, 0);
-	//SCREEN_BG_COL := border_debug_color;
-	UpdateTick();
-	
-	// Check collisions AFTER all sprite rows have been displayed
-	// Only check when bullet is actively moving (not exploding)
-	if player_bullet_active = 1 then
+	// Gate all game logic when in get-ready mode to prevent enemy movement.
+	// Only starfield, music, and button checking should run during intermission.
+	if get_ready_mode = 0 then
 	begin
-		CheckBulletCollision();
+		CheckShieldCollision();	
+		UpdateTick();
 		
+		// Check collisions AFTER all sprite rows have been displayed
+		// Only check when bullet is actively moving (not exploding)
+		if player_bullet_active = 1 then
+		begin
+			CheckBulletCollision();
+		end;	
 	end;	
 
 	
@@ -2508,11 +2676,33 @@ begin
 		call(sidfile_1_play) // main-context playback (disabled)		
 	else 
 		SCREEN_BG_COL := BLACK;
+
+	// In get-ready mode: only update starfield + music, skip all game logic.
+	// Check for fire button to exit get-ready mode and start the level.
+	if get_ready_mode = 1 then
+	begin
+		// Fire button detection (debounced)
+		Joystick(joystickPort);
+		if joystickbutton = 1 then
+		begin
+			if get_ready_prev_fire = 0 then
+				StartLevel();
+			get_ready_prev_fire := 1;
+		end
+		else
+			get_ready_prev_fire := 0;
+
+		// Schedule next frame — always go to Player (which handles starfield)
+		RasterIRQ(MainRasterPlayer(), 223, 0);
+		CloseIRQ();
+	end
+	else
+	begin
+		// Normal play mode — run all game logic
+		ShowBullet();	
 		
-	ShowBullet();	
-	
-	// Apply erosion every frame — now just a charset write, fast enough to run unconditionally.
-	ApplyShieldErosion();
+		// Apply erosion every frame — now just a charset write, fast enough to run unconditionally.
+		ApplyShieldErosion();
 	
 	//peek(^$D01F, 0);
 	
@@ -2624,7 +2814,8 @@ begin
 	// the updated position correctly even though the latch was written with the old value.
 	//UpdateTick();
 
-	CloseIRQ();
+		CloseIRQ();
+	end;  // end of normal play mode
 end;
 
 // ---------------------------------------------------------------------------
@@ -2678,10 +2869,28 @@ begin
 	// Reset player bullet
 	player_bullet_active := 0;
 
-	// Restore sprite pixel data, then re-apply pre-clear and position for the new level
+	// Reset UFO
+	ufo_active := 0;
+	ufo_spawn_timer := 1536;
+
+	// Do all level setup in the background during intermission.
+	// This includes sprite initialization, shield setup (if applicable),
+	// and enemy positioning — avoiding sound hickups when transitioning to play.
 	initializeMonsters();
 	PreclearLeftmostAndBottomEnemies();
 	MakeMonsters();
+
+	// Reset player position to far left
+	player_sprite_x := PLAYER_MIN_X;
+
+	// Regenerate shields only for levels < 6
+	if current_level < 6 then
+		CopyShieldSprites();
+
+	// Finally, show the get-ready screen and enter intermission mode.
+	get_ready_mode := 1;
+	get_ready_prev_fire := 0;
+	ShowGetReadyText();
 end;
 
 
@@ -2692,11 +2901,6 @@ end;
 // ---------------------------------------------------------------------------------------------------------------------------------
 begin
 	MakeSprites();
-	
-	initializeMonsters();
-	//ClearMonster();
-	PreclearLeftmostAndBottomEnemies();
-	MakeMonsters();
 	
 	InitSid(sidfile_1_init);
 	disableciainterrupts();
@@ -2718,7 +2922,13 @@ begin
 	SetMemoryConfig(1, 0, 0);	
 	
 	EnableRasterIrq();	
-	DisplayText();	
+	DisplayText();
+	
+	// Show "Get Ready" screen for the first level before starting play.
+	// AdvanceLevel will increment current_level from 0 to 1 and display the intermission screen.
+	current_level := 0;
+	AdvanceLevel();
+	
 	RasterIRQ(MainRasterRow1(),0,0);
 	enableirq();
 
