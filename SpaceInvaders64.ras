@@ -7,15 +7,12 @@ program SpaceInvaders64;
 
 var
 	sidfile: incsid("sid/Courier.sid",2);
-
 	
-	
-	const useKernal:byte=0;
-	
+	//const useKernal:byte=0;
 	
 	Score : integer = 0;    // Player score (integer — byte overflows at a 300pt saucer hit)
 	score_dirty : byte = 1; // 1 = score changed this frame; DisplayScore will refresh the screen
-	
+
 	
 	
 	// Game constants
@@ -31,20 +28,11 @@ var
 	const PLAYER_MIN_X : byte = 39;
 	const PLAYER_MAX_X : byte = 218;
 	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
-	//const SCORE_INCREMENT : byte = 9;
+
 	const SPRITE_HEIGHT : byte = 21;
-	//const ENEMY_COLUMN_WIDTH : byte = 16;
-	//const ENEMY_HITBOX_HALF_WIDTH : byte = 8;
-	//const ENEMY_HITBOX_HALF_HEIGHT : byte = 10;
-	//const BULLET_HIT_PRECHECK_RADIUS : byte = 12;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 1;
-	//border_debug_color : byte = 2;          // unused — only in commented-out debug lines
-	// Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
-	//debug_last_cleared : byte = 0;           // unused — DebugClearNextMonster is never called
-	// Number of enemies to keep alive when auto-clearing in debug mode
-	//const DEBUG_KEEP_ALIVE : byte = 3;       // unused — same reason
+	const DEBUG_ENABLE : byte = 0;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	current_speed_delay : byte = 50; // frames per march step (table or linear)
@@ -56,7 +44,7 @@ var
 	const UFO_Y : byte = 44;          // Fixed Y near top of screen (must be < monster_base_y - 33)
 
 	// UFO state
-	ufo_x : byte = 24;           // Current X position (UFO_X_MIN = 24, left play-field edge)
+	ufo_x : byte = 24;           		// Current X position (UFO_X_MIN = 24, left play-field edge)
 	ufo_direction : byte = 1;           // 1 = moving right, 0 = moving left
 	ufo_move_skip_counter : byte = 0;   // Counts 0-2; move is skipped when the counter resets (every 3rd frame)
 	ufo_active : byte = 0;              // 0 = not on screen, 1 = crossing screen
@@ -97,10 +85,6 @@ var
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
 	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
 
-	//sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
-	
-	//pos_x : byte = PLAYER_MIN_X;
-	
 
 	// Player bullet variables
 	player_bullet_active : byte = 0;  // 0=inactive, 1=moving, 2=exploding(alien hit), 3=exploding(enemy shot hit)
@@ -161,42 +145,25 @@ var
 	const monsterSprite3:byte = 3;
 	const monsterSprite4:byte = 4;
 	
-	// joystick_dir is used to display either left or right-pointing sprite
-	//player_joystick_direction : byte;        // unused — sprite direction code is commented out
+
 	// monster_animation_frame controls monster sprite animation independently
 	monster_animation_frame : byte;
+
 	// sprite location is where we keep the sprite in the memory.
 	// also used for setspriteloc that needs this value divided by 64
 	@define spriteLoc $2000
-	// In this tuturial, we use sprite "0" as the default one
+	
 	const useSprite:byte = 0;
+	
 	// Use joystick port 2
 	const joystickPort: byte = 2;
 	const useBank:byte = 0;
+	
 	// Include the sprite binary file. The original 
-	// image is located under sprites/sprites.flf 
-		
+	// image is located under sprites/sprites.flf 		
 	// Export all sprites automatically on each build
 	@export "sprites/spritesheet.flf" "sprites/spritesheet.bin" 1664 	  	
 	sprites:incbin("sprites/spritesheet.bin", @spriteLoc); 
-	
-
-	
-
-	// Enemy-shot globals (prefixed es_ to avoid global namespace collisions)
-	// Support 3 simultaneous hardware-shot slots with staggered firing
-	// Legacy es_shot_* parallel shot system — superseded by ufo_bullet_* — all unused:
-	//es_shot_active : array[3] of byte = (0,0,0);
-	//es_shot_x : array[3] of byte = (0,0,0);
-	//es_shot_y : array[3] of byte = (0,0,0);
-	//es_shot_anim_index : array[3] of byte = (0,0,0);
-	//es_move_tick : byte = 0;
-	//es_anim_tick : byte = 0;
-	//es_explode_counter : array[3] of byte = (0, 0, 0);
-	//es_shot_sequence_active : byte = 0;
-	//es_shot_next_to_fire : byte = 0;
-	//es_shot_stagger_counter : byte = 0;
-	//es_rand_seed : byte = $55;
 	
 	// Shot sprite hardware indices (use remaining hardware sprites).
 	// Stored as a lookup array so ShowEnemyShot can index by slot without if/else.
@@ -219,27 +186,7 @@ var
 	ufo_bullet_reload_timer : array[3] of byte = (0, 0, 0);
 	//const ES_SHOT_STAGGER_FRAMES:byte = 1; // unused — use UFO_BULLET_STAGGER_FRAMES instead
 
-	// ---------------------------------------------------------------------------
-	// Shot-vs-Shot collision: check if the player bullet overlaps any enemy bullet.
-	// Plunger (slot 0) and Squiggly (slot 2): mutual destruction on contact.
-	// Rolling / Teflon (slot 1): player bullet destroyed, Rolling shot continues.
-	//   (Arcade: Rolling handler never checks framebuffer overlap,
-	//    but the player bullet's own collision routine detects the
-	//    Rolling shot's pixels and treats it as a missed-alien hit.)
-	// ---------------------------------------------------------------------------
-	// Pixel-accurate AABB hitboxes (active pixels positioned at bottom of the
-	// 24x21 sprite box, horizontally centered 1px left of center at X offset 11):
-	//   Player bullet: 1px wide x 4px tall — sprite offsets (11,17)-(11,20)
-	//   Enemy shot:    3px wide x 7px tall — sprite offsets (10,14)-(12,20)
-	//
-	// Overlap conditions (derived from pixel positions):
-	//   X:  |player_x - enemy_x|  <=  1
-	//   Y:  player_y >= enemy_y - 6  AND  player_y <= enemy_y + 3
-	//
-	// On hit: player bullet resets immediately (active:=0, can fire again next
-	// frame).  Enemy shot enters explosion state (active:=2) for
-	// ES_SHOT_EXPLODE_DURATION frames.
-	// ---------------------------------------------------------------------------
+	
 
 	// Interrupt forward declarations — required because the raster chain is circular
 	// (each handler schedules the next via RasterIRQ, so all must be declared up-front).
@@ -725,7 +672,27 @@ begin
 	end;
 end;
 
-
+// ---------------------------------------------------------------------------
+// Shot-vs-Shot collision: check if the player bullet overlaps any enemy bullet.
+// Plunger (slot 0) and Squiggly (slot 2): mutual destruction on contact.
+// Rolling / Teflon (slot 1): player bullet destroyed, Rolling shot continues.
+//   (Arcade: Rolling handler never checks framebuffer overlap,
+//    but the player bullet's own collision routine detects the
+//    Rolling shot's pixels and treats it as a missed-alien hit.)
+// ---------------------------------------------------------------------------
+// Pixel-accurate AABB hitboxes (active pixels positioned at bottom of the
+// 24x21 sprite box, horizontally centered 1px left of center at X offset 11):
+//   Player bullet: 1px wide x 4px tall — sprite offsets (11,17)-(11,20)
+//   Enemy shot:    3px wide x 7px tall — sprite offsets (10,14)-(12,20)
+//
+// Overlap conditions (derived from pixel positions):
+//   X:  |player_x - enemy_x|  <=  1
+//   Y:  player_y >= enemy_y - 6  AND  player_y <= enemy_y + 3
+//
+// On hit: player bullet resets immediately (active:=0, can fire again next
+// frame).  Enemy shot enters explosion state (active:=2) for
+// ES_SHOT_EXPLODE_DURATION frames.
+// ---------------------------------------------------------------------------
 
 procedure CheckShotVsShotCollision();
 var
@@ -913,10 +880,7 @@ Begin
 			inc(numberOfEnemies);
 		// Defer edge-cache refresh to the next UpdateTick so the scan loops
 		// don't land on the same frame as the sprite clear.
-		pending_edge_rescan := 1;
-		// Award points for the kill and flag the display for refresh.
-		Score := Score + 12;
-		score_dirty := 1;
+		pending_edge_rescan := 1;		
 	end;
 end;
 
@@ -1359,6 +1323,10 @@ begin
 								player_bullet_active := 2;
 								explosion_frame_counter := 0;
 								found_hit := 1;
+								
+								// Award points for the kill and flag the display for refresh.
+								Score := Score + 12;
+								score_dirty := 1;
 							end;
 						end;
 
@@ -1371,8 +1339,6 @@ begin
 	end;
 end;
 
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // CheckEnemyShieldContact
 //   Called once per march step (gated on enemy_march_tick).
@@ -1502,6 +1468,7 @@ begin
 	end;
 end;
 
+// ---------------------------------------------------------------------------
 // CheckEnemyShieldCollision
 //   Checks all 3 enemy bullet slots against the 4 shields.
 //   Enemy bullets travel downward so they erode from the top (dir=1).
@@ -1862,6 +1829,8 @@ begin
 		pending_shield_erosion := 0;
 	end;
 end;
+
+// ---------------------------------------------------------------------------
 //   Copies the pristine shield sprite (17 at $2440) to sprites 18-21.
 //   Each shield gets its own sprite data that can be eroded independently.
 //   Call once at startup before PaintShieldChars.
@@ -1971,6 +1940,7 @@ begin
 	shield_top_eroded[2] := 0;
 	shield_top_eroded[3] := 0;
 end;
+
 // ---------------------------------------------------------------------------
 // WriteShieldRow
 //   Writes three consecutive char codes (c0, c1, c2) into screen RAM
@@ -2068,56 +2038,6 @@ begin
 	
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
-
-/*procedure ClearEnemyAtCounter();
-var
-	clear_index : byte;
-	clear_col : byte;
-	clear_local_index : byte;
-	clear_row : byte;
-	enemy_type : byte;
-	pair_index : byte;
-	sub_local : byte;
-	enemy_sub : byte;
-	cec_enemy_mask : byte;
-	temp_block_index : byte = 0;
-	temp_enemy_index : byte = 0;
-begin
-	clear_index := 71 - sequential_clear_counter;
-	clear_col := 3 - Helpers::Div(clear_index, 18);
-	clear_local_index := Helpers::Mod(clear_index, 18);
-	pair_index := Helpers::Div(clear_local_index, 6);
-	sub_local := Helpers::Mod(clear_local_index, 6);
-	// Map local sub-index to block row (0=top,1=middle,2=bottom)
-	clear_row := Helpers::Div(sub_local, 2);
-	enemy_sub := Helpers::Mod(sub_local, 2);
-	// Column-based enemy indexing: Col0(0,1), Col1(2,3), Col2(4,5)
-	// Clear from right to left, bottom then top within each column
-	if pair_index = 0 then
-	begin
-		if enemy_sub = 0 then enemy_type := 5 else enemy_type := 4;  // Right column
-	end
-	else if pair_index = 1 then
-	begin
-		if enemy_sub = 0 then enemy_type := 3 else enemy_type := 2;  // Middle column
-	end
-	else
-	begin
-		if enemy_sub = 0 then enemy_type := 1 else enemy_type := 0;  // Left column
-	end;
-	temp_enemy_index := enemy_type;
-	// block_enemies is row-major with row 0 = TOP. The clearing sequence
-	// should still clear bottom-first visually, so map the computed row
-	// (0=top..2=bottom) to the block index accordingly.
-	temp_block_index := clear_col + (2 - clear_row) * 4;
-	// Only clear if this enemy is still alive according to block_enemies
-	cec_enemy_mask := 1 << temp_enemy_index;
-	if (block_enemies[temp_block_index] & cec_enemy_mask) <> 0 then
-	begin
-		// ClearMonster will clear the sprite and update the block_enemies bitmask
-		ClearMonster(temp_block_index, temp_enemy_index);
-	end;
-end;*/
 
 // Find the rightmost occupied enemy column offset (0-172)
 // Returns pixel offset from monster_base_x to the rightmost enemy
@@ -2364,13 +2284,6 @@ begin
 		// This keeps sprite 1's image pointer owned solely by ShowUFO() until
 		// Row1 takes over, eliminating the UFO flash.
 
-		// Clear enemies based on ENEMIES_TO_CLEAR constant
-		/*if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
-		begin
-			ClearEnemyAtCounter();
-			dec(sequential_clear_counter);
-		end;*/
-
 		should_move_enemy := 1;
 	end;
 
@@ -2471,7 +2384,7 @@ var
 	mc_row_target : byte;
 begin
 	
-	StartIRQ(@useKernal);	
+	StartIRQ(0);	
 	
 	ShowBullet();
 	
@@ -2510,20 +2423,20 @@ begin
 	if RowHasMonsters(0) <> 0 then
 	begin
 		//mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
-		RasterIRQ(MainRasterRow1(), monster_base_y - 23, @useKernal); // There is room between 33 and 13 for tuning if needed.
+		RasterIRQ(MainRasterRow1(), monster_base_y - 23, 0); // There is room between 33 and 13 for tuning if needed.
 	end
 	else if RowHasMonsters(1) <> 0 then
 	begin
 		//mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
-		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, @useKernal);
+		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, 0);
 	end
 	else if RowHasMonsters(2) <> 0 then
 	begin
 		//mc_row_target := Helpers::Clamp(40 + monster_base_y, 40, 222);
-		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal);
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, 0);
 	end
 	else
-		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
+		RasterIRQ(MainRasterPlayer(), 223, 0);
 
 	
 
@@ -2592,22 +2505,6 @@ begin
 	// the updated position correctly even though the latch was written with the old value.
 	//UpdateTick();
 
-	// If no enemy shot active and enemies remain, start a staggered sequence
-	/*if es_shot_sequence_active = 0 then
-	begin
-		if es_shot_active[0] = 0 then
-		begin
-			if es_shot_active[1] = 0 then
-			begin
-				if es_shot_active[2] = 0 then
-				begin
-					if (INITIAL_INVADER_COUNT - numberOfEnemies) > 0 then
-						StartEnemyShotSequence(50);
-				end;
-			end;
-		end;
-	end;*/
-
 	CloseIRQ();
 end;
 
@@ -2615,7 +2512,7 @@ end;
 interrupt MainRasterRow1();
 begin	
 
-	StartIRQ(@useKernal);	
+	StartIRQ(0);	
 	togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 1);	
 	// Update first row of monsters only if there are monsters in that row
 	if RowHasMonsters(0) <> 0 then
@@ -2626,11 +2523,11 @@ begin
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, 0)
 	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, 0)
 	else
-		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
+		RasterIRQ(MainRasterPlayer(), 223, 0);
 
 
 	if DEBUG_ENABLE = 1 then
@@ -2640,7 +2537,7 @@ end;
 
 interrupt MainRasterRow2();
 begin	
-	StartIRQ(@useKernal);	
+	StartIRQ(0);	
 
 	//ShowBullet();
 	
@@ -2665,9 +2562,9 @@ begin
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, @useKernal)
+		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, 0)
 	else
-		RasterIRQ(MainRasterPlayer(), 223, @useKernal);
+		RasterIRQ(MainRasterPlayer(), 223, 0);
 
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLUE;
@@ -2691,7 +2588,7 @@ begin
 	
 	
 
-	StartIRQ(@useKernal);
+	StartIRQ(0);
 	
 	
 	/*if player_bullet_active <> 0 then
@@ -2709,7 +2606,7 @@ begin
 	
 
 	//RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
-	RasterIRQ(MainRasterPlayer(), 223, @useKernal);
+	RasterIRQ(MainRasterPlayer(), 223, 0);
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := GREEN;
 		
@@ -2725,13 +2622,13 @@ begin
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLACK;
 		
-	StartIRQ(@useKernal);
+	StartIRQ(0);
 
 	// Schedule MainRasterChain FIRST — same logic as the RasterIRQ-before-heavy-work
 	// pattern in MainRasterChain.  CheckBulletCollision (kill frame), UpdateTick
 	// (edge-rescan frame), and DoStarfield can all overrun.  If the latch is written
 	// after line 0 has passed the beam we lose a full frame on the chain.
-	RasterIRQ(MainRasterChain(), 0, @useKernal);
+	RasterIRQ(MainRasterChain(), 0, 0);
 
 	CheckShieldCollision();	
 	
@@ -2786,7 +2683,7 @@ begin
 	preventirq();  
 	//poke(^$D019, 0, 0);  
 	
-	RasterIRQ(MainRasterChain(), 0, @useKernal);
+	RasterIRQ(MainRasterChain(), 0, 0);
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -2803,7 +2700,7 @@ begin
 	
 	InitSid(sidfile_1_init);
 	disableciainterrupts();
-	setmemoryconfig(1,0,useKernal);
+	setmemoryconfig(1,0,0);
 	
 	DisableCIAInterrupts();
 	
@@ -2822,7 +2719,7 @@ begin
 	
 	EnableRasterIrq();	
 	DisplayText();	
-	RasterIRQ(MainRasterRow1(),0,@useKernal);
+	RasterIRQ(MainRasterRow1(),0,0);
 	enableirq();
 
 	// Non-IRQ SID playback (main context). This runs once during init and is safe
