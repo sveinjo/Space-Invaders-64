@@ -32,7 +32,7 @@ var
 	const SPRITE_HEIGHT : byte = 21;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 1;
+	const DEBUG_ENABLE : byte = 0;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	current_speed_delay : byte = 50; // frames per march step (table or linear)
@@ -2323,9 +2323,12 @@ interrupt MainRasterChain();
 begin
 	
 	StartIRQ(0);	
-	
-	ShowBullet();
-	
+	if DEBUG_ENABLE = 0 then
+		call(sidfile_1_play) // main-context playback (disabled)		
+	else 
+		SCREEN_BG_COL := BLACK;
+		
+	ShowBullet();	
 	
 	// Apply erosion every frame — now just a charset write, fast enough to run unconditionally.
 	ApplyShieldErosion();
@@ -2333,10 +2336,7 @@ begin
 	//peek(^$D01F, 0);
 	
 	// Shield erosion is applied directly to charset bytes in ApplyShieldErosion — no repaint step needed.
-	if DEBUG_ENABLE = 0 then
-		call(sidfile_1_play) // main-context playback (disabled)		
-	else 
-		SCREEN_BG_COL := BLACK;
+	
 
 	// Position and animate the UFO BEFORE scheduling Row1, so sprite 1
 	// registers hold the UFO values while the VIC-II scans through UFO_Y.
