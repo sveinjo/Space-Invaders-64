@@ -904,10 +904,17 @@ end;
 procedure StartLevel();
 begin
 	HideGetReadyText();
+	
+		// Do all level setup in the background during intermission.
+	// This includes sprite initialization, shield setup (if applicable),
+	// and enemy positioning — avoiding sound hickups when transitioning to play.
+	initializeMonsters();	
+	PreclearLeftmostAndBottomEnemies();
+	MakeMonsters();
 
 	// Only regenerate shields for levels 1-5; skip for 6+
-	if current_level < 6 then
-		CopyShieldSprites();
+	//if current_level < 6 then
+	//	CopyShieldSprites();
 
 	// Re-enable all sprites for gameplay
 	// Player sprite
@@ -1204,6 +1211,7 @@ begin
 	// explosion is still visually correct even when the box top is well above the enemy.
 	if player_bullet_active <> 0 then
 	begin
+		
 		// Select sprite based on bullet state:
 		//   1 = normal bullet
 		//   2 = alien-hit explosion (sprite 2)
@@ -1231,7 +1239,7 @@ begin
 			bullet_sprite_index := 1;  // Normal bullet sprite
 		
 		SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
-		SpritePos(player_bullet_x, player_bullet_y, useSprite);		
+		SpritePos(player_bullet_x, player_bullet_y, useSprite);			
 		
 		// Update score display after all score-changing events this frame.
 		//DisplayScore();
@@ -2826,6 +2834,13 @@ end;
 // ---------------------------------------------------------------------------
 procedure AdvanceLevel();
 begin
+	// Disable all sprites IMMEDIATELY to prevent flicker when entering intermission
+	sprite_bitmask := 0;
+	
+	// Disable interrupts during heavy initialization to prevent sound hickup
+	//disableirq();
+	//DisableCIAInterrupts(); 
+	
 	// Cycle level 1→2→...→9→1
 	inc(current_level);
 	if current_level > LEVEL_LAST then
@@ -2873,12 +2888,8 @@ begin
 	ufo_active := 0;
 	ufo_spawn_timer := 1536;
 
-	// Do all level setup in the background during intermission.
-	// This includes sprite initialization, shield setup (if applicable),
-	// and enemy positioning — avoiding sound hickups when transitioning to play.
-	initializeMonsters();
-	PreclearLeftmostAndBottomEnemies();
-	MakeMonsters();
+
+	
 
 	// Reset player position to far left
 	player_sprite_x := PLAYER_MIN_X;
@@ -2887,6 +2898,9 @@ begin
 	if current_level < 6 then
 		CopyShieldSprites();
 
+	// Re-enable interrupts before showing intermission screen
+	enableirq();
+	
 	// Finally, show the get-ready screen and enter intermission mode.
 	get_ready_mode := 1;
 	get_ready_prev_fire := 0;
@@ -2915,7 +2929,23 @@ begin
 	asm(" lda $D01E");
 	asm(" lda $D01F");
 	
-	StarField::CreateStarScreen();
+		
+	StarField::SetStarfieldColors(BLUE,PURPLE,GREY,LIGHT_GREY,LIGHT_BLUE,DARK_GREY); //Default
+	//StarField::SetStarfieldColors(RED,PURPLE,ORANGE,WHITE,LIGHT_BLUE,BLUE); //Purple Haze
+	//StarField::SetStarfieldColors(RED,PURPLE,GREY,LIGHT_GREY,LIGHT_RED,BROWN); //Red
+	//StarField::SetStarfieldColors(BROWN,GREEN,GREY,LIGHT_GREY,LIGHT_GREEN,DARK_GREY); //Jungle Green
+	//StarField::SetStarfieldColors(BLUE,LIGHT_BLUE,GREY,WHITE,CYAN,DARK_GREY); //Ice Blue
+	//StarField::SetStarfieldColors(RED,ORANGE,GREY,WHITE,YELLOW,BROWN); //Lava
+	StarField::CreateStarScreen();	
+	//StarField::SetStarfieldColors(RED,ORANGE,GREY,WHITE,YELLOW,BROWN); //Lava
+	
+	
+	/*const StarColour1 : byte = 6;   // Blue
+	const StarColour2 : byte = 4;   // Purple
+	const StarColour3 : byte = 12;  // Grey 
+	const StarColour4 : byte = 15;  // Light_Grey
+	const StarColour5 : byte = 14;  // Light Blue
+	const StarColour6 : byte = 11;  // Grey Dark*/
 		
 	// IO area visible at $D000-$DFFF, RAM visible at $A000-$BFFF (NO BASIC) and RAM visible at $E000-$FFFF (NO KERNAL). 
 	// This is the typical memory configuration for demo/game development. 

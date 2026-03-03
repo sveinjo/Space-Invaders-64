@@ -133,28 +133,65 @@ begin
 	end;
 end;
 
-Procedure changeStarColors();
+// ---------------------------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Sets the starfield colors by writing to color memory ($D800).
+// Takes 6 color parameters corresponding to StarColour1-6, and applies them in the predefined pattern
+// across the entire 29x18 starfield area.
+// ---------------------------------------------------------------------------------------------------------------------------------
+Procedure SetStarfieldColors(col1, col2, col3, col4, col5, col6 : byte);
+var
+	colorPattern : array[20] of byte;
+	colorIndex : byte;
+	color_col : byte;
+	color_row : byte;
+	color_offset : integer;
+	color_mem : pointer of byte;
+	
 begin
-	StarfieldColours[0] := StarColour1;
-	StarfieldColours[1] := StarColour2;
-	StarfieldColours[2] := StarColour3;
-	StarfieldColours[3] := StarColour4;
-	StarfieldColours[4] := StarColour1;
-	StarfieldColours[5] := StarColour5;
-	StarfieldColours[6] := StarColour3;
-	StarfieldColours[7] := StarColour6;
-	StarfieldColours[8] := StarColour2;
-	StarfieldColours[9] := StarColour1;
-	StarfieldColours[10] := StarColour1;
-	StarfieldColours[11] := StarColour2;
-	StarfieldColours[12] := StarColour1;
-	StarfieldColours[13] := StarColour4;
-	StarfieldColours[14] := StarColour1;
-	StarfieldColours[15] := StarColour5;
-	StarfieldColours[16] := StarColour3;
-	StarfieldColours[17] := StarColour6;
-	StarfieldColours[18] := StarColour2;
-	StarfieldColours[19] := StarColour3;
+	// Build the color pattern from the 6 input colors using the predefined sequence
+	colorPattern[0] := col1;
+	colorPattern[1] := col2;
+	colorPattern[2] := col3;
+	colorPattern[3] := col4;
+	colorPattern[4] := col1;
+	colorPattern[5] := col5;
+	colorPattern[6] := col3;
+	colorPattern[7] := col6;
+	colorPattern[8] := col2;
+	colorPattern[9] := col1;
+	colorPattern[10] := col1;
+	colorPattern[11] := col2;
+	colorPattern[12] := col1;
+	colorPattern[13] := col4;
+	colorPattern[14] := col1;
+	colorPattern[15] := col5;
+	colorPattern[16] := col3;
+	colorPattern[17] := col6;
+	colorPattern[18] := col2;
+	colorPattern[19] := col3;
+	
+	// Write the color pattern to all starfield positions
+	colorIndex := 0;
+	color_col := 0;
+	while color_col <= 28 do begin
+		color_row := 0;
+		while color_row <= 17 do begin
+			// Calculate offset: row * 40 + col
+			color_offset := color_row * 40 + color_col;
+			
+			// Set color memory pointer and write
+			colormemory := $D800 + color_offset;
+			colormemory[0] := colorPattern[colorIndex];
+			
+			inc(color_row);
+		end;
+		inc(colorIndex);
+		if colorIndex > 19 then begin
+			colorIndex := 0;
+		end;
+		inc(color_col);
+	end;
 end;
 
 
@@ -164,7 +201,6 @@ end;
 procedure CreateStarScreen();
 var
 	currentchar : byte;
-	colourindex : byte;
 	col : byte;
 	row : byte;
 	saddr : array[18] of integer;
@@ -184,7 +220,6 @@ begin
 	CreateAddressTable( #saddr, $0400, 40, 18 );   // $0400 screen address, 40 chars/row, 18 rows used
    	CreateAddressTable( #caddr, $D800, 40, 18 );   // $D800 color address, 40 chars/row, 18 rows used
 
-	colourindex := 0;
 	col := 0;	
 	while col <= 28 do begin
 	
@@ -208,22 +243,16 @@ begin
 			if currentchar = 83 then begin
 				currentchar := 58;
 			end;
-			
-			colormemory := AddressTable( #caddr, col, row );
-			colormemory[0] := StarfieldColours[colourindex];
 	
 			inc(row);
 			
 		end;
 		
-		inc(colourindex);
-		
-		if colourindex > 19 then begin
-			colourindex := 0;
-		end;
-		
 		inc(col);		
 	end;	
+	
+	// Apply the default color pattern to the starfield
+	//SetStarfieldColors(StarColour1, StarColour2, StarColour3, StarColour4, StarColour5, StarColour6);
 	
 	StarfieldPtr := #STAR1INIT;
 	StarfieldPtr2 := #STAR2INIT;
@@ -292,5 +321,6 @@ begin
 		StaticStarPtr[0] := 0;
 	end;
 
-	end;
+end;
+
 end.
