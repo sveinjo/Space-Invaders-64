@@ -48,6 +48,8 @@ var
 	const USE_SPEED_TABLE : byte = 0;
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
+	// Set to 1 to disable all enemy-shot firing; 0 to enable (useful for debugging)
+	const DEBUG_DISABLE_ENEMY_FIRE : byte = 1;
 	//border_debug_color : byte = 2;          // unused — only in commented-out debug lines
 	// Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
 	//debug_last_cleared : byte = 0;           // unused — DebugClearNextMonster is never called
@@ -61,7 +63,8 @@ var
 	const MONSTER_DROP_AMOUNT : byte = 6;
 	//const MONSTER_DROP_AMOUNT2 : byte = 10;  // unused
 	
-	const MONSTER_START_Y : byte = 102 ; // Initial monster base Y (was 71 base + 41 adjustment)
+	//const MONSTER_START_Y : byte = 102 ; // Initial monster base Y (was 71 base + 41 adjustment)
+	const MONSTER_START_Y : byte = 123 ; // Initial monster base Y (was 71 base + 41 adjustment)
 
 	// UFO constants
 	const UFO_HW_SPRITE : byte = 1;   // Hardware sprite index — shared with monsterSprite1 via raster mux
@@ -131,7 +134,7 @@ var
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
 	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
 
-	sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
+	//sequential_clear_counter : byte = 71; // Sequential enemy clearing counter, starts at 71 (last enemy index)
 	
 	//pos_x : byte = PLAYER_MIN_X;
 	
@@ -154,7 +157,7 @@ var
 	//   CONTACT_Y_NUDGE — added to SHIELD_Y_MIN for the per-sub-column Y test.
 	//                      Increase to delay contact       (enemy must descend further).
 	const CONTACT_X_NUDGE : byte = 6;
-	const CONTACT_Y_NUDGE : byte = 8;
+	const CONTACT_Y_NUDGE : byte = 14;
 	// Erosion stencil shape (4 bytes, applied hit-row first, widening inward then narrowing).
 	// AND-NOT'd into the sprite byte at each row: pixel = pixel & (stencil xor $FF).
 	const ERODE_STENCIL_0 : byte = $FF;   // hit row:    11111111  (full clear — prevents stuck edge bits)
@@ -650,53 +653,57 @@ var
 	tef_fire_col       : byte;
 	tef_player_rel_x   : byte;
 begin
-	if ufo_bullet_stagger_counter = 0 then
+	// Debug gate: disable enemy firing entirely when DEBUG_DISABLE_ENEMY_FIRE = 1
+	if DEBUG_DISABLE_ENEMY_FIRE = 0 then
 	begin
-		if ufo_bullet_active[ufo_bullet_next_to_fire] = 0 then
+		if ufo_bullet_stagger_counter = 0 then
 		begin
-			// Arcade reload gate: slot must have counted down its reload delay
-			// before it can fire again.  Timer is set when the previous shot ends.
-			if ufo_bullet_reload_timer[ufo_bullet_next_to_fire] = 0 then
+			if ufo_bullet_active[ufo_bullet_next_to_fire] = 0 then
 			begin
-				if ufo_bullet_next_to_fire = SHOT_SLOT_PLUNGER then
+				// Arcade reload gate: slot must have counted down its reload delay
+				// before it can fire again.  Timer is set when the previous shot ends.
+				if ufo_bullet_reload_timer[ufo_bullet_next_to_fire] = 0 then
 				begin
-					// Plunger: predefined column sequence, arcade-accurate.
-					// Arcade table is 1-indexed (1-11); subtract 1 for our 0-based columns.
-					tef_fire_col := Helpers::GetPlungerFireColumn(es_plunger_step) - 1;
-					inc(es_plunger_step);
-					if es_plunger_step >= 16 then es_plunger_step := 0;
-				end
-				else if ufo_bullet_next_to_fire = SHOT_SLOT_ROLLING then
-				begin
-					// Rolling/Teflon: target the column directly above the player.
-					// Column = (player_x - formation_left) / 18, clamped to 0-11.
-					if player_sprite_x >= monster_base_x then
+					if ufo_bullet_next_to_fire = SHOT_SLOT_PLUNGER then
 					begin
-						tef_player_rel_x := player_sprite_x - monster_base_x;
-						tef_fire_col := tef_player_rel_x / 18;
-						if tef_fire_col > 11 then tef_fire_col := 11;
+						// Plunger: predefined column sequence, arcade-accurate.
+						// Arcade table is 1-indexed (1-11); subtract 1 for our 0-based columns.
+						tef_fire_col := Helpers::GetPlungerFireColumn(es_plunger_step) - 1;
+						inc(es_plunger_step);
+						if es_plunger_step >= 16 then es_plunger_step := 0;
+					end
+					else if ufo_bullet_next_to_fire = SHOT_SLOT_ROLLING then
+					begin
+						// Rolling/Teflon: target the column directly above the player.
+						// Column = (player_x - formation_left) / 18, clamped to 0-11.
+						if player_sprite_x >= monster_base_x then
+						begin
+							tef_player_rel_x := player_sprite_x - monster_base_x;
+							tef_fire_col := tef_player_rel_x / 18;
+							if tef_fire_col > 11 then tef_fire_col := 11;
+						end
+						else
+							tef_fire_col := 0;
 					end
 					else
-						tef_fire_col := 0;
-				end
-				else
-				begin
-					// Squiggly: predefined column sequence, arcade-accurate.
-					tef_fire_col := Helpers::GetSquigglyFireColumn(es_squiggly_step) - 1;
-					inc(es_squiggly_step);
-					if es_squiggly_step >= 16 then es_squiggly_step := 0;
+					begin
+						// Squiggly: predefined column sequence, arcade-accurate.
+						tef_fire_col := Helpers::GetSquigglyFireColumn(es_squiggly_step) - 1;
+						inc(es_squiggly_step);
+						if es_squiggly_step >= 16 then es_squiggly_step := 0;
+					end;
+					SpawnShotFromColumn(tef_fire_col, ufo_bullet_next_to_fire);
 				end;
-				SpawnShotFromColumn(tef_fire_col, ufo_bullet_next_to_fire);
 			end;
-		end;
-		// Advance to next slot (cycles 0→1→2→0)
-		inc(ufo_bullet_next_to_fire);
-		if ufo_bullet_next_to_fire > 2 then
-			ufo_bullet_next_to_fire := 0;
-		ufo_bullet_stagger_counter := UFO_BULLET_STAGGER_FRAMES;
-	end
-	else
-		dec(ufo_bullet_stagger_counter);
+			// Advance to next slot (cycles 0→1→2→0)
+			inc(ufo_bullet_next_to_fire);
+			if ufo_bullet_next_to_fire > 2 then
+				ufo_bullet_next_to_fire := 0;
+			ufo_bullet_stagger_counter := UFO_BULLET_STAGGER_FRAMES;
+		end
+		else
+			dec(ufo_bullet_stagger_counter);
+	end;
 end;
 
 procedure ShowUFOBullet();
@@ -2087,7 +2094,7 @@ begin
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
 
-procedure ClearEnemyAtCounter();
+/*procedure ClearEnemyAtCounter();
 var
 	clear_index : byte;
 	clear_col : byte;
@@ -2135,7 +2142,7 @@ begin
 		// ClearMonster will clear the sprite and update the block_enemies bitmask
 		ClearMonster(temp_block_index, temp_enemy_index);
 	end;
-end;
+end;*/
 
 // Find the rightmost occupied enemy column offset (0-172)
 // Returns pixel offset from monster_base_x to the rightmost enemy
@@ -2380,11 +2387,11 @@ begin
 		// Row1 takes over, eliminating the UFO flash.
 
 		// Clear enemies based on ENEMIES_TO_CLEAR constant
-		if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
+		/*if sequential_clear_counter > (71 - ENEMIES_TO_CLEAR) then
 		begin
 			ClearEnemyAtCounter();
 			dec(sequential_clear_counter);
-		end;
+		end;*/
 
 		should_move_enemy := 1;
 	end;
