@@ -32,7 +32,7 @@ var
 	const SPRITE_HEIGHT : byte = 21;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 0;
+	const DEBUG_ENABLE : byte = 1;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	current_speed_delay : byte = 50; // frames per march step (table or linear)
@@ -139,6 +139,9 @@ var
 		$3F, $3F, $3F, $3F,  // Row 1 blocks
 		$3F, $3F, $3F, $3F   // Row 2 blocks (bottom)
 	);
+	// Cached row-present flags: 1 = row has alive enemies, 0 = row completely cleared.
+	// Maintained by ClearMonster; avoids scanning 4 blocks per row for every RowHasMonsters check.
+	row_has_monsters : array[3] of byte = (1, 1, 1);
 	
 	const monsterSprite1:byte = 1;
 	const monsterSprite2:byte = 2;
@@ -793,6 +796,9 @@ var
 	sprite_base_address : integer;
 	enemy_mask : byte;
 	was_alive : byte;
+	cm_row  : byte;  // row index (0-2) of the cleared block
+	cm_base : byte;  // first block index of that row (row << 2)
+	cm_any  : byte;  // OR of all 4 block_enemies bytes in the row
 Begin
 	// Calculate sprite indices for both animation frames
 	// Each block has 2 sprites (animation frames)
@@ -843,7 +849,7 @@ Begin
 	sprite_data_ptr := sprite_data_ptr + 3;
 	sprite_data_ptr^ := 0;
     
-	// Clear second animation frame (8 pixel rows)
+	// Clear second animation frame — sprite index is frame1+1, address is frame2_sprite_index*64
 	sprite_base_address := frame2_sprite_index;
 	sprite_base_address := sprite_base_address << 6;  // * 64
 	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
@@ -876,7 +882,22 @@ Begin
 			inc(numberOfEnemies);
 		// Defer edge-cache refresh to the next UpdateTick so the scan loops
 		// don't land on the same frame as the sprite clear.
-		pending_edge_rescan := 1;		
+		pending_edge_rescan := 1;
+		// Update row-present cache when this block just became empty.
+		if block_enemies[blockIndex] = 0 then
+		begin
+			cm_row  := blockIndex >> 2;
+			cm_base := cm_row << 2;
+			cm_any  := block_enemies[cm_base];
+			inc(cm_base);
+			cm_any  := cm_any | block_enemies[cm_base];
+			inc(cm_base);
+			cm_any  := cm_any | block_enemies[cm_base];
+			inc(cm_base);
+			cm_any  := cm_any | block_enemies[cm_base];
+			if cm_any = 0 then
+				row_has_monsters[cm_row] := 0;
+		end;
 	end;
 end;
 
@@ -1211,7 +1232,7 @@ begin
 		rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - monster_base_y;
 		if rel_y < MONSTER_ROW_OFFSET then
 			block_row := 0
-		else if rel_y < (MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET) then
+		else if rel_y < 52 then
 			block_row := 1
 		else
 			block_row := 2;
@@ -1331,7 +1352,7 @@ begin
 			else if cesc_form_row = 1 then
 				cesc_row_offset := MONSTER_ROW_OFFSET
 			else
-				cesc_row_offset := MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET;
+				cesc_row_offset := 52;
 
 			// Row fast skip: row-20 bottom must reach the tuned shield band.
 			if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE) and
@@ -2080,29 +2101,6 @@ begin
 	GetLeftmostEnemyOffset := leftmost_result_offset;
 end;
 
-// Returns 1 if any enemy remains in the specified row (0=top,1=middle,2=bottom)
-function RowHasMonsters(row: byte) : byte;
-var
-	col: byte;
-	idx: byte;
-	has_flag: byte;
-begin
-
-	has_flag := 0;
-	col := 0;
-	while (col < 4) do
-	begin
-		idx := row * 4 + col;
-		if block_enemies[idx] <> 0 then
-		begin
-			has_flag := 1;
-			col := 4; // break
-		end;
-		inc(col);
-	end;
-	RowHasMonsters := has_flag;
-end;
-
 // Returns the Y pixel coordinate of the bottom edge of the lowest alive enemy.
 // Scans monster rows bottom-to-top; byte underflow (dec past 0 -> 255) exits the loop naturally.
 // Used to clamp formation drops so enemies never reach the player.
@@ -2137,13 +2135,13 @@ begin
 			dec(gleby_r);  // at r=0 wraps to 255, exiting the while
 	end;
 
-	// Row Y offsets: row 0 = 0, row 1 = MONSTER_ROW_OFFSET, row 2 = MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET
+	// Row Y offsets: row 0 = 0, row 1 = MONSTER_ROW_OFFSET, row 2 = 52
 	if gleby_lowest_row = 0 then
 		gleby_row_offset := 0
 	else if gleby_lowest_row = 1 then
 		gleby_row_offset := MONSTER_ROW_OFFSET
 	else
-		gleby_row_offset := MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET;
+		gleby_row_offset := 52;
 
 	// Check whether any 'bottom' enemy (odd index; bits 1,3,5 = mask $2A) is alive in this row.
 	// Bottom enemies occupy sprite pixel rows 13-20 (bottom pixel offset = 20).
@@ -2280,6 +2278,10 @@ begin
 	//monster_base_y := 82;
 	monster_base_y := MONSTER_START_Y;
 	monster_base_x := 18;
+	// Reset row-present cache for new game.
+	row_has_monsters[0] := 1;
+	row_has_monsters[1] := 1;
+	row_has_monsters[2] := 1;
 	// Sync cached edges with the formation state after pre-clearing.
 	cached_rightmost_offset := GetRightmostEnemyOffset();
 	cached_leftmost_offset := GetLeftmostEnemyOffset();
@@ -2318,8 +2320,6 @@ end;
 // ---------------------------------------------------------------------------------------------------------------------------------
 
 interrupt MainRasterChain();
-var
-	mc_row_target : byte;
 begin
 	
 	StartIRQ(0);	
@@ -2358,20 +2358,20 @@ begin
 	// target scanline has already passed, causing Row1/2/3 to fire a full frame late.
 	// Clamping to [40, 222] guards against byte underflow (monster_base_y < 13) and
 	// byte overflow (40 + monster_base_y > 255), and keeps targets below player IRQ at 223.
-	if RowHasMonsters(0) <> 0 then
+	if row_has_monsters[0] <> 0 then
 	begin
 		//mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
-		RasterIRQ(MainRasterRow1(), monster_base_y - 23, 0); // There is room between 33 and 13 for tuning if needed.
+		RasterIRQ(MainRasterRow1(), monster_base_y - 8, 0); // There is room between 33 and 13 for tuning if needed.
 	end
-	else if RowHasMonsters(1) <> 0 then
+	else if row_has_monsters[1] <> 0 then
 	begin
 		//mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
-		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, 0);
+		RasterIRQ(MainRasterRow2(), 15 + monster_base_y, 0);
 	end
-	else if RowHasMonsters(2) <> 0 then
+	else if row_has_monsters[2] <> 0 then
 	begin
-		//mc_row_target := Helpers::Clamp(40 + monster_base_y, 40, 222);
-		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, 0);
+		//mc_row_target := Helpers::Clamp(39 + monster_base_y, 40, 222);
+		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0);
 	end
 	else
 		RasterIRQ(MainRasterPlayer(), 223, 0);
@@ -2453,17 +2453,17 @@ begin
 	StartIRQ(0);	
 	togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 1);	
 	// Update first row of monsters only if there are monsters in that row
-	if RowHasMonsters(0) <> 0 then
+	if row_has_monsters[0] <> 0 then
 	begin		
 		UpdateMonsters(0);  // Set screen positions for row 0
 		AnimateMonsters(0); // Set image pointers for row 0 — also transitions sprite 1 from UFO to enemy
 	end;
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
-	if RowHasMonsters(1) <> 0 then
-		RasterIRQ(MainRasterRow2(), 13 + monster_base_y, 0)
-	else if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, 0)
+	if row_has_monsters[1] <> 0 then
+		RasterIRQ(MainRasterRow2(), 15 + monster_base_y, 0)
+	else if row_has_monsters[2] <> 0 then
+		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, 0);
 
@@ -2492,15 +2492,15 @@ begin
 	
 	
 	// Update middle row only if it still contains monsters
-	if RowHasMonsters(1) <> 0 then
+	if row_has_monsters[1] <> 0 then
 	begin		
 		UpdateMonsters(MONSTER_ROW_OFFSET);  // Set screen positions for row 1
 		AnimateMonsters(1); // Set image pointers for row 1
 	end;
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
-	if RowHasMonsters(2) <> 0 then
-		RasterIRQ(MainRasterRow3(), 40 + monster_base_y, 0)
+	if row_has_monsters[2] <> 0 then
+		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0)
 	else
 		RasterIRQ(MainRasterPlayer(), 223, 0);
 
@@ -2535,9 +2535,9 @@ begin
 	end;*/	
 	
 	// Update bottom row only if it still contains monsters
-	if RowHasMonsters(2) <> 0 then
+	if row_has_monsters[2] <> 0 then
 	begin		
-		UpdateMonsters(MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET);  // Set screen positions for row 2
+		UpdateMonsters(52);  // Set screen positions for row 2
 		AnimateMonsters(2); // Set image pointers for row 2
 	end;
 	
