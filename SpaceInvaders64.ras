@@ -428,8 +428,8 @@ end;
 //     12 columns total — 4 block-columns * 3 enemy-columns per block.
 //     Column pitch = 18 px (MONSTER_SPACING / 3 = 54/3 = 18).
 //     spawn_col 0-11  →  block_col = spawn_col/3,  enemy_col = spawn_col mod 3
-//     Screen X = monster_base_x + block_col*MONSTER_SPACING + enemy_col*18 + ES_SHOT_SPAWN_X_ADJ
-//     Screen Y = monster_base_y + form_row*MONSTER_ROW_OFFSET + sub_row*14 + SPRITE_HEIGHT + ES_SHOT_SPAWN_Y_ADJ
+//     Screen X = monster_base_x + block_col*MONSTER_SPACING + enemy_col*18 - 6
+//     Screen Y = monster_base_y + form_row*MONSTER_ROW_OFFSET + sub_row*14 + 4
 //
 //   Scan order: form_row 2→0 (bottom→top), sub_row 1→0 within each block row.
 //   Stops at the first (lowest) alive alien found and activates the shot slot.
@@ -437,8 +437,6 @@ end;
 // ---------------------------------------------------------------------------
 procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
 var
-	const ES_SHOT_SPAWN_X_ADJ : byte = -6;  // col center: left-edge + 6 px
-	const ES_SHOT_SPAWN_Y_ADJ : byte = -17; // 0 = flush with bottom of sprite box
 	spawn_block_col    : byte;
 	spawn_enemy_col    : byte;
 	spawn_block_index  : byte;
@@ -471,13 +469,12 @@ begin
 				// X: block left-edge offset + per-column offset + centering adjustment.
 				spawn_x_calc := spawn_block_col * MONSTER_SPACING
 				              + spawn_enemy_col * 18
-				              + ES_SHOT_SPAWN_X_ADJ;
+				              - 6;
 				spawn_x_calc := monster_base_x + spawn_x_calc;
 				// Y: formation row offset + sub-row offset + sprite height + fine-tune.
 				spawn_y_calc := spawn_form_row * MONSTER_ROW_OFFSET
 				              + spawn_sub_row * 14
-				              + SPRITE_HEIGHT
-				              + ES_SHOT_SPAWN_Y_ADJ;
+				              + 4;
 				spawn_y_calc := monster_base_y + spawn_y_calc;
 
 				ufo_bullet_x[spawn_slot]          := spawn_x_calc;
@@ -604,7 +601,6 @@ end;
 
 procedure UpdateUFOBullet();
 var
-	const ES_SHOT_ANIM_FRAMES      : byte = 4; // animation frame count
 	const ES_SHOT_ANIM_HOLD_FRAMES : byte = 3; // frames each animation image is shown before advancing
 	const ES_SHOT_EXPLODE_DURATION : byte = 4; // frames enemy-shot explosion stays on screen
 	ub_i : byte;
@@ -634,10 +630,10 @@ begin
 
 				// Animation advances on its own tick
 				if ub_anim_fired <> 0 then
-					ufo_bullet_anim_index[ub_i] := (ufo_bullet_anim_index[ub_i] + 1) & (ES_SHOT_ANIM_FRAMES - 1);
+					ufo_bullet_anim_index[ub_i] := (ufo_bullet_anim_index[ub_i] + 1) & 3;
 
 				// Check if hit bottom of screen
-				if ufo_bullet_y[ub_i] >= (249 - SPRITE_HEIGHT) then
+				if ufo_bullet_y[ub_i] >= 228 then
 				begin
 					ufo_bullet_active[ub_i] := 2;
 					ufo_bullet_explode_counter[ub_i] := 0;
@@ -931,44 +927,6 @@ begin
 	SpritePos(x_position, y_position, monsterSprite4);
 end;
 	
-
-/*procedure DebugClearNextMonster();
-var
-	block_idx: byte;
-	enemy_idx: byte;
-	found_flag: byte;
-	emask: byte;
-begin
-	debug_last_cleared := 0;
-	// Do not auto-clear when remaining enemies are at or below DEBUG_KEEP_ALIVE
-	if (INITIAL_INVADER_COUNT - numberOfEnemies) <= DEBUG_KEEP_ALIVE then
-	begin
-		// nothing to do
-	end
-	else
-	begin
-		found_flag := 0;
-		block_idx := 0;
-	while (block_idx <= 11 and found_flag = 0) do
-	begin
-		enemy_idx := 0;
-		while (enemy_idx <= 5 and found_flag = 0) do
-		begin
-			emask := 1 << enemy_idx;
-			if (block_enemies[block_idx] & emask) <> 0 then
-			begin
-				ClearMonster(block_idx, enemy_idx);
-				debug_last_cleared := 1;
-				found_flag := 1;
-			end;
-			inc(enemy_idx);
-		end;
-		inc(block_idx);
-	end;
-	end;
-end;*/
-
-	
 procedure MakeSprites();
 begin	
 	// Set common sprite multicolor registers
@@ -1080,7 +1038,7 @@ begin
 	begin
 		// Copy frame 1 (sprite index 24 from spritesheet)
 		source_sprite_ptr := @spriteLoc + 1536;  // Source: sprite 24
-		destination_sprite_ptr := @spriteLoc + (26 + block_loop_counter * 2) * 64;  // Destination: sprite 26, 28, 30, 32...
+		destination_sprite_ptr := @spriteLoc + 1664 + (block_loop_counter << 7);  // Destination: sprite 26, 28, 30, 32...
 		for copy_loop_counter := 0 to 63 do
 		begin
 			destination_sprite_ptr^ := source_sprite_ptr^;
@@ -1090,7 +1048,7 @@ begin
 		
 		// Copy frame 2 (sprite index 25 from spritesheet)
 		source_sprite_ptr := @spriteLoc + 1600;  // Source: sprite 25
-		destination_sprite_ptr := @spriteLoc + (27 + block_loop_counter * 2) * 64;  // Destination: sprite 27, 29, 31, 33...
+		destination_sprite_ptr := @spriteLoc + 1728 + (block_loop_counter << 7);  // Destination: sprite 27, 29, 31, 33...
 		for copy_loop_counter := 0 to 63 do
 		begin
 			destination_sprite_ptr^ := source_sprite_ptr^;
@@ -1111,13 +1069,7 @@ begin
 	
 	// Update the sprite position on screen for sprite number @useSprite	
 	SpritePos(player_sprite_x, player_sprite_y, useSprite);
-	
-	// Set left/right offset pointer for sprite
-	/*if (joystickright) then
-		player_joystick_direction := 1;
-	if (joystickleft) then
-		player_joystick_direction := 0;*/
-		
+			
 	sprite_color[0] := cyan;
 	
 	SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
@@ -1186,8 +1138,6 @@ begin
 	end;
 end;
 
-
-
 procedure UpdatePlayerBullet();
 var
 	const BULLET_SPEED       : byte = 4;  // Pixels per frame upward
@@ -1217,7 +1167,6 @@ begin
 		end;
 	end;
 end;
-
 
 procedure CheckBulletCollision();
 var
@@ -1262,7 +1211,7 @@ begin
 		rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - monster_base_y;
 		if rel_y < MONSTER_ROW_OFFSET then
 			block_row := 0
-		else if rel_y < MONSTER_ROW_OFFSET * 2 then
+		else if rel_y < (MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET) then
 			block_row := 1
 		else
 			block_row := 2;
@@ -1382,7 +1331,7 @@ begin
 			else if cesc_form_row = 1 then
 				cesc_row_offset := MONSTER_ROW_OFFSET
 			else
-				cesc_row_offset := MONSTER_ROW_OFFSET * 2;
+				cesc_row_offset := MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET;
 
 			// Row fast skip: row-20 bottom must reach the tuned shield band.
 			if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE) and
@@ -1994,10 +1943,10 @@ begin
 	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
 	
 	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
-	Screen::PrintString("      1740",29,13,#Screen::screen0);
+	Screen::PrintString("       300",29,13,#Screen::screen0);
 	
 	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
-	Screen::PrintString("      1740",29,23,#Screen::screen0);
+	Screen::PrintString("       150",29,23,#Screen::screen0);
 	
 	//Screen::PrintString("¤¤¤",4,18,#Screen::screen0);
 	//Screen::PrintString("lmn",4,19,#Screen::screen0);
@@ -2024,17 +1973,6 @@ begin
 
 	// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
 	CopyShieldSprites();
-	
-	// === TEST EROSION: Remove a chunk from shield 1 to verify dynamic repaint ===
-	// Zero out bytes in sprite 18 using a pointer (poke causes compiler errors).
-	/*test_ptr := #SHIELD1_SRC;
-	test_ptr := test_ptr + 12;  // row 4 offset (4 * 3)
-	test_ptr[0] := 0; inc(test_ptr);  // col 0
-	test_ptr[0] := 0; inc(test_ptr);  // col 1
-	test_ptr[0] := 0; inc(test_ptr);  // col 2
-	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 0
-	test_ptr[0] := 0; inc(test_ptr);  // row 5 col 1
-	test_ptr[0] := 0;                 // row 5 col 2*/
 	
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
@@ -2199,13 +2137,13 @@ begin
 			dec(gleby_r);  // at r=0 wraps to 255, exiting the while
 	end;
 
-	// Row Y offsets: row 0 = 0, row 1 = MONSTER_ROW_OFFSET, row 2 = MONSTER_ROW_OFFSET*2
+	// Row Y offsets: row 0 = 0, row 1 = MONSTER_ROW_OFFSET, row 2 = MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET
 	if gleby_lowest_row = 0 then
 		gleby_row_offset := 0
 	else if gleby_lowest_row = 1 then
 		gleby_row_offset := MONSTER_ROW_OFFSET
 	else
-		gleby_row_offset := MONSTER_ROW_OFFSET * 2;
+		gleby_row_offset := MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET;
 
 	// Check whether any 'bottom' enemy (odd index; bits 1,3,5 = mask $2A) is alive in this row.
 	// Bottom enemies occupy sprite pixel rows 13-20 (bottom pixel offset = 20).
@@ -2599,7 +2537,7 @@ begin
 	// Update bottom row only if it still contains monsters
 	if RowHasMonsters(2) <> 0 then
 	begin		
-		UpdateMonsters(MONSTER_ROW_OFFSET*2);  // Set screen positions for row 2
+		UpdateMonsters(MONSTER_ROW_OFFSET + MONSTER_ROW_OFFSET);  // Set screen positions for row 2
 		AnimateMonsters(2); // Set image pointers for row 2
 	end;
 	
