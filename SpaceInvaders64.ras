@@ -1279,8 +1279,9 @@ begin
 		
 		SetSpriteLoc(useSprite, @spriteLoc/64 + bullet_sprite_index, useBank);
 		SpritePos(player_bullet_x, player_bullet_y, useSprite);		
+		
 		// Update score display after all score-changing events this frame.
-		DisplayScore();
+		//DisplayScore();
 	end;
 end;
 
