@@ -39,6 +39,12 @@ var
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
 
+	// Level progression
+	current_level : byte = 1;   // 1-9; set to any value before startup to test that level
+	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
+	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
+	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
+
 	// UFO constants
 	const UFO_HW_SPRITE : byte = 1;   // Hardware sprite index — shared with monsterSprite1 via raster mux
 	const UFO_Y : byte = 44;          // Fixed Y near top of screen (must be < monster_base_y - 33)
@@ -191,37 +197,15 @@ var
 
 	
 
-	// Interrupt forward declarations — required because the raster chain is circular
-	// (each handler schedules the next via RasterIRQ, so all must be declared up-front).
-	// No procedure forward declarations needed: every procedure is defined before its
-	// first call site.
-	
-	interrupt MainRasterRow1();
-	interrupt MainRasterRow2();
-	interrupt MainRasterRow3();
-	interrupt MainRasterJoystick();
-	interrupt MainRasterPlayer();
-	//interrupt MainRasterStarfield();
-	//function GetRightmostEnemyOffset() : byte;
-	//function GetLeftmostEnemyOffset() : byte;
-	//procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
-	//procedure TickEnemyShotFiring();
-	//procedure CopyShieldSprites();
-	//procedure CheckShieldCollision();
-	//procedure CheckEnemyShieldCollision();
-	//procedure CheckEnemyShieldContact();
-	//procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
-	//procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
-	//procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
+	// Forward declarations (minimum required after raster-chain reorder):
+	//   MainRasterChain — Player and Starfield schedule it; its body is defined last
+	//                     so all non-interrupt callees are already visible.
+	//   ClearMonster    — called by PreclearLeftmostAndBottomEnemies (~line 867) and
+	//                     CheckBulletCollision, both defined before ClearMonster's body.
+	interrupt MainRasterChain();
+	procedure PreclearLeftmostAndBottomEnemies();
+	procedure AdvanceLevel();
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
-	//procedure AnimateMonsters(enemyRow: byte);
-	//procedure UpdateMonsters(rowOffset: byte);
-	//procedure FirePlayerBullet();
-	//procedure UpdatePlayerBullet();
-	//procedure CheckBulletCollision();
-	//procedure ShowBullet();
-	//Procedure DisplayScore();
-	//Procedure DebugBorder();
 
 
 // ---------------------------------------------------------------------------
@@ -785,6 +769,76 @@ begin
 	end;
 end;
 
+
+procedure AnimateMonsters(enemyRow: byte);
+var
+	sprite_ptr_base: byte;
+	current_sprite_ptr: byte;
+begin
+	// Calculate the base sprite pointer once for this row
+	// Row 0: blocks 0-3 (sprites 26-33)
+	// Row 1: blocks 4-7 (sprites 34-41)
+	// Row 2: blocks 8-11 (sprites 42-49)
+	sprite_ptr_base := @spriteLoc/64 + 26 + (enemyRow << 3) + monster_animation_frame;
+    
+	// Set sprite locations using pre-calculated base + incremental additions
+	current_sprite_ptr := sprite_ptr_base;
+	SetSpriteLoc(monsterSprite1, current_sprite_ptr, useBank);
+    
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite2, current_sprite_ptr, useBank);
+    
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite3, current_sprite_ptr, useBank);
+    
+	current_sprite_ptr := current_sprite_ptr + 2;
+	SetSpriteLoc(monsterSprite4, current_sprite_ptr, useBank);
+end;
+
+procedure UpdateMonsters(rowOffset: byte);
+var
+	y_position: byte;
+	x_position: byte;
+begin
+	// Pre-calculate Y position to avoid repeated additions
+	y_position := monster_base_y + rowOffset;
+    
+	// Update sprites using incremental X positions instead of multiplications
+	x_position := monster_base_x;
+	SpritePos(x_position, y_position, monsterSprite1);
+    
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite2);
+    
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite3);
+    
+	x_position := x_position + MONSTER_SPACING;
+	SpritePos(x_position, y_position, monsterSprite4);
+end;
+	
+procedure MakeSprites();
+begin	
+	// Set common sprite multicolor registers
+	//sprite_multicolor_reg1:=green;
+	//sprite_multicolor_reg2:=white;
+	// Set sprite "0" individual color value 
+	sprite_color[useSprite]:=light_blue;
+	// Turn on sprite 0 (or @useSprite)
+	togglebit(sprite_bitmask,useSprite,1);
+	// Enable enemy-shot hardware sprites and set color
+	sprite_color[ES_SHOT_SPRITE1]:=cyan;
+	sprite_color[ES_SHOT_SPRITE2]:=cyan;
+	sprite_color[ES_SHOT_SPRITE3]:=cyan;
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE1,1);
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE2,1);
+	togglebit(sprite_bitmask,ES_SHOT_SPRITE3,1);
+	// UFO uses hardware sprite 2 (shared with monsterSprite2 via raster mux).
+	// The sprite is already enabled by MakeMonsters via monsterSprite2, but set
+	// its color here so it is distinct at the top of the screen.
+	//sprite_color[UFO_HW_SPRITE] := light_red;
+end;
+
 procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 var
 	sprite_data_ptr : ^byte;
@@ -896,78 +950,16 @@ Begin
 			inc(cm_base);
 			cm_any  := cm_any | block_enemies[cm_base];
 			if cm_any = 0 then
+			begin
 				row_has_monsters[cm_row] := 0;
+				// If all three rows just cleared, advance to next level.
+				if row_has_monsters[0] = 0 then
+					if row_has_monsters[1] = 0 then
+						if row_has_monsters[2] = 0 then
+							AdvanceLevel();
+			end;
 		end;
 	end;
-end;
-
-procedure AnimateMonsters(enemyRow: byte);
-var
-	sprite_ptr_base: byte;
-	current_sprite_ptr: byte;
-begin
-	// Calculate the base sprite pointer once for this row
-	// Row 0: blocks 0-3 (sprites 26-33)
-	// Row 1: blocks 4-7 (sprites 34-41)
-	// Row 2: blocks 8-11 (sprites 42-49)
-	sprite_ptr_base := @spriteLoc/64 + 26 + (enemyRow << 3) + monster_animation_frame;
-    
-	// Set sprite locations using pre-calculated base + incremental additions
-	current_sprite_ptr := sprite_ptr_base;
-	SetSpriteLoc(monsterSprite1, current_sprite_ptr, useBank);
-    
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite2, current_sprite_ptr, useBank);
-    
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite3, current_sprite_ptr, useBank);
-    
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite4, current_sprite_ptr, useBank);
-end;
-
-procedure UpdateMonsters(rowOffset: byte);
-var
-	y_position: byte;
-	x_position: byte;
-begin
-	// Pre-calculate Y position to avoid repeated additions
-	y_position := monster_base_y + rowOffset;
-    
-	// Update sprites using incremental X positions instead of multiplications
-	x_position := monster_base_x;
-	SpritePos(x_position, y_position, monsterSprite1);
-    
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite2);
-    
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite3);
-    
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite4);
-end;
-	
-procedure MakeSprites();
-begin	
-	// Set common sprite multicolor registers
-	//sprite_multicolor_reg1:=green;
-	//sprite_multicolor_reg2:=white;
-	// Set sprite "0" individual color value 
-	sprite_color[useSprite]:=light_blue;
-	// Turn on sprite 0 (or @useSprite)
-	togglebit(sprite_bitmask,useSprite,1);
-	// Enable enemy-shot hardware sprites and set color
-	sprite_color[ES_SHOT_SPRITE1]:=cyan;
-	sprite_color[ES_SHOT_SPRITE2]:=cyan;
-	sprite_color[ES_SHOT_SPRITE3]:=cyan;
-	togglebit(sprite_bitmask,ES_SHOT_SPRITE1,1);
-	togglebit(sprite_bitmask,ES_SHOT_SPRITE2,1);
-	togglebit(sprite_bitmask,ES_SHOT_SPRITE3,1);
-	// UFO uses hardware sprite 2 (shared with monsterSprite2 via raster mux).
-	// The sprite is already enabled by MakeMonsters via monsterSprite2, but set
-	// its color here so it is distinct at the top of the screen.
-	//sprite_color[UFO_HW_SPRITE] := light_red;
 end;
 
 
@@ -2164,6 +2156,8 @@ begin
 	GetLowestEnemyBottomY := gleby_result;
 end;
 
+
+
 procedure UpdateTick();
 var
 	const USE_SPEED_TABLE   : byte = 0; // 1 = table lookup, 0 = pure linear (arcade-accurate)
@@ -2186,97 +2180,103 @@ begin
 
 	enemy_count_diff := INITIAL_INVADER_COUNT - numberOfEnemies;
 	should_move_enemy := 0;
-	
-			
 
-	if enemyMoveCounter <> 0 then
-	begin
-		dec(enemyMoveCounter);
-		// Premove: fires 2 frames before the main tick to smooth out the
-		// direction-change transition. Suppressed when delay <= 2 because
-		// at that speed premove can't fire before the main tick.
-		if enemyMoveCounter = 2 then
-			if current_speed_delay > 2 then
-				should_move_enemy := 1;
-	end
-	else begin
-		// Reload delay.
-		// USE_SPEED_TABLE=1: table lookup capped to linear (gentle staircase boost).
-		// USE_SPEED_TABLE=0: pure linear (delay = aliens alive, arcade-accurate).
-		if USE_SPEED_TABLE <> 0 then
+		if enemyMoveCounter <> 0 then
 		begin
-			current_speed_delay := Helpers::GetArcadeSpeedDelay(enemy_count_diff);
-			if enemy_count_diff < current_speed_delay then
-				current_speed_delay := enemy_count_diff;
-		end
-		else
-			current_speed_delay := enemy_count_diff;
-		enemyMoveCounter := current_speed_delay;
-
-		monster_animation_frame := monster_animation_frame xor 1;
-		// Note: AnimateMonsters is NOT called here. All three rows are handled
-		// exclusively in their respective raster IRQs (Row1/2/3), which fire
-		// after the beam has passed UFO_Y but before each enemy row is scanned.
-		// This keeps sprite 1's image pointer owned solely by ShowUFO() until
-		// Row1 takes over, eliminating the UFO flash.
-
-		should_move_enemy := 1;
-	end;
-
-	if should_move_enemy <> 0 then
-	begin
-		// Read cached edge offsets — updated in ClearMonster, so O(1) cost here
-		// every tick regardless of enemy count.
-		right_edge := monster_base_x + cached_rightmost_offset + 10;  // +10 for double-width enemy
-		left_edge := monster_base_x + cached_leftmost_offset;
-	
-		prev_direction := enemy_direction;
-		if right_edge >= 242 then
-			enemy_direction := 0
-		else if left_edge <= 36 then
-			enemy_direction := 1;
-	
-		// If direction changed, drop instead of moving horizontally this tick.
-		// This keeps movement flow clean: one tick = one action (drop OR move, never both).
-		if prev_direction <> enemy_direction then
-		begin
-			if ((ENABLE_DROP_FLOOR = 0) or (GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT)) then
-				monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
+			dec(enemyMoveCounter);
+			// Premove: fires 2 frames before the main tick to smooth out the
+			// direction-change transition. Suppressed when delay <= 2 because
+			// at that speed premove can't fire before the main tick.
+			if enemyMoveCounter = 2 then
+				if current_speed_delay > 2 then
+					should_move_enemy := 1;
 		end
 		else begin
-			// No direction change: move horizontally.
-			// When premove is suppressed (delay <= 2), the main tick must move
-			// 2px to maintain the arcade's 2px-per-cycle rate.
-			if current_speed_delay <= 2 then
+			// Reload delay.
+			// USE_SPEED_TABLE=1: table lookup capped to linear (gentle staircase boost).
+			// USE_SPEED_TABLE=0: pure linear (delay = aliens alive, arcade-accurate).
+			if USE_SPEED_TABLE <> 0 then
 			begin
-				if enemy_direction <> 0 then
-					monster_base_x := monster_base_x + 2
-				else
-					monster_base_x := monster_base_x - 2;
+				current_speed_delay := Helpers::GetArcadeSpeedDelay(enemy_count_diff);
+				if enemy_count_diff < current_speed_delay then
+					current_speed_delay := enemy_count_diff;
+			end
+			else
+				current_speed_delay := enemy_count_diff;
+			enemyMoveCounter := current_speed_delay;
+
+			monster_animation_frame := monster_animation_frame xor 1;
+			// Note: AnimateMonsters is NOT called here. All three rows are handled
+			// exclusively in their respective raster IRQs (Row1/2/3), which fire
+			// after the beam has passed UFO_Y but before each enemy row is scanned.
+			// This keeps sprite 1's image pointer owned solely by ShowUFO() until
+			// Row1 takes over, eliminating the UFO flash.
+
+			should_move_enemy := 1;
+		end;
+
+		if should_move_enemy <> 0 then
+		begin
+			// Read cached edge offsets — updated in ClearMonster, so O(1) cost here
+			// every tick regardless of enemy count.
+			right_edge := monster_base_x + cached_rightmost_offset + 10;  // +10 for double-width enemy
+			left_edge := monster_base_x + cached_leftmost_offset;
+
+			prev_direction := enemy_direction;
+			if right_edge >= 242 then
+				enemy_direction := 0
+			else if left_edge <= 36 then
+				enemy_direction := 1;
+
+			// If direction changed, drop instead of moving horizontally this tick.
+			// This keeps movement flow clean: one tick = one action (drop OR move, never both).
+			if prev_direction <> enemy_direction then
+			begin
+				if ((ENABLE_DROP_FLOOR = 0) or (GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT)) then
+					monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
 			end
 			else begin
-				if enemy_direction <> 0 then
-					inc(monster_base_x)
-				else
-					dec(monster_base_x);
+				// No direction change: move horizontally.
+				// When premove is suppressed (delay <= 2), the main tick must move
+				// 2px to maintain the arcade's 2px-per-cycle rate.
+				if current_speed_delay <= 2 then
+				begin
+					if enemy_direction <> 0 then
+						monster_base_x := monster_base_x + 2
+					else
+						monster_base_x := monster_base_x - 2;
+				end
+				else begin
+					if enemy_direction <> 0 then
+						inc(monster_base_x)
+					else
+						dec(monster_base_x);
+				end;
 			end;
+			// Signal contact-erosion check: run once per march step, not per frame.
+			enemy_march_tick := 1;
 		end;
-		// Signal contact-erosion check: run once per march step, not per frame.
-		enemy_march_tick := 1;
-	end;
 end;
-
 
 
 
 procedure MakeMonsters();
 var
-	const MONSTER_START_Y : byte = 102; // Initial monster base Y
 	monster_sprite_color : byte = cyan;
+	lm_level  : byte;  // counter for level loop
+	lm_offset : byte;  // accumulated Y offset for current level
 
 begin
-	//monster_base_y := 82;
-	monster_base_y := MONSTER_START_Y;
+	// Compute starting Y: level 1 = LEVEL_START_Y, each level adds LEVEL_Y_STEP.
+	// Loop avoids a runtime multiply (max 8 iterations).
+	lm_offset := 0;
+	lm_level  := 1;
+	while lm_level < current_level do
+	begin
+		lm_offset := lm_offset + LEVEL_Y_STEP;
+		inc(lm_level);
+	end;
+	monster_base_y := LEVEL_START_Y + lm_offset;
 	monster_base_x := 18;
 	// Reset row-present cache for new game.
 	row_has_monsters[0] := 1;
@@ -2317,7 +2317,188 @@ end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Main raster interrupt routines.
+// Order: Player → Starfield → Row3 → Row2 → Row1 → Chain
+//   Only MainRasterChain needs a forward declaration (Player + Starfield schedule it).
+//   Each Row handler only schedules already-defined interrupts (Row3→Player,
+//   Row2→Row3/Player, Row1→Row2/Row3/Player). Chain schedules all four, all defined above.
 // ---------------------------------------------------------------------------------------------------------------------------------
+
+interrupt MainRasterPlayer();
+begin	
+		
+	UpdateSprite();
+	if DEBUG_ENABLE = 1 then
+		SCREEN_BG_COL := BLACK;
+		
+	StartIRQ(0);
+
+	// Schedule MainRasterChain FIRST — same logic as the RasterIRQ-before-heavy-work
+	// pattern in MainRasterChain.  CheckBulletCollision (kill frame), UpdateTick
+	// (edge-rescan frame), and DoStarfield can all overrun.  If the latch is written
+	// after line 0 has passed the beam we lose a full frame on the chain.
+	RasterIRQ(MainRasterChain(), 0, 0);
+
+	CheckShieldCollision();	
+	
+	//border_debug_color := peek($D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
+	UpdateTick();
+	
+	// Check collisions AFTER all sprite rows have been displayed
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
+	begin
+		CheckBulletCollision();
+		
+	end;	
+
+	
+	
+	//asm(" lda $D01E");
+	//asm(" lda $D01F");
+	//border_debug_color := peek($D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
+			
+	//SCREEN_BG_COL := border_debug_color;
+	
+	// Switch sprite 0 from bullet back to player
+	SetSpriteLoc(useSprite, @spriteLoc/64, useBank);  // Player sprite data
+	SpritePos(player_sprite_x, player_sprite_y, useSprite);  // Player position
+
+	//togglebit(sprite_bitmask, useSprite, 1);  // Ensure sprite is enabled for player
+
+	//RasterIRQ(MainRasterStarfield(),253,@useKernal);
+	
+	//border_debug_color := peek($D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
+	//DisplayScore();
+	inc(StarField_RasterCount);
+	StarField::DoStarfield();	
+	preventirq();  
+	//poke(^$D019, 0, 0);  
+	
+	CloseIRQ();
+end;
+
+interrupt MainRasterStarfield();
+begin	
+		
+	//border_debug_color := peek($D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
+	//DisplayScore();
+	inc(StarField_RasterCount);
+	StarField::DoStarfield();	
+	preventirq();  
+	//poke(^$D019, 0, 0);  
+	
+	RasterIRQ(MainRasterChain(), 0, 0);
+end;
+
+/*procedure BorderDebug();
+begin
+	border_debug_color := peek(^$D01E, 0);
+	if DEBUG_ENABLE = 1 then
+		SCREEN_BG_COL := border_debug_color;
+end;*/
+
+interrupt MainRasterRow3();
+begin	
+		
+	//BorderDebug();
+
+	//ShowBullet();
+	
+	
+	
+
+	StartIRQ(0);
+	
+	
+	/*if player_bullet_active <> 0 then
+	begin
+		//SCREEN_BG_COL := border_debug_color;
+	end;*/	
+	
+	// Update bottom row only if it still contains monsters
+	if row_has_monsters[2] <> 0 then
+	begin		
+		UpdateMonsters(52);  // Set screen positions for row 2
+		AnimateMonsters(2); // Set image pointers for row 2
+	end;
+	
+	
+
+	//RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
+	RasterIRQ(MainRasterPlayer(), 223, 0);
+	if DEBUG_ENABLE = 1 then
+		SCREEN_BG_COL := GREEN;
+		
+	
+	CloseIRQ();
+end;
+
+interrupt MainRasterRow2();
+begin	
+	StartIRQ(0);	
+
+	//ShowBullet();
+	
+	//border_debug_color := peek(^$D01E, 0);
+	//SCREEN_BG_COL := border_debug_color;
+	//DisplayScore();
+	
+
+	/*if player_bullet_active <> 0 then
+	begin
+		ShowBullet();
+		//SCREEN_BG_COL := border_debug_color;
+	end;*/
+	
+	
+	// Update middle row only if it still contains monsters
+	if row_has_monsters[1] <> 0 then
+	begin		
+		UpdateMonsters(MONSTER_ROW_OFFSET);  // Set screen positions for row 1
+		AnimateMonsters(1); // Set image pointers for row 1
+	end;
+
+	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
+	if row_has_monsters[2] <> 0 then
+		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0)
+	else
+		RasterIRQ(MainRasterPlayer(), 223, 0);
+
+	if DEBUG_ENABLE = 1 then
+		SCREEN_BG_COL := BLUE;
+	CloseIRQ();
+end;
+
+// This interrupt is triggered one time pr raster cycle
+interrupt MainRasterRow1();
+begin	
+
+	StartIRQ(0);	
+	togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 1);	
+	// Update first row of monsters only if there are monsters in that row
+	if row_has_monsters[0] <> 0 then
+	begin		
+		UpdateMonsters(0);  // Set screen positions for row 0
+		AnimateMonsters(0); // Set image pointers for row 0 — also transitions sprite 1 from UFO to enemy
+	end;
+	
+	// Choose next raster handler based on which subsequent rows still have monsters
+	if row_has_monsters[1] <> 0 then
+		RasterIRQ(MainRasterRow2(), 15 + monster_base_y, 0)
+	else if row_has_monsters[2] <> 0 then
+		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0)
+	else
+		RasterIRQ(MainRasterPlayer(), 223, 0);
+
+
+	if DEBUG_ENABLE = 1 then
+		SCREEN_BG_COL := RED; 	
+	CloseIRQ();
+end;
 
 interrupt MainRasterChain();
 begin
@@ -2446,183 +2627,64 @@ begin
 	CloseIRQ();
 end;
 
-// This interrupt is triggered one time pr raster cycle
-interrupt MainRasterRow1();
-begin	
-
-	StartIRQ(0);	
-	togglebit(SPRITE_STRETCH_X, UFO_HW_SPRITE, 1);	
-	// Update first row of monsters only if there are monsters in that row
-	if row_has_monsters[0] <> 0 then
-	begin		
-		UpdateMonsters(0);  // Set screen positions for row 0
-		AnimateMonsters(0); // Set image pointers for row 0 — also transitions sprite 1 from UFO to enemy
-	end;
-	
-	// Choose next raster handler based on which subsequent rows still have monsters
-	if row_has_monsters[1] <> 0 then
-		RasterIRQ(MainRasterRow2(), 15 + monster_base_y, 0)
-	else if row_has_monsters[2] <> 0 then
-		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0)
-	else
-		RasterIRQ(MainRasterPlayer(), 223, 0);
-
-
-	if DEBUG_ENABLE = 1 then
-		SCREEN_BG_COL := RED; 	
-	CloseIRQ();
-end;
-
-interrupt MainRasterRow2();
-begin	
-	StartIRQ(0);	
-
-	//ShowBullet();
-	
-	//border_debug_color := peek(^$D01E, 0);
-	//SCREEN_BG_COL := border_debug_color;
-	//DisplayScore();
-	
-
-	/*if player_bullet_active <> 0 then
-	begin
-		ShowBullet();
-		//SCREEN_BG_COL := border_debug_color;
-	end;*/
-	
-	
-	// Update middle row only if it still contains monsters
-	if row_has_monsters[1] <> 0 then
-	begin		
-		UpdateMonsters(MONSTER_ROW_OFFSET);  // Set screen positions for row 1
-		AnimateMonsters(1); // Set image pointers for row 1
-	end;
-
-	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
-	if row_has_monsters[2] <> 0 then
-		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0)
-	else
-		RasterIRQ(MainRasterPlayer(), 223, 0);
-
-	if DEBUG_ENABLE = 1 then
-		SCREEN_BG_COL := BLUE;
-	CloseIRQ();
-end;
-
-/*procedure BorderDebug();
+// ---------------------------------------------------------------------------
+// AdvanceLevel
+//   Called when all enemies are cleared.  Cycles current_level (1→9→1),
+//   resets board/bullet/march state, and repositions the formation for
+//   the new level (each level starts LEVEL_Y_STEP pixels lower).
+// ---------------------------------------------------------------------------
+procedure AdvanceLevel();
 begin
-	border_debug_color := peek(^$D01E, 0);
-	if DEBUG_ENABLE = 1 then
-		SCREEN_BG_COL := border_debug_color;
-end;*/
+	// Cycle level 1→2→...→9→1
+	inc(current_level);
+	if current_level > LEVEL_LAST then
+		current_level := 1;
 
-interrupt MainRasterRow3();
-begin	
-		
-	//BorderDebug();
+	// Reset enemy grid to full rack
+	block_enemies[0]  := $3F;
+	block_enemies[1]  := $3F;
+	block_enemies[2]  := $3F;
+	block_enemies[3]  := $3F;
+	block_enemies[4]  := $3F;
+	block_enemies[5]  := $3F;
+	block_enemies[6]  := $3F;
+	block_enemies[7]  := $3F;
+	block_enemies[8]  := $3F;
+	block_enemies[9]  := $3F;
+	block_enemies[10] := $3F;
+	block_enemies[11] := $3F;
+	numberOfEnemies := 0;
 
-	//ShowBullet();
-	
-	
-	
+	// Reset march / movement state
+	enemy_direction      := 1;
+	enemyMoveCounter     := INITIAL_INVADER_COUNT;
+	current_speed_delay  := 50;
+	pending_edge_rescan  := 0;
+	enemy_march_tick     := 0;
+	monster_animation_frame := 0;
 
-	StartIRQ(0);
-	
-	
-	/*if player_bullet_active <> 0 then
-	begin
-		//SCREEN_BG_COL := border_debug_color;
-	end;*/	
-	
-	// Update bottom row only if it still contains monsters
-	if row_has_monsters[2] <> 0 then
-	begin		
-		UpdateMonsters(52);  // Set screen positions for row 2
-		AnimateMonsters(2); // Set image pointers for row 2
-	end;
-	
-	
+	// Reset enemy shot state
+	ufo_bullet_active[0]       := 0;
+	ufo_bullet_active[1]       := 0;
+	ufo_bullet_active[2]       := 0;
+	ufo_bullet_reload_timer[0] := 0;
+	ufo_bullet_reload_timer[1] := 0;
+	ufo_bullet_reload_timer[2] := 0;
+	ufo_bullet_next_to_fire    := 0;
+	ufo_bullet_stagger_counter := 0;
+	es_plunger_step  := 0;
+	es_squiggly_step := 0;
 
-	//RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
-	RasterIRQ(MainRasterPlayer(), 223, 0);
-	if DEBUG_ENABLE = 1 then
-		SCREEN_BG_COL := GREEN;
-		
-	
-	CloseIRQ();
+	// Reset player bullet
+	player_bullet_active := 0;
+
+	// Restore sprite pixel data, then re-apply pre-clear and position for the new level
+	initializeMonsters();
+	PreclearLeftmostAndBottomEnemies();
+	MakeMonsters();
 end;
 
 
-interrupt MainRasterPlayer();
-begin	
-		
-	UpdateSprite();
-	if DEBUG_ENABLE = 1 then
-		SCREEN_BG_COL := BLACK;
-		
-	StartIRQ(0);
-
-	// Schedule MainRasterChain FIRST — same logic as the RasterIRQ-before-heavy-work
-	// pattern in MainRasterChain.  CheckBulletCollision (kill frame), UpdateTick
-	// (edge-rescan frame), and DoStarfield can all overrun.  If the latch is written
-	// after line 0 has passed the beam we lose a full frame on the chain.
-	RasterIRQ(MainRasterChain(), 0, 0);
-
-	CheckShieldCollision();	
-	
-	//border_debug_color := peek($D01E, 0);
-	//SCREEN_BG_COL := border_debug_color;
-	UpdateTick();
-	
-	// Check collisions AFTER all sprite rows have been displayed
-	// Only check when bullet is actively moving (not exploding)
-	if player_bullet_active = 1 then
-	begin
-		CheckBulletCollision();
-		
-	end;	
-
-	
-	
-	//asm(" lda $D01E");
-	//asm(" lda $D01F");
-	//border_debug_color := peek($D01E, 0);
-	//SCREEN_BG_COL := border_debug_color;
-			
-	//SCREEN_BG_COL := border_debug_color;
-	
-	// Switch sprite 0 from bullet back to player
-	SetSpriteLoc(useSprite, @spriteLoc/64, useBank);  // Player sprite data
-	SpritePos(player_sprite_x, player_sprite_y, useSprite);  // Player position
-
-	//togglebit(sprite_bitmask, useSprite, 1);  // Ensure sprite is enabled for player
-
-	//RasterIRQ(MainRasterStarfield(),253,@useKernal);
-	
-	//border_debug_color := peek($D01E, 0);
-	//SCREEN_BG_COL := border_debug_color;
-	//DisplayScore();
-	inc(StarField_RasterCount);
-	StarField::DoStarfield();	
-	preventirq();  
-	//poke(^$D019, 0, 0);  
-	
-	CloseIRQ();
-end;
-
-interrupt MainRasterStarfield();
-begin	
-		
-	//border_debug_color := peek($D01E, 0);
-	//SCREEN_BG_COL := border_debug_color;
-	//DisplayScore();
-	inc(StarField_RasterCount);
-	StarField::DoStarfield();	
-	preventirq();  
-	//poke(^$D019, 0, 0);  
-	
-	RasterIRQ(MainRasterChain(), 0, 0);
-end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Main program loop. Turn CIA interrupts off, copy the character set from ROM into RAM and tell the machine to look at CharSetLoc
