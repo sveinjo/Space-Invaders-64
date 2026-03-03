@@ -40,16 +40,6 @@ var
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
 	const DEBUG_ENABLE : byte = 1;
-	// Shot-vs-shot lockout toggle:
-	//   0 = player bullet resets immediately, enemy shot shows explosion (current default)
-	//   1 = player bullet locked out (shows explosion), enemy shot resets immediately (arcade-like)
-	const SHOT_COLLISION_LOCKOUT_PLAYER : byte = 1;
-	// Speed curve toggle: 1 = table lookup (gentle staircase boost), 0 = pure linear (arcade-accurate)
-	const USE_SPEED_TABLE : byte = 0;
-	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
-	const ENABLE_DROP_FLOOR : byte = 1;
-	// Set to 1 to disable all enemy-shot firing; 0 to enable (useful for debugging)
-	const DEBUG_DISABLE_ENEMY_FIRE : byte = 0;
 	//border_debug_color : byte = 2;          // unused — only in commented-out debug lines
 	// Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
 	//debug_last_cleared : byte = 0;           // unused — DebugClearNextMonster is never called
@@ -60,23 +50,13 @@ var
 	current_speed_delay : byte = 50; // frames per march step (table or linear)
 	enemy_direction : byte = 1;
 	numberOfEnemies : byte = 0;
-	const MONSTER_DROP_AMOUNT : byte = 6;
-	//const MONSTER_DROP_AMOUNT2 : byte = 10;  // unused
-	
-	const MONSTER_START_Y : byte = 102 ; // Initial monster base Y (was 71 base + 41 adjustment)
-	//const MONSTER_START_Y : byte = 123 ; // Initial monster base Y (was 71 base + 41 adjustment)
 
 	// UFO constants
 	const UFO_HW_SPRITE : byte = 1;   // Hardware sprite index — shared with monsterSprite1 via raster mux
-	const UFO_SPRITE_IMG : byte = 16; // Sprite image index in the sprite binary
 	const UFO_Y : byte = 44;          // Fixed Y near top of screen (must be < monster_base_y - 33)
-	const UFO_X_MIN : byte = 24;      // Left edge of 29-char (232-pixel) play field
-	const UFO_X_MAX : byte = 230;     // Right edge — sprite body (+24 px) lands at ~254, still in byte range
 
 	// UFO state
-	const UFO_SPAWN_TIMER_RESET : integer = 1536; // ~25.6 s at 60 Hz (arcade: $0600 frames)
-	const UFO_MIN_ALIVE_TO_SPAWN : byte = 8;      // Arcade: suppressed when fewer than 8 aliens alive
-	ufo_x : byte = UFO_X_MIN;           // Current X position
+	ufo_x : byte = 24;           // Current X position (UFO_X_MIN = 24, left play-field edge)
 	ufo_direction : byte = 1;           // 1 = moving right, 0 = moving left
 	ufo_move_skip_counter : byte = 0;   // Counts 0-2; move is skipped when the counter resets (every 3rd frame)
 	ufo_active : byte = 0;              // 0 = not on screen, 1 = crossing screen
@@ -84,18 +64,6 @@ var
 	player_shot_count : byte = 0;       // Player shots fired; parity determines saucer entry direction
 
 	// UFO hit / explosion state (active = 2)
-	const UFO_EXPLODE_DURATION : byte = 60; // ~1 s at 60 Hz — how long score sprite is shown
-	// UFO AABB hit window — derived from 16×8 hitbox at sprite bottom.
-	// UFO sprite: 24px wide, 21px tall.  Hitbox: X offsets [4..19], Y offsets [13..20].
-	// Player bullet active pixel: sprite-local X=11, Y=17..20.
-	// X overlap: px+11 in [ux+4..ux+19]  →  px in [ux-7 .. ux+8]
-	// Y overlap: py+20>=ux_y+13 AND py+17<=ux_y+20  →  py in [37..47]  (UFO_Y=44 fixed)
-	const UFO_HIT_PX_LO : byte = 37; // min player_bullet_y for Y overlap  (UFO_Y+13-20 = 37)
-	const UFO_HIT_PX_HI : byte = 47; // max player_bullet_y for Y overlap  (UFO_Y+20-17 = 47)
-	const UFO_SCORE_SPRITE_50  : byte = 19; // sprite image shown for   50 pts
-	const UFO_SCORE_SPRITE_100 : byte = 20; //                         100 pts
-	const UFO_SCORE_SPRITE_150 : byte = 21; //                         150 pts
-	const UFO_SCORE_SPRITE_300 : byte = 22; //                         300 pts
 	ufo_explode_counter : byte = 0;         // frames remaining in score-display phase
 	ufo_score_sprite    : byte = 19;        // which score sprite to show (set on hit)
 
@@ -121,15 +89,10 @@ var
 	// Shield erosion system: 4 charset glyph ranges, painted once at startup from the template.
 	// Sprite 17 ($2440) is the pristine template; erosion operates directly on charset bytes.
 	// Each shield gets 6 chars (3 wide × 2 tall). Char 109+ leaves gap above $3360 (star limit).
-	const SHIELD_TEMPLATE_SRC : integer = $2440; // sprite 17 (pristine, read-only at startup)
 	// Optimized shield lookup table: (x_min, x_max) for each shield
 	SHIELD_X_MIN : array[4] of byte = (45, 93, 141, 189);
 	SHIELD_X_MAX : array[4] of byte = (69, 117, 165, 213);
-	const SHIELD1_DST : integer = $3380; // char 112 ($3000+112*8)
-	const SHIELD2_DST : integer = $33B0; // char 118 ($3000+118*8)
-	const SHIELD3_DST : integer = $33E0; // char 124 ($3000+124*8)
-	const SHIELD4_DST : integer = $3410; // char 130 ($3000+130*8)
-	SHIELD_DST : array[4] of integer = (SHIELD1_DST, SHIELD2_DST, SHIELD3_DST, SHIELD4_DST);
+	SHIELD_DST : array[4] of integer = ($3380, $33B0, $33E0, $3410);
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
 	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
@@ -146,24 +109,9 @@ var
 	explosion_frame_counter : byte = 0;  // Counts frames for explosion animation
 	previous_fire_state : byte = 0;  // Track previous fire button state for debounce
 	//player_bullet_color_toggle : byte = 0;  // unused — color toggle code is commented out
-	const BULLET_SPEED : byte = 4;  // Pixels per frame
-	//const BULLET_SPRITE_HEIGHT : byte = 21;  // Standard C64 sprite height
-	const EXPLOSION_DURATION : byte = 16;  // Frames to show explosion
-	const SHIELD_Y_MIN : byte = 152 + 17 + 16;  // 135
-	const SHIELD_Y_MAX : byte = 167 + 17 + 16;  // 150
-	// Contact-erosion tuning: adjust these to align enemy-contact erosion visually.
-	//   CONTACT_X_NUDGE — subtracted from enemy X before shield lookup.
-	//                      Increase to shift erosion left  (positive = earlier X hit).
-	//   CONTACT_Y_NUDGE — added to SHIELD_Y_MIN for the per-sub-column Y test.
-	//                      Increase to delay contact       (enemy must descend further).
-	const CONTACT_X_NUDGE : byte = 6;
-	const CONTACT_Y_NUDGE : byte = 14;
-	// Erosion stencil shape (4 bytes, applied hit-row first, widening inward then narrowing).
-	// AND-NOT'd into the sprite byte at each row: pixel = pixel & (stencil xor $FF).
-	const ERODE_STENCIL_0 : byte = $FF;   // hit row:    11111111  (full clear — prevents stuck edge bits)
-	const ERODE_STENCIL_1 : byte = $FF;   // 1 row in:   11111111  (full)
-	const ERODE_STENCIL_2 : byte = $3C;   // 2 rows in:  00111100  (4 wide taper)
-	const ERODE_STENCIL_3 : byte = $18;   // 3 rows in:  00011000  (2 wide taper)
+	const SHIELD_Y_MIN : byte = 152 + 17 + 16;  // 185
+	const SHIELD_Y_MAX : byte = 167 + 17 + 16;  // 200
+
 	
 	// Per-column surface caches — updated by ApplyShieldErosion after each hit (O(1) detection).
 	// Index = shield_idx*3 + byte_col (0-11).
@@ -184,27 +132,7 @@ var
 	// Throttles contact erosion to one event per march tick instead of once per frame.
 	enemy_march_tick : byte = 0;
 
-	// --- Hitbox / explosion tuning ---
-	// Explosion sprite X alignment: subtracted from block_x + col*18 (increase = moves left)
-	const EXPLOSION_X_OFFSET : byte = 6;
-	// Explosion sprite Y alignment: added to block_y + row*14 (increase = moves down)
-	const EXPLOSION_Y_OFFSET : byte = 0;
-	// Number of pixels from the TOP of the sprite box to where the explosion lit pixels begin.
-	// Set to (SPRITE_HEIGHT - pixel_height) when pixels are packed at the bottom of the sprite frame,
-	// so the snap calculation places the box above the enemy and the pixels land on it visually.
-	// Must match the actual sprite pixel layout in the .flf sheet.
-	const EXPLOSION_PIXELS_FROM_TOP : byte = 13;
-	// How many pixels below the enemy's bottom edge the bullet still registers a hit (increase = fires sooner)
-	const BULLET_Y_CONTACT_REACH : byte = 0;
-	// Distance from the top of the bullet sprite box to the actual contact pixels (bullet pixels are at the bottom)
-	// C64 sprite box is 21px tall; 4px contact strip at bottom => offset = 21 - 4 = 17
-	const BULLET_Y_CONTACT_OFFSET : byte = 13;
-	// How many pixels into the bullet sprite the contact point is (increase = aim further right to hit)
-	const BULLET_X_CONTACT_REACH : byte = 11;
-
-							
-  
-	// sprite_x is usually an integer since x values range between 
+	// sprite_x is usually an integer since x values range between
 	// 0 and 320. But we have a smaller play area.
 	player_sprite_x : byte = PLAYER_MIN_X;
 	player_sprite_y : byte = PLAYER_POS_Y;
@@ -278,13 +206,6 @@ var
 	//es_shot_sprite_num : array[3] of byte = (6, 5, 7); // unused — use ES_SHOT_SPRITE1/2/3 consts
 
 	//const ES_SHOT_ANIM_START:byte = 13;     // unused
-	const ES_SHOT_ANIM_FRAMES:byte = 4;
-	// ES_SHOT_MOVE_FRAMES is kept for reference but is NO LONGER USED to add a bonus pixel.
-	// C64 NTSC runs at 60 Hz — identical to the arcade — so 1 px/frame is the exact correct
-	// speed with no bonus needed.  The constant is unused in UpdateUFOBullet.
-	//const ES_SHOT_MOVE_FRAMES:byte = 4;  // arcade: 4 px/step every 4 frames = 1 px/frame @ 60 Hz
-	const ES_SHOT_ANIM_HOLD_FRAMES:byte = 3; // frames each animation image is shown before advancing
-	const ES_SHOT_EXPLODE_DURATION:byte = 4; // frames enemy-shot explosion stays on screen
 	// Reload timer formula (arcade-accurate for NTSC 60 Hz):
 	//   reload = alive - ES_SHOT_RELOAD_OFFSET, clamped to ES_SHOT_RELOAD_MIN.
 	//   At 55 enemies (effective game-start count): 55 - 7 = 48 frames = arcade's $30 reload.
@@ -297,22 +218,7 @@ var
 	// Per-slot reload counters — set when a shot completes; gated in TickEnemyShotFiring.
 	ufo_bullet_reload_timer : array[3] of byte = (0, 0, 0);
 	//const ES_SHOT_STAGGER_FRAMES:byte = 1; // unused — use UFO_BULLET_STAGGER_FRAMES instead
-	const UFO_BULLET_STAGGER_FRAMES:byte = 1; // frames between UFO bullet fires
 
-	// ---------------------------------------------------------------------------
-	// Enemy-shot spawn position tuning.
-	// Shots spawn from the base of the lowest alive alien in the selected column.
-	//   ES_SHOT_SPAWN_X_ADJ : horizontal offset from the left edge of the enemy
-	//     cell (6 = center of the 12 px enemy pixel area).  Increase to move
-	//     spawns rightward, decrease to move them leftward.
-	//   ES_SHOT_SPAWN_Y_ADJ : added to the calculated bottom-of-alien Y before
-	//     the shot is placed.  0 = spawn at the exact bottom of the VIC sprite
-	//     box.  Positive = spawn further down (more gap before bullet appears).
-	// ---------------------------------------------------------------------------
-	const ES_SHOT_SPAWN_X_ADJ : byte = -6;  // col center: left-edge + 6 px
-	const ES_SHOT_SPAWN_Y_ADJ : byte = -17;  // 0 = flush with bottom of sprite box
-
-	
 	// ---------------------------------------------------------------------------
 	// Shot-vs-Shot collision: check if the player bullet overlaps any enemy bullet.
 	// Plunger (slot 0) and Squiggly (slot 2): mutual destruction on contact.
@@ -334,10 +240,7 @@ var
 	// frame).  Enemy shot enters explosion state (active:=2) for
 	// ES_SHOT_EXPLODE_DURATION frames.
 	// ---------------------------------------------------------------------------
-	const SHOT_VS_SHOT_MAX_DX : byte = 1;  // max abs X distance for overlap
-	const SHOT_VS_SHOT_Y_ABOVE : byte = 6; // player can be up to 6px above enemy
-	const SHOT_VS_SHOT_Y_BELOW : byte = 3; // player can be up to 3px below enemy
-	
+
 	// Interrupt forward declarations — required because the raster chain is circular
 	// (each handler schedules the next via RasterIRQ, so all must be declared up-front).
 	// No procedure forward declarations needed: every procedure is defined before its
@@ -377,6 +280,8 @@ var
 // ---------------------------------------------------------------------------
 
 procedure ShowUFO();
+var
+	const UFO_SPRITE_IMG : byte = 16; // Sprite image index in the sprite binary
 begin
 	if ufo_active = 1 then
 	begin
@@ -398,6 +303,10 @@ end;
 
 procedure UpdateUFO();
 var
+	const UFO_X_MIN : byte = 24;              // Left edge of play field
+	const UFO_X_MAX : byte = 230;             // Right edge of play field
+	const UFO_SPAWN_TIMER_RESET : integer = 1536; // ~25.6 s at 60 Hz
+	const UFO_MIN_ALIVE_TO_SPAWN : byte = 8;  // Suppressed when fewer than 8 aliens alive
 	ufo_aliens_alive : byte;
 begin
 	if ufo_active = 2 then
@@ -509,6 +418,13 @@ end;
 // ---------------------------------------------------------------------------
 procedure CheckUFOCollision();
 var
+	const UFO_EXPLODE_DURATION : byte = 60;    // ~1 s at 60 Hz — how long score sprite is shown
+	const UFO_HIT_PX_LO : byte = 37;           // min player_bullet_y for Y overlap (UFO_Y+13-20)
+	const UFO_HIT_PX_HI : byte = 47;           // max player_bullet_y for Y overlap (UFO_Y+20-17)
+	const UFO_SCORE_SPRITE_50  : byte = 19;    // sprite image shown for  50 pts
+	const UFO_SCORE_SPRITE_100 : byte = 20;    //                        100 pts
+	const UFO_SCORE_SPRITE_150 : byte = 21;    //                        150 pts
+	const UFO_SCORE_SPRITE_300 : byte = 22;    //                        300 pts
 	uc_score_raw : byte;
 	uc_overlap   : byte;
 begin
@@ -574,6 +490,8 @@ end;
 // ---------------------------------------------------------------------------
 procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
 var
+	const ES_SHOT_SPAWN_X_ADJ : byte = -6;  // col center: left-edge + 6 px
+	const ES_SHOT_SPAWN_Y_ADJ : byte = -17; // 0 = flush with bottom of sprite box
 	spawn_block_col    : byte;
 	spawn_enemy_col    : byte;
 	spawn_block_index  : byte;
@@ -653,6 +571,8 @@ end;
 // ---------------------------------------------------------------------------
 procedure TickEnemyShotFiring();
 var
+	const DEBUG_DISABLE_ENEMY_FIRE  : byte = 0; // Set to 1 to disable all enemy-shot firing
+	const UFO_BULLET_STAGGER_FRAMES : byte = 1; // frames between UFO bullet fires
 	tef_fire_col       : byte;
 	tef_player_rel_x   : byte;
 begin
@@ -737,6 +657,9 @@ end;
 
 procedure UpdateUFOBullet();
 var
+	const ES_SHOT_ANIM_FRAMES      : byte = 4; // animation frame count
+	const ES_SHOT_ANIM_HOLD_FRAMES : byte = 3; // frames each animation image is shown before advancing
+	const ES_SHOT_EXPLODE_DURATION : byte = 4; // frames enemy-shot explosion stays on screen
 	ub_i : byte;
 	ub_anim_fired : byte;
 	ub_alive : byte;  // enemies_alive snapshot used for reload calculation
@@ -806,6 +729,10 @@ end;
 
 procedure CheckShotVsShotCollision();
 var
+	const SHOT_COLLISION_LOCKOUT_PLAYER : byte = 1; // 1 = arcade-like (player bullet locked out)
+	const SHOT_VS_SHOT_MAX_DX : byte = 1;           // max abs X distance for overlap
+	const SHOT_VS_SHOT_Y_ABOVE : byte = 6;          // player can be up to 6px above enemy shot
+	const SHOT_VS_SHOT_Y_BELOW : byte = 3;          // player can be up to 3px below enemy shot
 	sc_i : byte;
 	sc_dx : byte;
 	sc_overlap : byte;
@@ -1298,6 +1225,9 @@ end;
 
 
 procedure UpdatePlayerBullet();
+var
+	const BULLET_SPEED       : byte = 4;  // Pixels per frame upward
+	const EXPLOSION_DURATION : byte = 16; // Frames to show explosion
 begin
 	if player_bullet_active = 1 then
 	begin
@@ -1327,6 +1257,12 @@ end;
 
 procedure CheckBulletCollision();
 var
+	const EXPLOSION_X_OFFSET       : byte = 6;  // sprite X alignment (increase = moves left)
+	const EXPLOSION_Y_OFFSET       : byte = 0;  // sprite Y alignment (increase = moves down)
+	const EXPLOSION_PIXELS_FROM_TOP : byte = 13; // pixels from sprite top to lit pixel start
+	const BULLET_Y_CONTACT_REACH   : byte = 0;  // pixels below enemy bottom that still register a hit
+	const BULLET_Y_CONTACT_OFFSET  : byte = 13; // pixels from top of bullet sprite to contact point
+	const BULLET_X_CONTACT_REACH   : byte = 11; // horizontal pixel offset into bullet sprite for contact
 	block_row       : byte;
 	block_col       : byte;
 	block_index     : byte;
@@ -1450,6 +1386,8 @@ end;
 // ---------------------------------------------------------------------------
 procedure CheckEnemyShieldContact();
 var
+	const CONTACT_X_NUDGE : byte = 6;  // subtracted from enemy X before shield lookup
+	const CONTACT_Y_NUDGE : byte = 14; // added to SHIELD_Y_MIN for per-sub-column Y test
 	cesc_form_row   : byte;  // formation row 2..0
 	cesc_block_col  : byte;  // block column 0-3
 	cesc_enemy_col  : byte;  // enemy sub-column within block 0-2
@@ -1820,6 +1758,10 @@ end;
 // ---------------------------------------------------------------------------
 procedure ApplyShieldErosion();
 var
+	const ERODE_STENCIL_0 : byte = $FF; // hit row    — full clear (prevents stuck edge bits)
+	const ERODE_STENCIL_1 : byte = $FF; // 1 row in   — full clear
+	const ERODE_STENCIL_2 : byte = $3C; // 2 rows in  — 00111100 (4-wide taper)
+	const ERODE_STENCIL_3 : byte = $18; // 3 rows in  — 00011000 (2-wide taper)
 	ase_charset_base : integer;
 	ase_charset_addr : integer;
 	ase_chr_ptr      : pointer of byte;
@@ -1926,6 +1868,7 @@ end;
 // ---------------------------------------------------------------------------
 procedure CopyShieldSprites();
 var
+	const SHIELD_TEMPLATE_SRC : integer = $2440; // sprite 17 (pristine, read-only)
 	css_src       : integer;    // CopyShieldGlyph source address
 	css_dst       : integer;    // CopyShieldGlyph dest address
 	css_scan_addr : integer;
@@ -1940,33 +1883,33 @@ begin
 	// Bot band = template bytes 24,25,26 (cols 0-2, rows 8-15, stride 3).
 
 	// Shield 1
-	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD1_DST;      CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD1_DST + 8;  CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD1_DST + 16; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD1_DST + 24; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD1_DST + 32; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD1_DST + 40; CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD_DST[0];          CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD_DST[0] + 8;      CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD_DST[0] + 16;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD_DST[0] + 24;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD_DST[0] + 32;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD_DST[0] + 40;     CopyShieldGlyph(css_src, css_dst);
 	// Shield 2
-	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD2_DST;      CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD2_DST + 8;  CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD2_DST + 16; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD2_DST + 24; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD2_DST + 32; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD2_DST + 40; CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD_DST[1];          CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD_DST[1] + 8;      CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD_DST[1] + 16;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD_DST[1] + 24;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD_DST[1] + 32;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD_DST[1] + 40;     CopyShieldGlyph(css_src, css_dst);
 	// Shield 3
-	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD3_DST;      CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD3_DST + 8;  CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD3_DST + 16; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD3_DST + 24; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD3_DST + 32; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD3_DST + 40; CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD_DST[2];          CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD_DST[2] + 8;      CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD_DST[2] + 16;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD_DST[2] + 24;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD_DST[2] + 32;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD_DST[2] + 40;     CopyShieldGlyph(css_src, css_dst);
 	// Shield 4
-	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD4_DST;      CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD4_DST + 8;  CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD4_DST + 16; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD4_DST + 24; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD4_DST + 32; CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD4_DST + 40; CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD_DST[3];          CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD_DST[3] + 8;      CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD_DST[3] + 16;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD_DST[3] + 24;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD_DST[3] + 32;     CopyShieldGlyph(css_src, css_dst);
+	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD_DST[3] + 40;     CopyShieldGlyph(css_src, css_dst);
 
 	// Scan the template once per column (all shields identical at startup).
 	// Replicate each result to the 4 shields' cache slots.
@@ -2367,6 +2310,9 @@ end;
 
 procedure UpdateTick();
 var
+	const USE_SPEED_TABLE   : byte = 0; // 1 = table lookup, 0 = pure linear (arcade-accurate)
+	const ENABLE_DROP_FLOOR : byte = 1; // 1 = prevent formation from dropping into player
+	const MONSTER_DROP_AMOUNT : byte = 6; // pixels to drop per direction change
 	should_move_enemy : byte;
 	enemy_count_diff : byte;
 	right_edge : byte;
@@ -2475,9 +2421,10 @@ end;
 
 
 procedure MakeMonsters();
-var 
+var
+	const MONSTER_START_Y : byte = 102; // Initial monster base Y
 	monster_sprite_color : byte = cyan;
-	
+
 begin
 	//monster_base_y := 82;
 	monster_base_y := MONSTER_START_Y;
