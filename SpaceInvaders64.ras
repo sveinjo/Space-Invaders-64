@@ -49,7 +49,7 @@ var
 	// Set to 1 to prevent the formation from dropping into the player; 0 to disable (useful for debugging)
 	const ENABLE_DROP_FLOOR : byte = 1;
 	// Set to 1 to disable all enemy-shot firing; 0 to enable (useful for debugging)
-	const DEBUG_DISABLE_ENEMY_FIRE : byte = 1;
+	const DEBUG_DISABLE_ENEMY_FIRE : byte = 0;
 	//border_debug_color : byte = 2;          // unused — only in commented-out debug lines
 	// Debug helper flag: set to 1 when DebugClearNextMonster actually cleared one
 	//debug_last_cleared : byte = 0;           // unused — DebugClearNextMonster is never called
@@ -63,8 +63,8 @@ var
 	const MONSTER_DROP_AMOUNT : byte = 6;
 	//const MONSTER_DROP_AMOUNT2 : byte = 10;  // unused
 	
-	//const MONSTER_START_Y : byte = 102 ; // Initial monster base Y (was 71 base + 41 adjustment)
-	const MONSTER_START_Y : byte = 123 ; // Initial monster base Y (was 71 base + 41 adjustment)
+	const MONSTER_START_Y : byte = 102 ; // Initial monster base Y (was 71 base + 41 adjustment)
+	//const MONSTER_START_Y : byte = 123 ; // Initial monster base Y (was 71 base + 41 adjustment)
 
 	// UFO constants
 	const UFO_HW_SPRITE : byte = 1;   // Hardware sprite index — shared with monsterSprite1 via raster mux
@@ -171,6 +171,9 @@ var
 	// shield_surface_bot: topmost row (0..15) with any pixels — enemy bullet target. 255=eroded.
 	shield_surface_top : array[12] of byte = (15,15,15,15,15,15,15,15,15,15,15,15);
 	shield_surface_bot : array[12] of byte = ( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	// Per-shield skip flags: 1 = all 3 top columns are fully eroded (enemy side can pass through).
+	// Set by ApplyShieldErosion; reset by CopyShieldSprites at startup.
+	shield_top_eroded  : array[4] of byte  = ( 0, 0, 0, 0);
 	// Pending shield erosion state (for deferred/split processing)
 	pending_shield_erosion : byte = 0;  // 1 = erosion work pending, 0 = none
 	pending_shield_idx : byte = 0;      // Which shield (0-3)
@@ -1520,27 +1523,30 @@ begin
 									else
 										cesc_enemy_x := 0;
 
-									// Match X against each shield via the SHIELD_X_MIN/MAX arrays.
+									// Match X against each shield; skip any fully eroded from the top.
 									cesc_shield_s := 0;
 									while ((cesc_shield_s <= 3) and (cesc_done = 0)) do
 									begin
-										if ((cesc_enemy_x + 11 >= SHIELD_X_MIN[cesc_shield_s]) and
-										    (cesc_enemy_x < SHIELD_X_MAX[cesc_shield_s])) then
+										if shield_top_eroded[cesc_shield_s] = 0 then
 										begin
-											if cesc_enemy_x >= SHIELD_X_MIN[cesc_shield_s] then
-												cesc_byte_col := (cesc_enemy_x - SHIELD_X_MIN[cesc_shield_s]) >> 3
-											else
-												cesc_byte_col := 0;
-											cesc_col_idx := cesc_shield_s * 3 + cesc_byte_col;
-											if ((shield_surface_bot[cesc_col_idx] <> 255) and
-											   (pending_shield_erosion = 0)) then
+											if ((cesc_enemy_x + 11 >= SHIELD_X_MIN[cesc_shield_s]) and
+											    (cesc_enemy_x < SHIELD_X_MAX[cesc_shield_s])) then
 											begin
-												pending_shield_erosion := 1;
-												pending_erosion_dir    := 1;
-												pending_shield_idx     := cesc_shield_s;
-												pending_byte_col       := cesc_byte_col;
-												pending_erase_top      := shield_surface_bot[cesc_col_idx];
-												cesc_done              := 1;
+												if cesc_enemy_x >= SHIELD_X_MIN[cesc_shield_s] then
+													cesc_byte_col := (cesc_enemy_x - SHIELD_X_MIN[cesc_shield_s]) >> 3
+												else
+													cesc_byte_col := 0;
+												cesc_col_idx := cesc_shield_s * 3 + cesc_byte_col;
+												if ((shield_surface_bot[cesc_col_idx] <> 255) and
+												   (pending_shield_erosion = 0)) then
+												begin
+													pending_shield_erosion := 1;
+													pending_erosion_dir    := 1;
+													pending_shield_idx     := cesc_shield_s;
+													pending_byte_col       := cesc_byte_col;
+													pending_erase_top      := shield_surface_bot[cesc_col_idx];
+													cesc_done              := 1;
+												end;
 											end;
 										end;
 										inc(cesc_shield_s);
@@ -1580,6 +1586,8 @@ begin
 			if ((ufo_bullet_y[esc_i] >= SHIELD_Y_MIN) and (ufo_bullet_y[esc_i] <= SHIELD_Y_MAX)) then
 			begin
 				if ((ufo_bullet_x[esc_i] >= 45) and (ufo_bullet_x[esc_i] < 69)) then
+			begin
+				if shield_top_eroded[0] = 0 then
 				begin
 					esc_byte_col := (ufo_bullet_x[esc_i] - 45) >> 3;
 					esc_col_idx  := esc_byte_col;
@@ -1597,8 +1605,11 @@ begin
 						ufo_bullet_active[esc_i]          := 2;
 						ufo_bullet_explode_counter[esc_i] := 0;
 					end;
-				end
-				else if ((ufo_bullet_x[esc_i] >= 93) and (ufo_bullet_x[esc_i] < 117)) then
+				end;
+			end
+			else if ((ufo_bullet_x[esc_i] >= 93) and (ufo_bullet_x[esc_i] < 117)) then
+			begin
+				if shield_top_eroded[1] = 0 then
 				begin
 					esc_byte_col := (ufo_bullet_x[esc_i] - 93) >> 3;
 					esc_col_idx  := 3 + esc_byte_col;
@@ -1616,8 +1627,11 @@ begin
 						ufo_bullet_active[esc_i]          := 2;
 						ufo_bullet_explode_counter[esc_i] := 0;
 					end;
-				end
-				else if ((ufo_bullet_x[esc_i] >= 141) and (ufo_bullet_x[esc_i] < 165)) then
+				end;
+			end
+			else if ((ufo_bullet_x[esc_i] >= 141) and (ufo_bullet_x[esc_i] < 165)) then
+			begin
+				if shield_top_eroded[2] = 0 then
 				begin
 					esc_byte_col := (ufo_bullet_x[esc_i] - 141) >> 3;
 					esc_col_idx  := 6 + esc_byte_col;
@@ -1635,8 +1649,11 @@ begin
 						ufo_bullet_active[esc_i]          := 2;
 						ufo_bullet_explode_counter[esc_i] := 0;
 					end;
-				end
-				else if ((ufo_bullet_x[esc_i] >= 189) and (ufo_bullet_x[esc_i] < 213)) then
+				end;
+			end
+			else if ((ufo_bullet_x[esc_i] >= 189) and (ufo_bullet_x[esc_i] < 213)) then
+			begin
+				if shield_top_eroded[3] = 0 then
 				begin
 					esc_byte_col := (ufo_bullet_x[esc_i] - 189) >> 3;
 					esc_col_idx  := 9 + esc_byte_col;
@@ -1655,6 +1672,7 @@ begin
 						ufo_bullet_explode_counter[esc_i] := 0;
 					end;
 				end;
+			end;
 			end;
 		end;
 		inc(esc_i);
@@ -1888,7 +1906,15 @@ begin
 			end;
 			shield_surface_bot[ase_col_idx] := ase_new_surface;
 			if ase_new_surface = 255 then
+			begin
 				shield_surface_top[ase_col_idx] := 255;
+				// If all 3 columns of this shield are now fully tunnelled from the top,
+				// raise the skip flag so both bullet and contact checks bypass it entirely.
+				if shield_surface_bot[pending_shield_idx * 3] = 255 then
+					if shield_surface_bot[pending_shield_idx * 3 + 1] = 255 then
+						if shield_surface_bot[pending_shield_idx * 3 + 2] = 255 then
+							shield_top_eroded[pending_shield_idx] := 1;
+			end;
 		end;
 
 		pending_shield_erosion := 0;
@@ -1995,6 +2021,12 @@ begin
 
 		inc(css_bc);
 	end;
+
+	// Reset per-shield top-eroded skip flags (all shields freshly painted = none eroded).
+	shield_top_eroded[0] := 0;
+	shield_top_eroded[1] := 0;
+	shield_top_eroded[2] := 0;
+	shield_top_eroded[3] := 0;
 end;
 // ---------------------------------------------------------------------------
 // WriteShieldRow
