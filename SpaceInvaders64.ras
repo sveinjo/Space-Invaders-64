@@ -43,8 +43,8 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 32;   // 1-9; set to any value before startup to test that level
-	total_level_counter : byte = 32;  // Persistent counter; never wraps, keeps incrementing indefinitely
+	current_level : byte = 7;   // 1-9; set to any value before startup to test that level
+	total_level_counter : byte = 7;  // Persistent counter; never wraps, keeps incrementing indefinitely
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -1409,123 +1409,211 @@ end;
 //   X: sub-col 12px wide. right edge (X+11) >= SHIELD_X_MIN, left edge < SHIELD_X_MAX.
 //      CONTACT_X_NUDGE shifts X left; shield matched via SHIELD_X_MIN/MAX arrays.
 // ---------------------------------------------------------------------------
+
+// Global shared state for CheckEnemyShieldContact refactored methods (avoids TRSE var parameter issues)
+var
+	cesc_contact_done : byte;
+
+// Helper: Test if enemy X at given position hits any shield and queue erosion
+procedure CESC_TryAllShields_Unrolled(tas_enemy_x : byte);
+var
+	tas_byte_col : byte;
+	tas_col_idx  : byte;
+begin
+	// Try Shield 0
+	if ((cesc_contact_done = 0) and (shield_top_eroded[0] = 0)) then
+	begin
+		if ((tas_enemy_x + 11 >= SHIELD_X_MIN[0]) and (tas_enemy_x < SHIELD_X_MAX[0])) then
+		begin
+			if tas_enemy_x >= SHIELD_X_MIN[0] then
+				tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[0]) >> 3
+			else
+				tas_byte_col := 0;
+			tas_col_idx := 0 * 3 + tas_byte_col;
+			if shield_surface_bot[tas_col_idx] <> 255 then
+			begin
+				pending_shield_erosion := 1;
+				pending_erosion_dir    := 1;
+				pending_shield_idx     := 0;
+				pending_byte_col       := tas_byte_col;
+				pending_erase_top      := shield_surface_bot[tas_col_idx];
+				cesc_contact_done      := 1;
+			end;
+		end;
+	end;
+
+	// Try Shield 1
+	if ((cesc_contact_done = 0) and (shield_top_eroded[1] = 0)) then
+	begin
+		if ((tas_enemy_x + 11 >= SHIELD_X_MIN[1]) and (tas_enemy_x < SHIELD_X_MAX[1])) then
+		begin
+			if tas_enemy_x >= SHIELD_X_MIN[1] then
+				tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[1]) >> 3
+			else
+				tas_byte_col := 0;
+			tas_col_idx := 1 * 3 + tas_byte_col;
+			if shield_surface_bot[tas_col_idx] <> 255 then
+			begin
+				pending_shield_erosion := 1;
+				pending_erosion_dir    := 1;
+				pending_shield_idx     := 1;
+				pending_byte_col       := tas_byte_col;
+				pending_erase_top      := shield_surface_bot[tas_col_idx];
+				cesc_contact_done      := 1;
+			end;
+		end;
+	end;
+
+	// Try Shield 2
+	if ((cesc_contact_done = 0) and (shield_top_eroded[2] = 0)) then
+	begin
+		if ((tas_enemy_x + 11 >= SHIELD_X_MIN[2]) and (tas_enemy_x < SHIELD_X_MAX[2])) then
+		begin
+			if tas_enemy_x >= SHIELD_X_MIN[2] then
+				tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[2]) >> 3
+			else
+				tas_byte_col := 0;
+			tas_col_idx := 2 * 3 + tas_byte_col;
+			if shield_surface_bot[tas_col_idx] <> 255 then
+			begin
+				pending_shield_erosion := 1;
+				pending_erosion_dir    := 1;
+				pending_shield_idx     := 2;
+				pending_byte_col       := tas_byte_col;
+				pending_erase_top      := shield_surface_bot[tas_col_idx];
+				cesc_contact_done      := 1;
+			end;
+		end;
+	end;
+
+	// Try Shield 3
+	if ((cesc_contact_done = 0) and (shield_top_eroded[3] = 0)) then
+	begin
+		if ((tas_enemy_x + 11 >= SHIELD_X_MIN[3]) and (tas_enemy_x < SHIELD_X_MAX[3])) then
+		begin
+			if tas_enemy_x >= SHIELD_X_MIN[3] then
+				tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[3]) >> 3
+			else
+				tas_byte_col := 0;
+			tas_col_idx := 3 * 3 + tas_byte_col;
+			if shield_surface_bot[tas_col_idx] <> 255 then
+			begin
+				pending_shield_erosion := 1;
+				pending_erosion_dir    := 1;
+				pending_shield_idx     := 3;
+				pending_byte_col       := tas_byte_col;
+				pending_erase_top      := shield_surface_bot[tas_col_idx];
+				cesc_contact_done      := 1;
+			end;
+		end;
+	end;
+end;
+
+// Helper: Check one enemy column (0, 1, or 2) - unrolled for constant enemy_col
+procedure CESC_CheckColumn(cc_row : byte; cc_block_col : byte; cc_enemy_col : byte; cc_row_offset : byte);
+var
+	cc_block_byte : byte;
+	cc_col_mask   : byte;
+	cc_bot_mask   : byte;
+	cc_enemy_x    : byte;
+begin
+	if cesc_contact_done = 0 then
+	begin
+		cc_block_byte := block_enemies[cc_row * 4 + cc_block_col];
+		
+		// Unrolled column masks for efficiency
+		if cc_enemy_col = 0 then
+		begin
+			cc_col_mask := $03;
+			cc_bot_mask := $02;
+		end
+		else if cc_enemy_col = 1 then
+		begin
+			cc_col_mask := $0C;
+			cc_bot_mask := $08;
+		end
+		else
+		begin
+			cc_col_mask := $30;
+			cc_bot_mask := $20;
+		end;
+		
+		if (cc_block_byte & cc_col_mask) <> 0 then
+		begin
+			if (((cc_block_byte & cc_bot_mask) <> 0) or
+			   (monster_base_y + cc_row_offset + 7 >= SHIELD_Y_MIN + 14)) then
+			begin
+				cc_enemy_x := monster_base_x + cc_block_col * MONSTER_SPACING + cc_enemy_col * 18;
+				if cc_enemy_x >= 6 then
+					cc_enemy_x := cc_enemy_x - 6
+				else
+					cc_enemy_x := 0;
+				CESC_TryAllShields_Unrolled(cc_enemy_x);
+			end;
+		end;
+	end;
+end;
+
+// Helper: Check all 3 columns in one block
+procedure CESC_CheckBlock(cb_row : byte; cb_block_col : byte; cb_row_offset : byte);
+begin
+	CESC_CheckColumn(cb_row, cb_block_col, 0, cb_row_offset);
+	CESC_CheckColumn(cb_row, cb_block_col, 1, cb_row_offset);
+	CESC_CheckColumn(cb_row, cb_block_col, 2, cb_row_offset);
+end;
+
+// Helper: Check all blocks (0-3) in one formation row
+procedure CESC_CheckRow(cr_row : byte; cr_row_offset : byte);
+begin
+	if block_enemies[cr_row * 4 + 0] <> 0 then CESC_CheckBlock(cr_row, 0, cr_row_offset);
+	if block_enemies[cr_row * 4 + 1] <> 0 then CESC_CheckBlock(cr_row, 1, cr_row_offset);
+	if block_enemies[cr_row * 4 + 2] <> 0 then CESC_CheckBlock(cr_row, 2, cr_row_offset);
+	if block_enemies[cr_row * 4 + 3] <> 0 then CESC_CheckBlock(cr_row, 3, cr_row_offset);
+end;
+
+// REFACTORED: CheckEnemyShieldContact
+//   Flattened from 8 levels of nesting to 4 levels maximum.
+//   Uses loop unrolling (3 columns, 4 shields constant-unrolled) and method dispatch.
 procedure CheckEnemyShieldContact();
 var
-	const CONTACT_X_NUDGE : byte = 6;  // subtracted from enemy X before shield lookup
-	const CONTACT_Y_NUDGE : byte = 14; // added to SHIELD_Y_MIN for per-sub-column Y test
-	cesc_form_row   : byte;  // formation row 2..0
-	cesc_block_col  : byte;  // block column 0-3
-	cesc_enemy_col  : byte;  // enemy sub-column within block 0-2
-	cesc_row_offset : byte;  // Y pixel offset for this formation row
-	cesc_block_byte : byte;  // cached block_enemies[row*4+col]
-	cesc_col_mask   : byte;  // alive mask for both sub-rows of this sub-column
-	cesc_bot_mask   : byte;  // alive mask for bottom sub-row only
-	cesc_enemy_x    : byte;  // nudged pixel X of sub-column left edge
-	cesc_shield_s   : byte;  // shield index 0-3 (loop variable)
-	cesc_byte_col   : byte;  // byte column within shield (0-2)
-	cesc_col_idx    : byte;  // cache index = shield_s*3 + byte_col
-	cesc_done       : byte;  // 1 = erosion queued, exit all loops
+	cesc_row_offset : byte;
 begin
 	if enemy_march_tick <> 0 then
 	begin
 		enemy_march_tick := 0;
-		// Cheap bailout: if one erosion is already queued, skip this contact scan.
 		if pending_shield_erosion = 0 then
 		begin
-			cesc_done := 0;
-			cesc_form_row := 2;
-			// Scan rows from bottom (2) upward.
-			// Decrement past 0 wraps to 255 (byte underflow) which exits the <= 2 guard.
-			while ((cesc_form_row <= 2) and (cesc_done = 0)) do
+			//sei();  // Disable IRQs for state consistency
+			PreventIRQ();
+			
+			cesc_contact_done := 0;
+			
+			// Check formation row 2
+			cesc_row_offset := 52;
+			if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + 14) and
+			    (monster_base_y + cesc_row_offset <= SHIELD_Y_MAX)) then
+				CESC_CheckRow(2, cesc_row_offset);
+			
+			// Check formation row 1
+			if cesc_contact_done = 0 then
 			begin
-				// Compute Y offset for this formation row.
-				if cesc_form_row = 0 then
-					cesc_row_offset := 0
-				else if cesc_form_row = 1 then
-					cesc_row_offset := MONSTER_ROW_OFFSET
-				else
-					cesc_row_offset := 52;
-
-				// Row fast skip: row-20 bottom must reach the tuned shield band.
-				if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE) and
+				cesc_row_offset := MONSTER_ROW_OFFSET;
+				if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + 14) and
 				    (monster_base_y + cesc_row_offset <= SHIELD_Y_MAX)) then
-				begin
-					cesc_block_col := 0;
-					while ((cesc_block_col <= 3) and (cesc_done = 0)) do
-					begin
-						cesc_block_byte := block_enemies[cesc_form_row * 4 + cesc_block_col];
-						if cesc_block_byte <> 0 then
-						begin
-							cesc_enemy_col := 0;
-							while ((cesc_enemy_col <= 2) and (cesc_done = 0)) do
-							begin
-								// col 0: pair=$03 bot=$02  col 1: pair=$0C bot=$08  col 2: pair=$30 bot=$20
-								if cesc_enemy_col = 0 then
-								begin
-									cesc_col_mask := $03;
-									cesc_bot_mask := $02;
-								end
-								else if cesc_enemy_col = 1 then
-								begin
-									cesc_col_mask := $0C;
-									cesc_bot_mask := $08;
-								end
-								else
-								begin
-									cesc_col_mask := $30;
-									cesc_bot_mask := $20;
-								end;
-
-								if (cesc_block_byte & cesc_col_mask) <> 0 then
-								begin
-									// Y precision: top-only enemy (row 7) may not yet reach the band.
-									// Bottom sub-row alive -> row 20, already covered by row fast skip.
-									if (((cesc_block_byte & cesc_bot_mask) <> 0) or
-									   (monster_base_y + cesc_row_offset + 7 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE)) then
-									begin
-										cesc_enemy_x := monster_base_x + cesc_block_col * MONSTER_SPACING + cesc_enemy_col * 18;
-										if cesc_enemy_x >= CONTACT_X_NUDGE then
-											cesc_enemy_x := cesc_enemy_x - CONTACT_X_NUDGE
-										else
-											cesc_enemy_x := 0;
-
-										// Match X against each shield; skip any fully eroded from the top.
-										cesc_shield_s := 0;
-										while ((cesc_shield_s <= 3) and (cesc_done = 0)) do
-										begin
-											if shield_top_eroded[cesc_shield_s] = 0 then
-											begin
-												if ((cesc_enemy_x + 11 >= SHIELD_X_MIN[cesc_shield_s]) and
-												    (cesc_enemy_x < SHIELD_X_MAX[cesc_shield_s])) then
-												begin
-													if cesc_enemy_x >= SHIELD_X_MIN[cesc_shield_s] then
-														cesc_byte_col := (cesc_enemy_x - SHIELD_X_MIN[cesc_shield_s]) >> 3
-													else
-														cesc_byte_col := 0;
-													cesc_col_idx := cesc_shield_s * 3 + cesc_byte_col;
-													if shield_surface_bot[cesc_col_idx] <> 255 then
-													begin
-														pending_shield_erosion := 1;
-														pending_erosion_dir    := 1;
-														pending_shield_idx     := cesc_shield_s;
-														pending_byte_col       := cesc_byte_col;
-														pending_erase_top      := shield_surface_bot[cesc_col_idx];
-														cesc_done              := 1;
-													end;
-												end;
-											end;
-											inc(cesc_shield_s);
-										end;
-									end;
-								end;
-								inc(cesc_enemy_col);
-							end;
-						end;
-						inc(cesc_block_col);
-					end;
-				end;
-				dec(cesc_form_row);  // byte underflow at 0 -> 255, exits while cesc_form_row <= 2
+					CESC_CheckRow(1, cesc_row_offset);
 			end;
+			
+			// Check formation row 0
+			if cesc_contact_done = 0 then
+			begin
+				cesc_row_offset := 0;
+				if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + 14) and
+				    (monster_base_y + cesc_row_offset <= SHIELD_Y_MAX)) then
+					CESC_CheckRow(0, cesc_row_offset);
+			end;
+			
+			EnableIRQ();
+			//cli();  // Re-enable IRQs
 		end;
 	end;
 end;
