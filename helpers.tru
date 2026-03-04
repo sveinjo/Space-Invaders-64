@@ -649,18 +649,7 @@ end;
 //   starting at a given integer address, using pointer dereferencing
 //   (the correct TRSE idiom — poke with an integer addr generates bad asm).
 // ---------------------------------------------------------------------------
-procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
-var
-	wsr_ptr : pointer of byte;
-begin
-	// Use pointer dereference (the starfield pattern).
-	wsr_ptr := wsr_addr;
-	wsr_ptr[0] := wsr_c0;
-	inc(wsr_ptr);
-	wsr_ptr[0] := wsr_c1;
-	inc(wsr_ptr);
-	wsr_ptr[0] := wsr_c2;
-end;
+
 
 // ---------------------------------------------------------------------------
 // PlaceShieldBlock
@@ -678,6 +667,20 @@ end;
 procedure PlaceShieldBlock(psb_base_addr : integer; psb_char_base : byte);
 var
 	psb_addr : integer;
+	
+	procedure WriteShieldRow(wsr_addr : integer; wsr_c0 : byte; wsr_c1 : byte; wsr_c2 : byte);
+	var
+		wsr_ptr : pointer of byte;
+	begin
+		// Use pointer dereference (the starfield pattern).
+		wsr_ptr := wsr_addr;
+		wsr_ptr[0] := wsr_c0;
+		inc(wsr_ptr);
+		wsr_ptr[0] := wsr_c1;
+		inc(wsr_ptr);
+		wsr_ptr[0] := wsr_c2;
+	end;
+	
 begin
 	// Top row (3 chars at psb_base_addr)
 	WriteShieldRow(psb_base_addr, psb_char_base, psb_char_base + 1, psb_char_base + 2);

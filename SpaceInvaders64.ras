@@ -1,4 +1,4 @@
-﻿program SpaceInvaders64;
+program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
@@ -152,8 +152,13 @@ var
 	previous_fire_state : byte = 0;  // Track previous fire button state for debounce
 	const SHIELD_Y_MIN : byte = 152 + 17 + 16;  // 185
 	const SHIELD_Y_MAX : byte = 167 + 17 + 16;  // 200
+	// Erosion stencil shape (4 bytes, applied hit-row first, widening inward then narrowing).
+	// AND-NOT'd into the charset byte at each row: pixel = pixel & (stencil xor $FF).
+	const ERODE_STENCIL_0 : byte = $FF;   // hit row:    11111111  (full clear — prevents stuck edge bits)
+	const ERODE_STENCIL_1 : byte = $FF;   // 1 row in:   11111111  (full)
+	const ERODE_STENCIL_2 : byte = $3C;   // 2 rows in:  00111100  (4 wide taper)
+	const ERODE_STENCIL_3 : byte = $18;   // 3 rows in:  00011000  (2 wide taper)
 
-	
 	// Per-column surface caches — updated by ApplyShieldErosion after each hit (O(1) detection).
 	// Index = shield_idx*3 + byte_col (0-11).
 	// shield_surface_top: bottommost row (15..0) with any pixels — player bullet target. 255=eroded.
@@ -172,6 +177,9 @@ var
 	// Set to 1 by UpdateTick on every enemy march step; consumed by CheckEnemyShieldContact.
 	// Throttles contact erosion to one event per march tick instead of once per frame.
 	enemy_march_tick : byte = 0;
+	// Collision state flags — must be global because nested procs cannot access outer-proc locals.
+	cbc_found_hit     : byte = 0;  // Set to 1 when CheckBulletCollision hits an enemy; reset each call.
+	cesc_contact_done : byte = 0;  // Set to 1 once CheckEnemyShieldContact queues erosion; reset each tick.
 
 	// sprite_x is usually an integer since x values range between
 	// 0 and 320. But we have a smaller play area.
@@ -477,82 +485,12 @@ end;
 //   Stops at the first (lowest) alive alien found and activates the shot slot.
 //   If no alive alien exists in the column the slot is left untouched.
 // ---------------------------------------------------------------------------
-procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
-var
-	spawn_block_col    : byte;
-	spawn_enemy_col    : byte;
-	spawn_block_index  : byte;
-	spawn_enemy_index  : byte;
-	spawn_enemy_mask   : byte;
-	spawn_form_row     : byte;
-	spawn_sub_row      : byte;
-	spawn_found_flag   : byte;
-	spawn_x_calc       : byte;
-	spawn_y_calc       : byte;
-begin
-	spawn_block_col  := spawn_col / 3;
-	spawn_enemy_col  := spawn_col - spawn_block_col * 3;
-	spawn_found_flag := 0;
-	spawn_form_row   := 2;  // start at bottom formation row
 
-	// Scan downward (form_row 2→0).  TRSE has no 'exit': use found_flag + countdown trick.
-	// When the counter reaches 0 it is set to 255 (> 2) to break on the next while check.
-	while (spawn_form_row <= 2 and spawn_found_flag = 0) do
-	begin
-		spawn_sub_row := 1;  // bottom sub-row within block first
-		while (spawn_sub_row <= 1 and spawn_found_flag = 0) do
-		begin
-			spawn_block_index := spawn_form_row * 4 + spawn_block_col;
-			spawn_enemy_index := spawn_enemy_col * 2 + spawn_sub_row;
-			spawn_enemy_mask  := 1 << spawn_enemy_index;
-			if (block_enemies[spawn_block_index] & spawn_enemy_mask) <> 0 then
-			begin
-				// Compute screen position.
-				// X: block left-edge offset + per-column offset + centering adjustment.
-				spawn_x_calc := spawn_block_col * MONSTER_SPACING
-				              + spawn_enemy_col * 18
-				              - 6;
-				spawn_x_calc := monster_base_x + spawn_x_calc;
-				// Y: formation row offset + sub-row offset + sprite height + fine-tune.
-				spawn_y_calc := spawn_form_row * MONSTER_ROW_OFFSET
-				              + spawn_sub_row * 14
-				              + 4;
-				spawn_y_calc := monster_base_y + spawn_y_calc;
-
-				ufo_bullet_x[spawn_slot]          := spawn_x_calc;
-				ufo_bullet_y[spawn_slot]          := spawn_y_calc;
-				ufo_bullet_active[spawn_slot]     := 1;
-				ufo_bullet_anim_index[spawn_slot] := 0;
-				ufo_bullet_anim_tick[spawn_slot]  := 0;
-				spawn_found_flag := 1;
-			end;
-			// Count sub_row downward: 1→0 then break (set to 255 > 1)
-			if spawn_sub_row = 0 then
-				spawn_sub_row := 255
-			else
-				dec(spawn_sub_row);
-		end;
-		// Count form_row downward: 2→1→0 then break (set to 255 > 2)
-		if spawn_form_row = 0 then
-			spawn_form_row := 255
-		else
-			dec(spawn_form_row);
-	end;
-end;
 
 // ---------------------------------------------------------------------------
 // TickEnemyShotFiring
-//   Called every frame.  Manages the stagger timer and selects the correct
-//   column for each shot type, then calls SpawnShotFromColumn.
-//
-//   Slot routing (matches arcade shot types):
-//     SHOT_SLOT_PLUNGER  (0) — predefined column table (arcade_plunger_columns)
-//     SHOT_SLOT_ROLLING  (1) — tracks player X: fires from the column directly
-//                               above the player's current position
-//     SHOT_SLOT_SQUIGGLY (2) — predefined column table (arcade_squiggly_columns)
-//
-//   Only fires a slot if it is currently inactive (active = 0).  If the slot
-//   is still in flight the stagger counter still resets so timing is preserved.
+//   Manages the stagger timer and selects the correct column for each shot
+//   type, then calls SpawnShotFromColumn (nested — sole caller).
 // ---------------------------------------------------------------------------
 procedure TickEnemyShotFiring();
 var
@@ -560,6 +498,63 @@ var
 	const UFO_BULLET_STAGGER_FRAMES : byte = 1; // frames between UFO bullet fires
 	tef_fire_col       : byte;
 	tef_player_rel_x   : byte;
+
+	// ── Nested: Fire enemy-shot slot from lowest alive alien in column ────────
+	procedure SpawnShotFromColumn(spawn_col : byte; spawn_slot : byte);
+	var
+		spawn_block_col    : byte;
+		spawn_enemy_col    : byte;
+		spawn_block_index  : byte;
+		spawn_enemy_index  : byte;
+		spawn_enemy_mask   : byte;
+		spawn_form_row     : byte;
+		spawn_sub_row      : byte;
+		spawn_found_flag   : byte;
+		spawn_x_calc       : byte;
+		spawn_y_calc       : byte;
+	begin
+		spawn_block_col  := spawn_col / 3;
+		spawn_enemy_col  := spawn_col - spawn_block_col * 3;
+		spawn_found_flag := 0;
+		spawn_form_row   := 2;  // start at bottom formation row
+
+		while (spawn_form_row <= 2 and spawn_found_flag = 0) do
+		begin
+			spawn_sub_row := 1;
+			while (spawn_sub_row <= 1 and spawn_found_flag = 0) do
+			begin
+				spawn_block_index := spawn_form_row * 4 + spawn_block_col;
+				spawn_enemy_index := spawn_enemy_col * 2 + spawn_sub_row;
+				spawn_enemy_mask  := 1 << spawn_enemy_index;
+				if (block_enemies[spawn_block_index] & spawn_enemy_mask) <> 0 then
+				begin
+					spawn_x_calc := spawn_block_col * MONSTER_SPACING
+					              + spawn_enemy_col * 18
+					              - 6;
+					spawn_x_calc := monster_base_x + spawn_x_calc;
+					spawn_y_calc := spawn_form_row * MONSTER_ROW_OFFSET
+					              + spawn_sub_row * 14
+					              + 4;
+					spawn_y_calc := monster_base_y + spawn_y_calc;
+					ufo_bullet_x[spawn_slot]          := spawn_x_calc;
+					ufo_bullet_y[spawn_slot]          := spawn_y_calc;
+					ufo_bullet_active[spawn_slot]     := 1;
+					ufo_bullet_anim_index[spawn_slot] := 0;
+					ufo_bullet_anim_tick[spawn_slot]  := 0;
+					spawn_found_flag := 1;
+				end;
+				if spawn_sub_row = 0 then
+					spawn_sub_row := 255
+				else
+					dec(spawn_sub_row);
+			end;
+			if spawn_form_row = 0 then
+				spawn_form_row := 255
+			else
+				dec(spawn_form_row);
+		end;
+	end; // SpawnShotFromColumn
+
 begin
 	// Debug gate: disable enemy firing entirely when DEBUG_DISABLE_ENEMY_FIRE = 1
 	if DEBUG_DISABLE_ENEMY_FIRE = 0 then
@@ -903,58 +898,58 @@ begin
 	//sprite_color[UFO_HW_SPRITE] := light_red;
 end;
 
-// ---------------------------------------------------------------------------
-// HideGetReadyText
-//   Restores the buffered starfield characters and colors to remove the "Get ready" text.
-// ---------------------------------------------------------------------------
-procedure HideGetReadyText();
-var
-	hgrt_screen_addr : integer;
-	hgrt_color_addr : integer;
-	hgrt_ptr : pointer of byte;
-	hgrt_color_ptr : pointer of byte;
-	hgrt_i : byte;
-begin
-	
-	// Restore line 1 (13 chars + colors) from GET_READY_LINE1_COL
-	hgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
-	hgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
-	hgrt_ptr := hgrt_screen_addr;
-	hgrt_color_ptr := hgrt_color_addr;
-	hgrt_i := 0;
-	while hgrt_i < 13 do
-	begin
-		hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
-		hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
-		inc(hgrt_i);
-		inc(hgrt_ptr);
-		inc(hgrt_color_ptr);
-	end;
 
-	// Restore line 2 (8 chars + colors) from GET_READY_LINE2_COL
-	hgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-	hgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-	hgrt_ptr := hgrt_screen_addr;
-	hgrt_color_ptr := hgrt_color_addr;
-	while hgrt_i < 21 do  // hgrt_i continues from 13
-	begin
-		hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
-		hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
-		inc(hgrt_i);
-		inc(hgrt_ptr);
-		inc(hgrt_color_ptr);
-	end;
-end;
+
 
 // ---------------------------------------------------------------------------
 // StartLevel
 //   Called from IntermissionChain when the player presses fire.
-//   Does the heavy monster initialisation here, at a natural transition point
-//   (player-initiated), so any brief pause is imperceptible.
-//   AdvanceLevel() stays lightweight so ClearMonster can call it safely from
-//   inside the raster interrupt without stalling for multiple frames.
+//   HideGetReadyText nested inside — sole caller.
 // ---------------------------------------------------------------------------
 procedure StartLevel();
+var
+	// ── Nested: Restore buffered starfield chars beneath get-ready text ───────
+	// ---------------------------------------------------------------------------
+	// HideGetReadyText
+	//   Restores the buffered starfield characters and colors to remove the "Get ready" text.
+	// ---------------------------------------------------------------------------
+	procedure HideGetReadyText();
+	var
+		hgrt_screen_addr : integer;
+		hgrt_color_addr  : integer;
+		hgrt_ptr         : pointer of byte;
+		hgrt_color_ptr   : pointer of byte;
+		hgrt_i           : byte;
+	begin
+		// Restore line 1 (13 chars + colors) from GET_READY_LINE1_COL
+		hgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
+		hgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
+		hgrt_ptr := hgrt_screen_addr;
+		hgrt_color_ptr := hgrt_color_addr;
+		hgrt_i := 0;
+		while hgrt_i < 13 do
+		begin
+			hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
+			hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
+			inc(hgrt_i);
+			inc(hgrt_ptr);
+			inc(hgrt_color_ptr);
+		end;
+		// Restore line 2 (8 chars + colors) from GET_READY_LINE2_COL
+		hgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+		hgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+		hgrt_ptr := hgrt_screen_addr;
+		hgrt_color_ptr := hgrt_color_addr;
+		while hgrt_i < 21 do  // hgrt_i continues from 13
+		begin
+			hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
+			hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
+			inc(hgrt_i);
+			inc(hgrt_ptr);
+			inc(hgrt_color_ptr);
+		end;
+	end; // HideGetReadyText
+
 begin
 	HideGetReadyText();
 
@@ -1296,89 +1291,9 @@ end;
 
 // ---------------------------------------------------------------------------
 // CheckBulletCollision
-//   REFACTORED: Unrolled 4-column while loop to reduce nesting depth.
-//   Original: 1 while loop × 5-6 levels of nested if statements
-//   Refactored: 4 helper method calls with global flag for early exit
 //   Checks player bullet collision against enemy formation blocks.
+//   CBC_CheckBlockColumn nested inside — sole caller.
 // ---------------------------------------------------------------------------
-
-// Global shared state for CheckBulletCollision (avoids TRSE var parameter limitation)
-var
-	cbc_found_hit : byte;
-
-// Helper: Check one block column for bullet collision
-procedure CBC_CheckBlockColumn(cbcc_block_col : byte; cbcc_block_row_base : byte; cbcc_block_x : byte; 
-                                cbcc_block_y : byte; cbcc_rel_y : byte);
-var
-	const EXPLOSION_X_OFFSET       : byte = 6;
-	const EXPLOSION_Y_OFFSET       : byte = 0;
-	const EXPLOSION_PIXELS_FROM_TOP : byte = 13;
-	const BULLET_Y_CONTACT_REACH   : byte = 0;
-	const BULLET_X_CONTACT_REACH   : byte = 11;
-	cbcc_block_index     : byte;
-	cbcc_enemy_alive     : byte;
-	cbcc_rel_x           : byte;
-	cbcc_enemy_col       : byte;
-	cbcc_enemy_row       : byte;
-	cbcc_hit_enemy_index : byte;
-	cbcc_enemy_mask      : byte;
-begin
-	if cbc_found_hit = 0 then
-	begin
-		cbcc_block_index := cbcc_block_row_base + cbcc_block_col;
-		cbcc_enemy_alive := block_enemies[cbcc_block_index];
-		
-		if cbcc_enemy_alive <> 0 then
-		begin
-			// Horizontal range check: contact point within [block_x, block_x+48).
-			if player_bullet_x >= cbcc_block_x - BULLET_X_CONTACT_REACH then
-				if player_bullet_x < cbcc_block_x + 48 - BULLET_X_CONTACT_REACH then
-				begin
-					cbcc_rel_x := player_bullet_x - cbcc_block_x + BULLET_X_CONTACT_REACH;
-					
-					// Enemy column within block (0-2): 12px wide, 6px gaps.
-					if cbcc_rel_x < 12 then
-						cbcc_enemy_col := 0
-					else if cbcc_rel_x < 18 then
-						cbcc_enemy_col := $FF  // gap
-					else if cbcc_rel_x < 30 then
-						cbcc_enemy_col := 1
-					else if cbcc_rel_x < 36 then
-						cbcc_enemy_col := $FF  // gap
-					else
-						cbcc_enemy_col := 2;
-					
-					// Enemy row within block (0=top, 1=bottom).
-					cbcc_enemy_row := $FF;
-					if cbcc_rel_y <= 7 + BULLET_Y_CONTACT_REACH then
-						cbcc_enemy_row := 0
-					else if (cbcc_rel_y >= 8 and cbcc_rel_y <= 21 + BULLET_Y_CONTACT_REACH) then
-						cbcc_enemy_row := 1;
-					
-					if (cbcc_enemy_row <> $FF and cbcc_enemy_col <> $FF) then
-					begin
-						cbcc_hit_enemy_index := cbcc_enemy_col * 2 + cbcc_enemy_row;
-						cbcc_enemy_mask := 1 << cbcc_hit_enemy_index;
-						
-						if (cbcc_enemy_alive & cbcc_enemy_mask) <> 0 then
-						begin
-							ClearMonster(cbcc_block_index, cbcc_hit_enemy_index);
-							player_bullet_x := cbcc_block_x + cbcc_enemy_col * 18 - EXPLOSION_X_OFFSET;
-							player_bullet_y := cbcc_block_y + cbcc_enemy_row * 14 + EXPLOSION_Y_OFFSET - EXPLOSION_PIXELS_FROM_TOP;
-							player_bullet_active := 2;
-							explosion_frame_counter := 0;
-							cbc_found_hit := 1;
-							
-							// Award points for the kill and flag the display for refresh.
-							Score := Score + 12;
-							score_dirty := 1;
-						end;
-					end;
-				end;
-		end;
-	end;
-end;
-
 procedure CheckBulletCollision();
 var
 	const BULLET_Y_CONTACT_OFFSET  : byte = 13;
@@ -1388,6 +1303,80 @@ var
 	cbc_block_y         : byte;
 	cbc_rel_y           : byte;
 	cbc_block_x         : byte;
+
+	// ── Nested: Check one block column for bullet collision ──────────────────
+	procedure CBC_CheckBlockColumn(cbcc_block_col : byte; cbcc_block_row_base : byte; cbcc_block_x : byte;
+	                                cbcc_block_y : byte; cbcc_rel_y : byte);
+	var
+		const EXPLOSION_X_OFFSET        : byte = 6;
+		const EXPLOSION_Y_OFFSET        : byte = 0;
+		const EXPLOSION_PIXELS_FROM_TOP : byte = 13;
+		const BULLET_Y_CONTACT_REACH    : byte = 0;
+		const BULLET_X_CONTACT_REACH    : byte = 11;
+		cbcc_block_index     : byte;
+		cbcc_enemy_alive     : byte;
+		cbcc_rel_x           : byte;
+		cbcc_enemy_col       : byte;
+		cbcc_enemy_row       : byte;
+		cbcc_hit_enemy_index : byte;
+		cbcc_enemy_mask      : byte;
+	begin
+		if cbc_found_hit = 0 then
+		begin
+			cbcc_block_index := cbcc_block_row_base + cbcc_block_col;
+			cbcc_enemy_alive := block_enemies[cbcc_block_index];
+			
+			if cbcc_enemy_alive <> 0 then
+			begin
+				// Horizontal range check: contact point within [block_x, block_x+48).
+				if player_bullet_x >= cbcc_block_x - BULLET_X_CONTACT_REACH then
+					if player_bullet_x < cbcc_block_x + 48 - BULLET_X_CONTACT_REACH then
+					begin
+						cbcc_rel_x := player_bullet_x - cbcc_block_x + BULLET_X_CONTACT_REACH;
+						
+						// Enemy column within block (0-2): 12px wide, 6px gaps.
+						if cbcc_rel_x < 12 then
+							cbcc_enemy_col := 0
+						else if cbcc_rel_x < 18 then
+							cbcc_enemy_col := $FF  // gap
+						else if cbcc_rel_x < 30 then
+							cbcc_enemy_col := 1
+						else if cbcc_rel_x < 36 then
+							cbcc_enemy_col := $FF  // gap
+						else
+							cbcc_enemy_col := 2;
+						
+						// Enemy row within block (0=top, 1=bottom).
+						cbcc_enemy_row := $FF;
+						if cbcc_rel_y <= 7 + BULLET_Y_CONTACT_REACH then
+							cbcc_enemy_row := 0
+						else if (cbcc_rel_y >= 8 and cbcc_rel_y <= 21 + BULLET_Y_CONTACT_REACH) then
+							cbcc_enemy_row := 1;
+						
+						if (cbcc_enemy_row <> $FF and cbcc_enemy_col <> $FF) then
+						begin
+							cbcc_hit_enemy_index := cbcc_enemy_col * 2 + cbcc_enemy_row;
+							cbcc_enemy_mask := 1 << cbcc_hit_enemy_index;
+							
+							if (cbcc_enemy_alive & cbcc_enemy_mask) <> 0 then
+							begin
+								ClearMonster(cbcc_block_index, cbcc_hit_enemy_index);
+								player_bullet_x := cbcc_block_x + cbcc_enemy_col * 18 - EXPLOSION_X_OFFSET;
+								player_bullet_y := cbcc_block_y + cbcc_enemy_row * 14 + EXPLOSION_Y_OFFSET - EXPLOSION_PIXELS_FROM_TOP;
+								player_bullet_active := 2;
+								explosion_frame_counter := 0;
+								cbc_found_hit := 1;
+								
+								// Award points for the kill and flag the display for refresh.
+								Score := Score + 12;
+								score_dirty := 1;
+							end;
+						end;
+					end;
+			end;
+		end;
+	end; // CBC_CheckBlockColumn
+
 begin
 	cbc_should_check := 1;
 	cbc_found_hit := 0;
@@ -1442,167 +1431,6 @@ end;
 //      CONTACT_X_NUDGE shifts X left; shield matched via SHIELD_X_MIN/MAX arrays.
 // ---------------------------------------------------------------------------
 
-// Global shared state for CheckEnemyShieldContact refactored methods (avoids TRSE var parameter issues)
-var
-	cesc_contact_done : byte;
-
-// Helper: Test if enemy X at given position hits any shield and queue erosion
-procedure CESC_TryAllShields_Unrolled(tas_enemy_x : byte);
-var
-	tas_byte_col : byte;
-	tas_col_idx  : byte;
-begin
-	// Try Shield 0
-	if ((cesc_contact_done = 0) and (shield_top_eroded[0] = 0)) then
-	begin
-		if ((tas_enemy_x + 11 >= SHIELD_X_MIN[0]) and (tas_enemy_x < SHIELD_X_MAX[0])) then
-		begin
-			if tas_enemy_x >= SHIELD_X_MIN[0] then
-				tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[0]) >> 3
-			else
-				tas_byte_col := 0;
-			tas_col_idx := 0 * 3 + tas_byte_col;
-			if shield_surface_bot[tas_col_idx] <> 255 then
-			begin
-				pending_shield_erosion := 1;
-				pending_erosion_dir    := 1;
-				pending_shield_idx     := 0;
-				pending_byte_col       := tas_byte_col;
-				pending_erase_top      := shield_surface_bot[tas_col_idx];
-				cesc_contact_done      := 1;
-			end;
-		end;
-	end;
-
-	// Try Shield 1
-	if ((cesc_contact_done = 0) and (shield_top_eroded[1] = 0)) then
-	begin
-		if ((tas_enemy_x + 11 >= SHIELD_X_MIN[1]) and (tas_enemy_x < SHIELD_X_MAX[1])) then
-		begin
-			if tas_enemy_x >= SHIELD_X_MIN[1] then
-				tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[1]) >> 3
-			else
-				tas_byte_col := 0;
-			tas_col_idx := 1 * 3 + tas_byte_col;
-			if shield_surface_bot[tas_col_idx] <> 255 then
-			begin
-				pending_shield_erosion := 1;
-				pending_erosion_dir    := 1;
-				pending_shield_idx     := 1;
-				pending_byte_col       := tas_byte_col;
-				pending_erase_top      := shield_surface_bot[tas_col_idx];
-				cesc_contact_done      := 1;
-			end;
-		end;
-	end;
-
-	// Try Shield 2
-	if ((cesc_contact_done = 0) and (shield_top_eroded[2] = 0)) then
-	begin
-		if ((tas_enemy_x + 11 >= SHIELD_X_MIN[2]) and (tas_enemy_x < SHIELD_X_MAX[2])) then
-		begin
-			if tas_enemy_x >= SHIELD_X_MIN[2] then
-				tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[2]) >> 3
-			else
-				tas_byte_col := 0;
-			tas_col_idx := 2 * 3 + tas_byte_col;
-			if shield_surface_bot[tas_col_idx] <> 255 then
-			begin
-				pending_shield_erosion := 1;
-				pending_erosion_dir    := 1;
-				pending_shield_idx     := 2;
-				pending_byte_col       := tas_byte_col;
-				pending_erase_top      := shield_surface_bot[tas_col_idx];
-				cesc_contact_done      := 1;
-			end;
-		end;
-	end;
-
-	// Try Shield 3
-	if ((cesc_contact_done = 0) and (shield_top_eroded[3] = 0)) then
-	begin
-		if ((tas_enemy_x + 11 >= SHIELD_X_MIN[3]) and (tas_enemy_x < SHIELD_X_MAX[3])) then
-		begin
-			if tas_enemy_x >= SHIELD_X_MIN[3] then
-				tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[3]) >> 3
-			else
-				tas_byte_col := 0;
-			tas_col_idx := 3 * 3 + tas_byte_col;
-			if shield_surface_bot[tas_col_idx] <> 255 then
-			begin
-				pending_shield_erosion := 1;
-				pending_erosion_dir    := 1;
-				pending_shield_idx     := 3;
-				pending_byte_col       := tas_byte_col;
-				pending_erase_top      := shield_surface_bot[tas_col_idx];
-				cesc_contact_done      := 1;
-			end;
-		end;
-	end;
-end;
-
-// Helper: Check one enemy column (0, 1, or 2) - unrolled for constant enemy_col
-procedure CESC_CheckColumn(cc_row : byte; cc_block_col : byte; cc_enemy_col : byte; cc_row_offset : byte);
-var
-	cc_block_byte : byte;
-	cc_col_mask   : byte;
-	cc_bot_mask   : byte;
-	cc_enemy_x    : byte;
-begin
-	if cesc_contact_done = 0 then
-	begin
-		cc_block_byte := block_enemies[cc_row * 4 + cc_block_col];
-		
-		// Unrolled column masks for efficiency
-		if cc_enemy_col = 0 then
-		begin
-			cc_col_mask := $03;
-			cc_bot_mask := $02;
-		end
-		else if cc_enemy_col = 1 then
-		begin
-			cc_col_mask := $0C;
-			cc_bot_mask := $08;
-		end
-		else
-		begin
-			cc_col_mask := $30;
-			cc_bot_mask := $20;
-		end;
-		
-		if (cc_block_byte & cc_col_mask) <> 0 then
-		begin
-			if (((cc_block_byte & cc_bot_mask) <> 0) or
-			   (monster_base_y + cc_row_offset + 7 >= SHIELD_Y_MIN + 14)) then
-			begin
-				cc_enemy_x := monster_base_x + cc_block_col * MONSTER_SPACING + cc_enemy_col * 18;
-				if cc_enemy_x >= 6 then
-					cc_enemy_x := cc_enemy_x - 6
-				else
-					cc_enemy_x := 0;
-				CESC_TryAllShields_Unrolled(cc_enemy_x);
-			end;
-		end;
-	end;
-end;
-
-// Helper: Check all 3 columns in one block
-procedure CESC_CheckBlock(cb_row : byte; cb_block_col : byte; cb_row_offset : byte);
-begin
-	CESC_CheckColumn(cb_row, cb_block_col, 0, cb_row_offset);
-	CESC_CheckColumn(cb_row, cb_block_col, 1, cb_row_offset);
-	CESC_CheckColumn(cb_row, cb_block_col, 2, cb_row_offset);
-end;
-
-// Helper: Check all blocks (0-3) in one formation row
-procedure CESC_CheckRow(cr_row : byte; cr_row_offset : byte);
-begin
-	if block_enemies[cr_row * 4 + 0] <> 0 then CESC_CheckBlock(cr_row, 0, cr_row_offset);
-	if block_enemies[cr_row * 4 + 1] <> 0 then CESC_CheckBlock(cr_row, 1, cr_row_offset);
-	if block_enemies[cr_row * 4 + 2] <> 0 then CESC_CheckBlock(cr_row, 2, cr_row_offset);
-	if block_enemies[cr_row * 4 + 3] <> 0 then CESC_CheckBlock(cr_row, 3, cr_row_offset);
-end;
-
 // ---------------------------------------------------------------------------
 // SHIELD SYSTEM PROCEDURES — Charset-based erosion + surface caching
 // ---------------------------------------------------------------------------
@@ -1613,21 +1441,178 @@ end;
 // CopyShieldSprites: Resets shield charsets to pristine (called per level, plus game start)
 //
 // Refactoring Notes:
-//   - Deep nesting (8+ levels) reduced to 4 levels via method extraction + loop unrolling
-//   - This achieved >50% compile-time reduction in CheckEnemyShieldContact
-//   - Uses global flags (cesc_contact_done, cbc_found_hit) for early-exit communication
+//   - CESC_CheckRow/Block/Column/TryAllShields nested inside CheckEnemyShieldContact
+//   - CBC_CheckBlockColumn nested inside CheckBulletCollision
+//   - Each flag (cesc_contact_done, cbc_found_hit) is a global var (nested procs can't access outer-proc locals)
 // ---------------------------------------------------------------------------
 
 procedure CheckEnemyShieldContact();
 var
-	cesc_row_offset : byte;
-begin
+	cesc_row_offset   : byte;
+
+	// ── Nested: Test enemy X against all 4 shields ──────────────────────────────
+	procedure CESC_TryAllShields_Unrolled(tas_enemy_x : byte);
+	var
+		tas_byte_col : byte;
+		tas_col_idx  : byte;
+	begin
+		// Try Shield 0
+		if ((cesc_contact_done = 0) and (shield_top_eroded[0] = 0)) then
+		begin
+			if ((tas_enemy_x + 11 >= SHIELD_X_MIN[0]) and (tas_enemy_x < SHIELD_X_MAX[0])) then
+			begin
+				if tas_enemy_x >= SHIELD_X_MIN[0] then
+					tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[0]) >> 3
+				else
+					tas_byte_col := 0;
+				tas_col_idx := 0 * 3 + tas_byte_col;
+				if shield_surface_bot[tas_col_idx] <> 255 then
+				begin
+					pending_shield_erosion := 1;
+					pending_erosion_dir    := 1;
+					pending_shield_idx     := 0;
+					pending_byte_col       := tas_byte_col;
+					pending_erase_top      := shield_surface_bot[tas_col_idx];
+					cesc_contact_done      := 1;
+				end;
+			end;
+		end;
+	
+		// Try Shield 1
+		if ((cesc_contact_done = 0) and (shield_top_eroded[1] = 0)) then
+		begin
+			if ((tas_enemy_x + 11 >= SHIELD_X_MIN[1]) and (tas_enemy_x < SHIELD_X_MAX[1])) then
+			begin
+				if tas_enemy_x >= SHIELD_X_MIN[1] then
+					tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[1]) >> 3
+				else
+					tas_byte_col := 0;
+				tas_col_idx := 1 * 3 + tas_byte_col;
+				if shield_surface_bot[tas_col_idx] <> 255 then
+				begin
+					pending_shield_erosion := 1;
+					pending_erosion_dir    := 1;
+					pending_shield_idx     := 1;
+					pending_byte_col       := tas_byte_col;
+					pending_erase_top      := shield_surface_bot[tas_col_idx];
+					cesc_contact_done      := 1;
+				end;
+			end;
+		end;
+	
+		// Try Shield 2
+		if ((cesc_contact_done = 0) and (shield_top_eroded[2] = 0)) then
+		begin
+			if ((tas_enemy_x + 11 >= SHIELD_X_MIN[2]) and (tas_enemy_x < SHIELD_X_MAX[2])) then
+			begin
+				if tas_enemy_x >= SHIELD_X_MIN[2] then
+					tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[2]) >> 3
+				else
+					tas_byte_col := 0;
+				tas_col_idx := 2 * 3 + tas_byte_col;
+				if shield_surface_bot[tas_col_idx] <> 255 then
+				begin
+					pending_shield_erosion := 1;
+					pending_erosion_dir    := 1;
+					pending_shield_idx     := 2;
+					pending_byte_col       := tas_byte_col;
+					pending_erase_top      := shield_surface_bot[tas_col_idx];
+					cesc_contact_done      := 1;
+				end;
+			end;
+		end;
+	
+		// Try Shield 3
+		if ((cesc_contact_done = 0) and (shield_top_eroded[3] = 0)) then
+		begin
+			if ((tas_enemy_x + 11 >= SHIELD_X_MIN[3]) and (tas_enemy_x < SHIELD_X_MAX[3])) then
+			begin
+				if tas_enemy_x >= SHIELD_X_MIN[3] then
+					tas_byte_col := (tas_enemy_x - SHIELD_X_MIN[3]) >> 3
+				else
+					tas_byte_col := 0;
+				tas_col_idx := 3 * 3 + tas_byte_col;
+				if shield_surface_bot[tas_col_idx] <> 255 then
+				begin
+					pending_shield_erosion := 1;
+					pending_erosion_dir    := 1;
+					pending_shield_idx     := 3;
+					pending_byte_col       := tas_byte_col;
+					pending_erase_top      := shield_surface_bot[tas_col_idx];
+					cesc_contact_done      := 1;
+				end;
+			end;
+		end;
+	end; // CESC_TryAllShields_Unrolled
+	
+	// ── Nested: Check one enemy column (0, 1, or 2) ─────────────────────────────
+	procedure CESC_CheckColumn(cc_row : byte; cc_block_col : byte; cc_enemy_col : byte; cc_row_offset : byte);
+	var
+		cc_block_byte : byte;
+		cc_col_mask   : byte;
+		cc_bot_mask   : byte;
+		cc_enemy_x    : byte;
+	begin // CESC_CheckColumn
+		if cesc_contact_done = 0 then
+		begin
+			cc_block_byte := block_enemies[cc_row * 4 + cc_block_col];
+			
+			// Unrolled column masks for efficiency
+			if cc_enemy_col = 0 then
+			begin
+				cc_col_mask := $03;
+				cc_bot_mask := $02;
+			end
+			else if cc_enemy_col = 1 then
+			begin
+				cc_col_mask := $0C;
+				cc_bot_mask := $08;
+			end
+			else
+			begin
+				cc_col_mask := $30;
+				cc_bot_mask := $20;
+			end;
+			
+			if (cc_block_byte & cc_col_mask) <> 0 then
+			begin
+				if (((cc_block_byte & cc_bot_mask) <> 0) or
+				   (monster_base_y + cc_row_offset + 7 >= SHIELD_Y_MIN + 14)) then
+				begin
+					cc_enemy_x := monster_base_x + cc_block_col * MONSTER_SPACING + cc_enemy_col * 18;
+					if cc_enemy_x >= 6 then
+						cc_enemy_x := cc_enemy_x - 6
+					else
+						cc_enemy_x := 0;
+					CESC_TryAllShields_Unrolled(cc_enemy_x);
+				end;
+			end;
+		end;
+	end; // CESC_CheckColumn
+	
+	// ── Nested: Check all 3 columns in one block ────────────────────────────────
+	procedure CESC_CheckBlock(cb_row : byte; cb_block_col : byte; cb_row_offset : byte);
+	begin // CESC_CheckBlock
+		CESC_CheckColumn(cb_row, cb_block_col, 0, cb_row_offset);
+		CESC_CheckColumn(cb_row, cb_block_col, 1, cb_row_offset);
+		CESC_CheckColumn(cb_row, cb_block_col, 2, cb_row_offset);
+	end; // CESC_CheckBlock
+	
+	// ── Nested: Check all blocks (0-3) in one formation row ─────────────────────
+	procedure CESC_CheckRow(cr_row : byte; cr_row_offset : byte);
+	begin // CESC_CheckRow
+		if block_enemies[cr_row * 4 + 0] <> 0 then CESC_CheckBlock(cr_row, 0, cr_row_offset);
+		if block_enemies[cr_row * 4 + 1] <> 0 then CESC_CheckBlock(cr_row, 1, cr_row_offset);
+		if block_enemies[cr_row * 4 + 2] <> 0 then CESC_CheckBlock(cr_row, 2, cr_row_offset);
+		if block_enemies[cr_row * 4 + 3] <> 0 then CESC_CheckBlock(cr_row, 3, cr_row_offset);
+	end; // CESC_CheckRow
+
+begin // CheckEnemyShieldContact
 	if enemy_march_tick <> 0 then
 	begin
 		enemy_march_tick := 0;
 		if pending_shield_erosion = 0 then
 		begin
-			//sei();  // Disable IRQs for state consistency
 			PreventIRQ();
 			
 			cesc_contact_done := 0;
@@ -1657,10 +1642,9 @@ begin
 			end;
 			
 			EnableIRQ();
-			//cli();  // Re-enable IRQs
 		end;
 	end;
-end;
+end; // CheckEnemyShieldContact
 
 // ---------------------------------------------------------------------------
 // CheckEnemyShieldCollision
@@ -1770,37 +1754,9 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-//   Copies 8 rows of one charset glyph from sprite data.
-//   csg_src: address of the first byte of the sprite column to read.
-//   csg_dst: address of the first byte of the 8-byte charset glyph to write.
-//   The sprite is 3 bytes wide per row, so src advances by 3 per row while
-//   dst advances by 1 per row.
-// ---------------------------------------------------------------------------
-procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
-var
-	csg_src_ptr : pointer of integer;
-	csg_dst_ptr : pointer of integer;
-begin
-	// Fully unrolled — no loop counter, no compare, no branch.
-	csg_src_ptr := csg_src;
-	csg_dst_ptr := csg_dst;
-	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-	csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-	csg_dst_ptr[0] := csg_src_ptr[0];
-end;
-
-// ---------------------------------------------------------------------------
 // CheckShieldCollision - DETECTION PHASE ONLY (fast)
 //   Just detects collision and queues erosion work for later application.
-//   1. X/Y bounding box → which shield (0-3)
-//   2. Map bullet X to sprite byte column (0-2) using bit shift
-//   3. Scan sprite byte column bottom-up to find the surface row
-//   4. Queue erosion work if needed
+//   Nested inside MainRasterPlayer — sole caller.
 // ---------------------------------------------------------------------------
 procedure CheckShieldCollision();
 var
@@ -1894,17 +1850,11 @@ end;
 
 // ---------------------------------------------------------------------------
 // ApplyShieldErosion - EROSION PHASE
-//   AND-NOTs the stencil directly into charset bytes (the display IS the
-//   ground truth — no sprite intermediary) and advances the surface caches
-//   deterministically: stencils 0+1 are always $FF (full clear), so the
-//   surface always moves exactly 2 rows inward. No rescan needed.
+//   AND-NOTs the stencil directly into charset bytes and advances the surface
+//   caches deterministically.  Nested inside MainRasterChain — sole caller.
 // ---------------------------------------------------------------------------
 procedure ApplyShieldErosion();
 var
-	const ERODE_STENCIL_0 : byte = $FF; // hit row    — full clear (prevents stuck edge bits)
-	const ERODE_STENCIL_1 : byte = $FF; // 1 row in   — full clear
-	const ERODE_STENCIL_2 : byte = $3C; // 2 rows in  — 00111100 (4-wide taper)
-	const ERODE_STENCIL_3 : byte = $18; // 3 rows in  — 00011000 (2-wide taper)
 	ase_charset_base : integer;
 	ase_charset_addr : integer;
 	ase_chr_ptr      : pointer of byte;
@@ -2021,6 +1971,26 @@ var
 	css_row       : byte;
 	css_bc        : byte;       // byte column 0-2
 	css_found     : byte;       // scan result sentinel
+
+	// ── Nested: Copy 8 rows of one charset glyph from sprite data ───────────
+	procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
+	var
+		csg_src_ptr : pointer of integer;
+		csg_dst_ptr : pointer of integer;
+	begin
+		// Fully unrolled — no loop counter, no compare, no branch.
+		csg_src_ptr := csg_src;
+		csg_dst_ptr := csg_dst;
+		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
+		csg_dst_ptr[0] := csg_src_ptr[0];
+	end; // CopyShieldGlyph
+
 begin
 	// Paint all 4 shield charsets directly from the single pristine template.
 	// Sprite slot copies are no longer needed — erosion operates on charset bytes.

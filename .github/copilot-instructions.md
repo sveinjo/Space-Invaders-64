@@ -34,13 +34,52 @@ The TRSE compiler has severe performance penalties for certain code patterns. Op
 - **Shallow nesting**: Keep nesting depth ≤4 levels; extract nested logic to helper methods
 - **Method dispatch**: Call helper methods instead of deeply nested loops
 - **Duplicated branches**: Duplicate code with constant values rather than shared logic with variables
+- **Nested single-caller procedures**: Procedures with exactly one caller can be nested inside that caller's `var` block — confirmed to **improve** compile time
+
+### TRSE Nested Procedure Pattern
+Procedures called by exactly one other `procedure` (not `interrupt`) should be nested inside it. This reduces compile time and makes scope explicit.
+
+```pascal
+procedure OuterProc();
+var
+    outer_var : byte;
+
+    // ── Nested: brief description ──────────────────────────────────────
+    procedure InnerProc(param : byte);
+    var
+        inner_var : byte;
+    begin
+        // body — can access outer_var directly (shared scope)
+    end; // InnerProc
+
+begin  // OuterProc
+    InnerProc(value);
+end; // OuterProc
+```
+
+**Rules**:
+- Nested procs are declared inside the outer proc's `var` block, after the outer's own vars
+- **Innermost-first ordering**: when chaining multiple levels, declare the deepest proc first (bottom-up)
+- Each nested proc has its own `var`/`begin`/`end`
+- The outer proc's `begin` starts after all nested declarations
+- Only applies to regular `procedure` — do **not** nest inside `interrupt` handlers (untested / unsupported)
+- Nested procs share **only the global namespace** — they cannot access the outer procedure's local variables. Variables shared between outer and inner proc must remain global.
+- Multi-caller procedures must **not** be nested
+
+**Examples in codebase**:
+- `CESC_TryAllShields_Unrolled` → `CESC_CheckColumn` → `CESC_CheckBlock` → `CESC_CheckRow` → `CheckEnemyShieldContact` (4-level chain)
+- `CBC_CheckBlockColumn` nested inside `CheckBulletCollision`
+- `SpawnShotFromColumn` nested inside `TickEnemyShotFiring`
+- `HideGetReadyText` nested inside `StartLevel`
+- `CopyShieldGlyph` nested inside `CopyShieldSprites`
 
 ### Refactoring Strategy for Compile-Time Optimization
 1. Identify procedures with 5+ levels of nesting (primary target)
 2. Extract each nested loop level into a separate helper method
 3. Unroll loops with ≤4 constant iterations into sequential calls/checks
 4. Use unique variable name prefixes per method to avoid global namespace collisions
-5. Test compile time before/after to measure impact
+5. Nest single-caller helper methods inside their sole caller (bottom-up ordering)
+6. Test compile time before/after to measure impact
 
 ## IRQ Handling and Thread Safety
 C64 raster interrupts can fire at any time, potentially corrupting shared state during multi-step operations.
@@ -63,7 +102,7 @@ begin
         global_state_1 := new_value;
         global_state_2 := calculate_something();
         
-        CloseIRQ();  // Re-enable IRQs
+        EnableIRQ();  // Re-enable IRQs
     end;
 end;
 ```
