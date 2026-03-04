@@ -18,6 +18,8 @@ Unit Helpers;
 var
    i: byte;
    temp: integer;
+   
+   
 
 // ============================================================================
 //  1.  HELPER FUNCTIONS
@@ -45,6 +47,8 @@ begin
 	// Modulo operation (dividend mod divisor)
 	Mod := modDividend - ((modDividend / modDivisor) * modDivisor);
 end;
+
+
 
 // ============================================================================
 //  2.  ORIGINAL ARCADE GAME CONSTANTS

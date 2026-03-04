@@ -147,7 +147,7 @@ var
 	color_row : byte;
 	color_offset : integer;
 	color_mem : pointer of byte;
-	
+
 begin
 	// Build the color pattern from the 6 input colors using the predefined sequence
 	colorPattern[0] := col1;
@@ -192,8 +192,27 @@ begin
 		end;
 		inc(color_col);
 	end;
+	StarfieldColours[0] := StarColour1;
+	StarfieldColours[1] := StarColour2;
+	StarfieldColours[2] := StarColour3;
+	StarfieldColours[3] := StarColour4;
+	StarfieldColours[4] := StarColour1;
+	StarfieldColours[5] := StarColour5;
+	StarfieldColours[6] := StarColour3;
+	StarfieldColours[7] := StarColour6;
+	StarfieldColours[8] := StarColour2;
+	StarfieldColours[9] := StarColour1;
+	StarfieldColours[10] := StarColour1;
+	StarfieldColours[11] := StarColour2;
+	StarfieldColours[12] := StarColour1;
+	StarfieldColours[13] := StarColour4;
+	StarfieldColours[14] := StarColour1;
+	StarfieldColours[15] := StarColour5;
+	StarfieldColours[16] := StarColour3;
+	StarfieldColours[17] := StarColour6;
+	StarfieldColours[18] := StarColour2;
+	StarfieldColours[19] := StarColour3;
 end;
-
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Fills the entire character screen with the characters and colours defined in StarfieldRow\StarfieldColours.
@@ -201,6 +220,7 @@ end;
 procedure CreateStarScreen();
 var
 	currentchar : byte;
+	colourindex : byte;
 	col : byte;
 	row : byte;
 	saddr : array[18] of integer;
@@ -220,6 +240,7 @@ begin
 	CreateAddressTable( #saddr, $0400, 40, 18 );   // $0400 screen address, 40 chars/row, 18 rows used
    	CreateAddressTable( #caddr, $D800, 40, 18 );   // $D800 color address, 40 chars/row, 18 rows used
 
+	colourindex := 0;
 	col := 0;	
 	while col <= 28 do begin
 	
@@ -243,16 +264,22 @@ begin
 			if currentchar = 83 then begin
 				currentchar := 58;
 			end;
+			
+			colormemory := AddressTable( #caddr, col, row );
+			colormemory[0] := StarfieldColours[colourindex];
 	
 			inc(row);
 			
 		end;
 		
+		inc(colourindex);
+		
+		if colourindex > 19 then begin
+			colourindex := 0;
+		end;
+		
 		inc(col);		
 	end;	
-	
-	// Apply the default color pattern to the starfield
-	//SetStarfieldColors(StarColour1, StarColour2, StarColour3, StarColour4, StarColour5, StarColour6);
 	
 	StarfieldPtr := #STAR1INIT;
 	StarfieldPtr2 := #STAR2INIT;
@@ -321,6 +348,5 @@ begin
 		StaticStarPtr[0] := 0;
 	end;
 
-end;
-
+	end;
 end.
