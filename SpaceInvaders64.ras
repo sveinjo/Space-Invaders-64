@@ -952,6 +952,59 @@ var
 
 begin
 	HideGetReadyText();
+	
+	// Reset enemy grid to full rack
+	block_enemies[0]  := $3F;
+	block_enemies[1]  := $3F;
+	block_enemies[2]  := $3F;
+	block_enemies[3]  := $3F;
+	block_enemies[4]  := $3F;
+	block_enemies[5]  := $3F;
+	block_enemies[6]  := $3F;
+	block_enemies[7]  := $3F;
+	block_enemies[8]  := $3F;
+	block_enemies[9]  := $3F;
+	block_enemies[10] := $3F;
+	block_enemies[11] := $3F;
+	numberOfEnemies := 0;
+
+	// Reset march / movement state
+	enemy_direction      := 1;
+	enemyMoveCounter     := INITIAL_INVADER_COUNT;
+	current_speed_delay  := 50;
+	pending_edge_rescan  := 0;
+	enemy_march_tick     := 0;
+	monster_animation_frame := 0;
+
+	// Reset enemy shot state
+	ufo_bullet_active[0]       := 0;
+	ufo_bullet_active[1]       := 0;
+	ufo_bullet_active[2]       := 0;
+	ufo_bullet_reload_timer[0] := 0;
+	ufo_bullet_reload_timer[1] := 0;
+	ufo_bullet_reload_timer[2] := 0;
+	ufo_bullet_next_to_fire    := 0;
+	ufo_bullet_stagger_counter := 0;
+	es_plunger_step  := 0;
+	es_squiggly_step := 0;
+
+	// Reset player bullet
+	player_bullet_active := 0;
+
+	// Reset UFO
+	ufo_active := 0;
+	ufo_spawn_timer := 1536;
+
+
+	
+
+	// Reset player position to far left
+	player_sprite_x := PLAYER_MIN_X;
+
+	// Regenerate shields only for levels < 5 (using persistent counter)
+	if total_level_counter < 5 then
+		CopyShieldSprites();
+
 
 	// Build the monster formation for the new level.
 	// These are the heavy calls (~3 frames combined) — safe here because the
@@ -3012,58 +3065,7 @@ begin
 		StarField::SetStarfieldColors(RED,GREEN,LIGHT_BLUE,WHITE,YELLOW,BLUE); // RGB
 	end;
 
-	// Reset enemy grid to full rack
-	block_enemies[0]  := $3F;
-	block_enemies[1]  := $3F;
-	block_enemies[2]  := $3F;
-	block_enemies[3]  := $3F;
-	block_enemies[4]  := $3F;
-	block_enemies[5]  := $3F;
-	block_enemies[6]  := $3F;
-	block_enemies[7]  := $3F;
-	block_enemies[8]  := $3F;
-	block_enemies[9]  := $3F;
-	block_enemies[10] := $3F;
-	block_enemies[11] := $3F;
-	numberOfEnemies := 0;
-
-	// Reset march / movement state
-	enemy_direction      := 1;
-	enemyMoveCounter     := INITIAL_INVADER_COUNT;
-	current_speed_delay  := 50;
-	pending_edge_rescan  := 0;
-	enemy_march_tick     := 0;
-	monster_animation_frame := 0;
-
-	// Reset enemy shot state
-	ufo_bullet_active[0]       := 0;
-	ufo_bullet_active[1]       := 0;
-	ufo_bullet_active[2]       := 0;
-	ufo_bullet_reload_timer[0] := 0;
-	ufo_bullet_reload_timer[1] := 0;
-	ufo_bullet_reload_timer[2] := 0;
-	ufo_bullet_next_to_fire    := 0;
-	ufo_bullet_stagger_counter := 0;
-	es_plunger_step  := 0;
-	es_squiggly_step := 0;
-
-	// Reset player bullet
-	player_bullet_active := 0;
-
-	// Reset UFO
-	ufo_active := 0;
-	ufo_spawn_timer := 1536;
-
-
 	
-
-	// Reset player position to far left
-	player_sprite_x := PLAYER_MIN_X;
-
-	// Regenerate shields only for levels < 5 (using persistent counter)
-	if total_level_counter < 5 then
-		CopyShieldSprites();
-
 	// Disable all sprites during intermission; StartLevel() re-enables them when
 	// the player presses fire.  Monster init is intentionally deferred to StartLevel()
 	// so this function stays fast enough to call from within the raster interrupt
