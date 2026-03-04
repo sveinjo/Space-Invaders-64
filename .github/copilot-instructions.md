@@ -46,7 +46,7 @@ The TRSE compiler has severe performance penalties for certain code patterns. Op
 C64 raster interrupts can fire at any time, potentially corrupting shared state during multi-step operations.
 
 ### When to Use IRQ Protection
-Use `sei()` (disable interrupts) / `cli()` (enable interrupts) around:
+Use `PreventIRQ()` (disable interrupts) / `EnableIRQ()` (enable interrupts) around:
 - **Multi-step state updates** where intermediate state is invalid (e.g., queuing shield erosion)
 - **Critical sections** accessing shared global variables modified by both main loop and IRQ handlers
 - **Complex calculations** that must complete atomically
@@ -69,14 +69,14 @@ end;
 ```
 
 ### Important IRQ Rules
-- **Never nest `PreventIRQ`/`CloseIRQ`**: They are absolute flags, not a nesting stack. Nested `CloseIRQ()` will re-enable IRQs even if outer context expects them masked.
+- **Never nest `PreventIRQ`/`EnableIRQ`**: They are absolute flags, not a nesting stack. Nested `EnableIRQ()` will re-enable IRQs even if outer context expects them masked.
 - **Keep critical sections short**: Long IRQ-disabled sections cause audio glitches and dropped frames
 - **Main loop operations**: Most game logic runs in `MainRasterChain()` with IRQs already active - add protection only where needed
-- **Interrupt handlers**: Use `interrupt` keyword and end with `CloseIRQ()` - never call `PreventIRQ`/`CloseIRQ` inside interrupt handlers
+- **Interrupt handlers**: Use `interrupt` keyword and end with `EnableIRQ()` - never call `PreventIRQ`/`EnableIRQ` inside interrupt handlers
 
 ### Examples in Codebase
-- `CheckEnemyShieldContact()`: Uses `PreventIRQ`/`CloseIRQ` to protect `cesc_contact_done` flag and `pending_shield_erosion` state
-- `ShowGetReadyText()` / `HideGetReadyText()`: Must NOT use nested `PreventIRQ`/`CloseIRQ` - caused crashes when called from IRQ-protected contexts
+- `CheckEnemyShieldContact()`: Uses `PreventIRQ`/`EnableIRQ` to protect `cesc_contact_done` flag and `pending_shield_erosion` state
+- `ShowGetReadyText()` / `HideGetReadyText()`: Must NOT use nested `PreventIRQ`/`EnableIRQ` - caused crashes when called from IRQ-protected contexts
 
 ## Architecture
 - Main program entry is the TRSE project file pointing at the .ras source and output type.
