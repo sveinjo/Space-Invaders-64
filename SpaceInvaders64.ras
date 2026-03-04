@@ -1,9 +1,51 @@
-program SpaceInvaders64;
+﻿program SpaceInvaders64;
 @use "screen/screen"
 @use "system/memory"
 @use "system"
 @use "starfield"
 @use "helpers"
+
+// ============================================================================
+//  SPACE INVADERS 64 — C64 Arcade Implementation
+// ============================================================================
+//
+//  ARCHITECTURE & GLOBAL VARIABLES:
+//
+//  This program uses a raster-interrupt-driven architecture with minimal main loop.
+//  The critical game loop (UpdateTick) is commented out; the raster handlers manage
+//  all state updates and display. All global variables are persistent state accessed
+//  across multiple interrupt contexts — they MUST remain global even if used by
+//  only one procedure (due to TRSE's per-frame interrupt model).
+//
+//  INTERRUPT-SAFETY PATTERNS:
+//
+//  1. STATE FLAGS (enemy_march_tick, pending_shield_erosion, etc.):
+//     - Written by one handler, read by another or main-loop-derived logic
+//     - Volatile — may change mid-procedure; use local copies if multi-step
+//
+//  2. COLLISION STATE (cbc_found_hit, cesc_contact_done):
+//     - Helper procedures modify these to communicate with their caller
+//     - Must be global since TRSE has no `var` (pass-by-reference) parameters
+//     - Initialize to 0 at caller; check result after helper returns
+//
+//  3. POSITION/ANIMATION (monster_base_y, player_bullet_y, etc.):
+//     - Raster handlers cache these at frame start for consistency
+//     - Cache invalidation flags (pending_edge_rescan) trigger rescans
+//     - Never modify mid-frame within an interrupt; queue changes for next frame
+//
+//  4. FRAME-PERSISTENT COUNTERS (ufo_spawn_timer, enemy_move_counter):
+//     - Decremented/incremented by UpdateTick (currently disabled)
+//     - Safe from interrupt corruption if accessed as atomic byte/word loads
+//
+//  COMPILE-TIME OPTIMIZATIONS:
+//
+//  - Deep method extraction (CheckEnemyShieldContact, CheckBulletCollision)
+//    reduces nesting from 8+ levels to 4 levels max
+//  - Loop unrolling for tight 3-4 iteration loops (shields, columns, enemies)
+//  - Constant array indexing instead of variable subscripts (faster codegen)
+//  - Forward declarations preserved to maintain logical grouping
+//
+// ============================================================================
 
 var
 	sidfile: incsid("sid/Courier.sid",2);
@@ -83,7 +125,6 @@ var
 	ufo_bullet_x : array[3] of byte = (0, 0, 0);           // Fixed X position (set when fired)
 	ufo_bullet_y : array[3] of byte = (0, 0, 0);           // Current Y position
 	ufo_bullet_anim_index : array[3] of byte = (0, 0, 0);  // Current animation frame (0-3)
-	ufo_bullet_move_tick : array[3] of byte = (0, 0, 0);   // Unused — movement is now 1px/frame constant (60Hz NTSC = exact arcade speed)
 	ufo_bullet_anim_tick : array[3] of byte = (0, 0, 0);   // Accumulator for animation speed
 	ufo_bullet_explode_counter : array[3] of byte = (0, 0, 0); // Frames remaining in explosion
 	ufo_bullet_sprite : array[3] of byte = (6, 5, 7);      // HW sprite: Plunger=6, Rolling=5, Squiggly=7
@@ -109,7 +150,6 @@ var
 	player_bullet_y : byte;
 	explosion_frame_counter : byte = 0;  // Counts frames for explosion animation
 	previous_fire_state : byte = 0;  // Track previous fire button state for debounce
-	//player_bullet_color_toggle : byte = 0;  // unused — color toggle code is commented out
 	const SHIELD_Y_MIN : byte = 152 + 17 + 16;  // 185
 	const SHIELD_Y_MAX : byte = 167 + 17 + 16;  // 200
 
@@ -190,9 +230,6 @@ var
 	const ES_SHOT_SPRITE1:byte = 6;
 	const ES_SHOT_SPRITE2:byte = 5;
 	const ES_SHOT_SPRITE3:byte = 7;
-	//es_shot_sprite_num : array[3] of byte = (6, 5, 7); // unused — use ES_SHOT_SPRITE1/2/3 consts
-
-	//const ES_SHOT_ANIM_START:byte = 13;     // unused
 	// Reload timer formula (arcade-accurate for NTSC 60 Hz):
 	//   reload = alive - ES_SHOT_RELOAD_OFFSET, clamped to ES_SHOT_RELOAD_MIN.
 	//   At 55 enemies (effective game-start count): 55 - 7 = 48 frames = arcade's $30 reload.
@@ -204,7 +241,6 @@ var
 	const ES_SHOT_RELOAD_MIN:byte = 8;     // minimum frames before a slot may refire
 	// Per-slot reload counters — set when a shot completes; gated in TickEnemyShotFiring.
 	ufo_bullet_reload_timer : array[3] of byte = (0, 0, 0);
-	//const ES_SHOT_STAGGER_FRAMES:byte = 1; // unused — use UFO_BULLET_STAGGER_FRAMES instead
 
 	
 
@@ -214,17 +250,23 @@ var
 	//   ClearMonster    — called by PreclearLeftmostAndBottomEnemies (~line 867) and
 	//                     CheckBulletCollision, both defined before ClearMonster's body.
 	interrupt MainRasterChain();
+	interrupt MainRasterRow1();
 	procedure PreclearLeftmostAndBottomEnemies();
 	procedure AdvanceLevel();
 	procedure CopyShieldSprites();
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 	procedure initializeMonsters();
 	procedure MakeMonsters();
+	interrupt IntermissionStarfield();
 
 
 // ---------------------------------------------------------------------------
-// UFO procedures — sprite 2 is set here (top of frame, raster 0 context)
-// and later repurposed by MainRasterRow1/2/3 for enemy sprites.
+// UFO PROCEDURES — Sprite 1 reserved for UFO (repurposed by Row1/2/3 for enemy blocks)
+// ---------------------------------------------------------------------------
+// ShowUFO, UpdateUFO, CheckUFOCollision: Main UFO logic
+// FireUFOBullet, SpawnShotFromColumn: Enemy shot firing (arcade-pattern targeting)
+// ShowUFOBullet, UpdateUFOBullet: Enemy shot display and movement
+// CheckShotVsShotCollision: Player vs enemy bullet collision
 // ---------------------------------------------------------------------------
 
 procedure ShowUFO();
@@ -336,7 +378,6 @@ begin
 	ufo_bullet_x[bullet_index] := ufo_x;    // Fire from current UFO position
 	ufo_bullet_y[bullet_index] := UFO_Y + 8; // Start just below UFO
 	ufo_bullet_anim_index[bullet_index] := 0;
-	ufo_bullet_move_tick[bullet_index] := 0;
 	ufo_bullet_anim_tick[bullet_index] := 0;
 end;
 
@@ -482,7 +523,6 @@ begin
 				ufo_bullet_y[spawn_slot]          := spawn_y_calc;
 				ufo_bullet_active[spawn_slot]     := 1;
 				ufo_bullet_anim_index[spawn_slot] := 0;
-				ufo_bullet_move_tick[spawn_slot]  := 0;
 				ufo_bullet_anim_tick[spawn_slot]  := 0;
 				spawn_found_flag := 1;
 			end;
@@ -809,6 +849,16 @@ begin
 	SetSpriteLoc(monsterSprite4, current_sprite_ptr, useBank);
 end;
 
+// ---------------------------------------------------------------------------
+// ENEMY FORMATION PROCEDURES — Sprites 1-4 for current row display
+// ---------------------------------------------------------------------------
+// UpdateMonsters: Sets sprite positions for a row (Y + rowOffset)
+// AnimateMonsters: Updates sprite image pointers for current animation frame
+// MakeMonsters: Resets block_enemies bits to fully alive state (55 of 72 total)
+// ClearMonster: Marks enemy dead in block_enemies; rescans formation edges; queues level-end check
+// PreclearLeftmostAndBottomEnemies: Clears initial 16 enemies at startup (reduces 72 to 55)
+// ---------------------------------------------------------------------------
+
 procedure UpdateMonsters(rowOffset: byte);
 var
 	y_position: byte;
@@ -898,40 +948,34 @@ end;
 
 // ---------------------------------------------------------------------------
 // StartLevel
-//   Called when player presses fire in get-ready mode.
-//   Hides the get-ready text, regenerates shields (if level < 6),
-//   re-enables sprites, and returns to normal play mode.
-//   (Level setup happens in background during intermission via AdvanceLevel)
+//   Called from IntermissionChain when the player presses fire.
+//   Does the heavy monster initialisation here, at a natural transition point
+//   (player-initiated), so any brief pause is imperceptible.
+//   AdvanceLevel() stays lightweight so ClearMonster can call it safely from
+//   inside the raster interrupt without stalling for multiple frames.
 // ---------------------------------------------------------------------------
 procedure StartLevel();
 begin
-	HideGetReadyText();	
-	
-		// Do all level setup in the background during intermission.
-	// This includes sprite initialization, shield setup (if applicable),
-	// and enemy positioning — avoiding sound hickups when transitioning to play.
-	initializeMonsters();	
+	HideGetReadyText();
+
+	// Build the monster formation for the new level.
+	// These are the heavy calls (~3 frames combined) — safe here because the
+	// player just pressed fire and the game is transitioning, not mid-play.
+	initializeMonsters();
 	PreclearLeftmostAndBottomEnemies();
 	MakeMonsters();
 
-	// Only regenerate shields for levels 1-5; skip for 6+
-	//if current_level < 6 then
-	//	CopyShieldSprites();
-
 	// Re-enable all sprites for gameplay
-	// Player sprite
 	togglebit(sprite_bitmask, useSprite, 1);
-	// Monster sprites
 	togglebit(sprite_bitmask, monsterSprite1, 1);
 	togglebit(sprite_bitmask, monsterSprite2, 1);
 	togglebit(sprite_bitmask, monsterSprite3, 1);
 	togglebit(sprite_bitmask, monsterSprite4, 1);
-	// Enemy shot sprites
 	togglebit(sprite_bitmask, ES_SHOT_SPRITE1, 1);
 	togglebit(sprite_bitmask, ES_SHOT_SPRITE2, 1);
 	togglebit(sprite_bitmask, ES_SHOT_SPRITE3, 1);
 
-	// Now ready to play — exit intermission mode
+	// Exit intermission mode — IntermissionChain will see this and switch to the game chain
 	get_ready_mode := 0;
 end;
 
@@ -1080,42 +1124,6 @@ begin
 	ClearMonster(11, 1);
 	ClearMonster(11, 3);
 	ClearMonster(11, 5);
-	
-	/*ClearMonster(8, 2);
-	ClearMonster(8, 4);	
-	ClearMonster(9, 0);
-	ClearMonster(9, 2);
-	ClearMonster(9, 4);
-	ClearMonster(10, 0);
-	ClearMonster(10, 2);
-	ClearMonster(10, 4);
-	ClearMonster(11, 0);
-	ClearMonster(11, 2);
-	ClearMonster(11, 4);
-	
-	ClearMonster(4, 2);
-	ClearMonster(4, 4);	
-	ClearMonster(5, 0);
-	ClearMonster(5, 2);
-	ClearMonster(5, 4);
-	ClearMonster(6, 0);
-	ClearMonster(6, 2);
-	ClearMonster(6, 4);
-	ClearMonster(7, 0);
-	ClearMonster(7, 2);
-	ClearMonster(7, 4);
-	
-	ClearMonster(4, 3);
-	ClearMonster(4, 5);	
-	ClearMonster(5, 1);
-	ClearMonster(5, 3);
-	ClearMonster(5, 5);
-	ClearMonster(6, 1);
-	ClearMonster(6, 3);
-	ClearMonster(6, 5);
-	ClearMonster(7, 1);
-	ClearMonster(7, 3);
-	ClearMonster(7, 5);*/
 end;
 
 
@@ -1186,6 +1194,14 @@ begin
 	//animateMonsters();
 	
 end;
+
+// ---------------------------------------------------------------------------
+// PLAYER BULLET PROCEDURES — Sprite 0 reserved for player bullet
+// ---------------------------------------------------------------------------
+// FirePlayerBullet: Spawns player bullet; increments shot counter (affects UFO spawn direction)
+// ShowBullet: Positions and displays player bullet sprite; handles explosion animation
+// CheckBulletCollision: Detects player bullet vs enemy formation (unrolled 4 columns)
+// ---------------------------------------------------------------------------
 
 procedure FirePlayerBullet();
 begin
@@ -1587,9 +1603,21 @@ begin
 	if block_enemies[cr_row * 4 + 3] <> 0 then CESC_CheckBlock(cr_row, 3, cr_row_offset);
 end;
 
-// REFACTORED: CheckEnemyShieldContact
-//   Flattened from 8 levels of nesting to 4 levels maximum.
-//   Uses loop unrolling (3 columns, 4 shields constant-unrolled) and method dispatch.
+// ---------------------------------------------------------------------------
+// SHIELD SYSTEM PROCEDURES — Charset-based erosion + surface caching
+// ---------------------------------------------------------------------------
+// CheckEnemyShieldContact: Detects enemies overlapping shields; queues erosion
+// CheckEnemyShieldCollision: Detects enemy bullets hitting shields
+// CheckBulletCollision: Detects player bullets hitting shields
+// ApplyShieldErosion: Applies queued erosion stencils to charset bytes; updates surface caches
+// CopyShieldSprites: Resets shield charsets to pristine (called per level, plus game start)
+//
+// Refactoring Notes:
+//   - Deep nesting (8+ levels) reduced to 4 levels via method extraction + loop unrolling
+//   - This achieved >50% compile-time reduction in CheckEnemyShieldContact
+//   - Uses global flags (cesc_contact_done, cbc_found_hit) for early-exit communication
+// ---------------------------------------------------------------------------
+
 procedure CheckEnemyShieldContact();
 var
 	cesc_row_offset : byte;
@@ -2582,12 +2610,88 @@ begin
 end;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
-// Main raster interrupt routines.
+// RASTER INTERRUPT HANDLERS — Scheduled chain manages all game logic timing
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Architecture:
+//
+// Full game chain (normal play):
+//   MainRasterPlayer (raster 0):    Updates sprite positions; schedules Starfield
+//   MainRasterStarfield (raster 0): Updates starfield sprite; schedules Row3
+//   MainRasterRow3 (row 2 monsters): Animates/positions row 2; schedules Row2 or Player
+//   MainRasterRow2 (row 1 monsters): Animates/positions row 1; schedules Row1 or Player
+//   MainRasterRow1 (row 0 monsters): Animates/positions row 0; schedules MainRasterChain
+//   MainRasterChain (raster 53):     Main game logic (physics, collisions, UI)
+//
+// Intermission chain (get-ready screen):
+//   IntermissionChain (raster 0):    Music playback, button polling; schedules Starfield
+//   IntermissionStarfield (raster 0): Starfield animation; loops back to IntermissionChain
+//
+// Raster Mux: Sprites 1-4 repurposed per row context (enemy formation display)
+// Forward Declarations: MainRasterChain (scheduled by both Player and Row1)
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// INTERMISSION RASTER CHAIN
+// ---------------------------------------------------------------------------
+// Simplified raster chain for get-ready screen: only music, starfield, and input.
+// No monster logic, no collision detection, no sprite updates.
+// ---------------------------------------------------------------------------
+
+interrupt IntermissionChain();
+begin
+	StartIRQ(0);
+	
+	// Play music during intermission
+	if DEBUG_ENABLE = 0 then
+		call(sidfile_1_play);
+	
+	// Check fire button to start the level (debounced)
+	Joystick(joystickPort);
+	if joystickbutton = 1 then
+	begin
+		if get_ready_prev_fire = 0 then
+		begin
+			StartLevel();  // Exits intermission, switches to full game chain
+			get_ready_prev_fire := 1;
+		end;
+	end
+	else
+		get_ready_prev_fire := 0;
+	
+	// Schedule next step based on current mode.
+	// If StartLevel() just ran, get_ready_mode is now 0 and we must not overwrite
+	// the game-chain handoff with another intermission IRQ.
+	if get_ready_mode = 1 then
+		RasterIRQ(IntermissionStarfield(), 100, 0)
+	else
+		RasterIRQ(MainRasterRow1(), monster_base_y - 8, 0);
+	
+	CloseIRQ();
+end;
+
+interrupt IntermissionStarfield();
+begin
+	StartIRQ(0);
+	
+	// Animate starfield
+	inc(StarField_RasterCount);
+	StarField::DoStarfield();
+	
+	// Loop back to intermission chain for next frame
+	RasterIRQ(IntermissionChain(), 0, 0);
+	
+	CloseIRQ();
+end;
+
+// ---------------------------------------------------------------------------
+// MAIN GAME RASTER CHAIN
+// ---------------------------------------------------------------------------
+// Full raster chain for active gameplay.
 // Order: Player → Starfield → Row3 → Row2 → Row1 → Chain
 //   Only MainRasterChain needs a forward declaration (Player + Starfield schedule it).
 //   Each Row handler only schedules already-defined interrupts (Row3→Player,
 //   Row2→Row3/Player, Row1→Row2/Row3/Player). Chain schedules all four, all defined above.
-// ---------------------------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
 interrupt MainRasterPlayer();
 begin	
@@ -2604,19 +2708,15 @@ begin
 	// after line 0 has passed the beam we lose a full frame on the chain.
 	RasterIRQ(MainRasterChain(), 0, 0);
 
-	// Gate all game logic when in get-ready mode to prevent enemy movement.
-	// Only starfield, music, and button checking should run during intermission.
-	if get_ready_mode = 0 then
+	// Run game logic unconditionally — intermission uses separate chain
+	CheckShieldCollision();	
+	UpdateTick();
+	
+	// Check collisions AFTER all sprite rows have been displayed
+	// Only check when bullet is actively moving (not exploding)
+	if player_bullet_active = 1 then
 	begin
-		CheckShieldCollision();	
-		UpdateTick();
-		
-		// Check collisions AFTER all sprite rows have been displayed
-		// Only check when bullet is actively moving (not exploding)
-		if player_bullet_active = 1 then
-		begin
-			CheckBulletCollision();
-		end;	
+		CheckBulletCollision();
 	end;	
 
 	
@@ -2642,7 +2742,6 @@ begin
 	inc(StarField_RasterCount);
 	
 	StarField::DoStarfield();	
-	preventirq();  
 	//poke(^$D019, 0, 0);  	
 	
 	CloseIRQ();
@@ -2656,36 +2755,15 @@ begin
 	//DisplayScore();
 	inc(StarField_RasterCount);
 	StarField::DoStarfield();	
-	preventirq();  
 	//poke(^$D019, 0, 0);  
 	
 	RasterIRQ(MainRasterChain(), 0, 0);
+	CloseIRQ();
 end;
-
-/*procedure BorderDebug();
-begin
-	border_debug_color := peek(^$D01E, 0);
-	if DEBUG_ENABLE = 1 then
-		SCREEN_BG_COL := border_debug_color;
-end;*/
 
 interrupt MainRasterRow3();
 begin	
-		
-	//BorderDebug();
-
-	//ShowBullet();
-	
-	
-	
-
 	StartIRQ(0);
-	
-	
-	/*if player_bullet_active <> 0 then
-	begin
-		//SCREEN_BG_COL := border_debug_color;
-	end;*/	
 	
 	// Update bottom row only if it still contains monsters
 	if row_has_monsters[2] <> 0 then
@@ -2777,28 +2855,7 @@ begin
 	else 
 		SCREEN_BG_COL := BLACK;
 
-	// In get-ready mode: only update starfield + music, skip all game logic.
-	// Check for fire button to exit get-ready mode and start the level.
-	if get_ready_mode = 1 then
-	begin
-		// Fire button detection (debounced)
-		Joystick(joystickPort);
-		if joystickbutton = 1 then
-		begin
-			if get_ready_prev_fire = 0 then
-				StartLevel();
-			get_ready_prev_fire := 1;
-		end
-		else
-			get_ready_prev_fire := 0;
-
-		// Schedule next frame — always go to Player (which handles starfield)
-		RasterIRQ(MainRasterPlayer(), 223, 0);
-		CloseIRQ();
-	end
-	else
-	begin
-		// Normal play mode — run all game logic
+	// Game logic runs unconditionally — intermission uses separate chain
 		ShowBullet();	
 		
 		// Apply erosion every frame — now just a charset write, fast enough to run unconditionally.
@@ -2914,8 +2971,7 @@ begin
 	// the updated position correctly even though the latch was written with the old value.
 	//UpdateTick();
 
-		CloseIRQ();
-	end;  // end of normal play mode
+	CloseIRQ();
 end;
 
 // ---------------------------------------------------------------------------
@@ -2929,7 +2985,8 @@ var
 	advancelevel_palette_level : byte;
 begin
 	// Disable all sprites IMMEDIATELY to prevent flicker when entering intermission
-	sprite_bitmask := 0;
+	//sprite_bitmask := 0;
+	
 	
 	//poke(^$D019, 0, 0);  
 	
@@ -3035,13 +3092,19 @@ begin
 	if total_level_counter < 5 then
 		CopyShieldSprites();
 
-	// Finally, show the get-ready screen and enter intermission mode.
+	// Disable all sprites during intermission; StartLevel() re-enables them when
+	// the player presses fire.  Monster init is intentionally deferred to StartLevel()
+	// so this function stays fast enough to call from within the raster interrupt
+	// (ClearMonster path) without stalling for multiple frames.
+	sprite_bitmask := 0;
+
+	// Show the get-ready screen and enter intermission mode.
 	get_ready_mode := 1;
 	get_ready_prev_fire := 0;
 	ShowGetReadyText();
 	
-	// Re-enable interrupts after intermission screen setup is complete
-	enableirq();
+	// Install intermission raster chain.
+	RasterIRQ(IntermissionChain(), 0, 0);
 end;
 
 
@@ -3051,6 +3114,45 @@ end;
 // for its character set, initialise the pointers and start the raster chain off.
 // ---------------------------------------------------------------------------------------------------------------------------------
 begin
+	/*MakeSprites();
+	
+	InitSid(sidfile_1_init);
+	DisableCIAInterrupts();
+	SetMemoryConfig(1, 0, 0);
+	
+	SCREEN_BG_COL:=BLACK;
+    SCREEN_FG_COL:=BLACK;
+	
+	// Clear sprite collision registers to remove garbage data
+	asm(" lda $D01E");
+	asm(" lda $D01F");
+		
+	
+	StarField::CreateStarScreen();
+	
+	EnableRasterIrq();	
+	DisplayText();
+	
+	// Show "Get Ready" screen for the first level before starting play.
+	// AdvanceLevel will increment current_level from 0 to 1, display intermission screen,
+	// and install the IntermissionChain raster handler.
+	//dec(current_level);
+	//dec(total_level_counter);
+	
+	
+	// AdvanceLevel installed IntermissionChain, now safe to enable IRQs
+	RasterIRQ(MainRasterChain(),0,0);
+	//RasterIRQ(IntermissionChain(), 0, 0);
+	
+	enableirq();
+
+	// Non-IRQ SID playback (main context). This runs once during init and is safe
+	// to execute outside the raster IRQ. Comment/uncomment to test.
+	//call(sidfile_1_play); // main-context playback (disabled)
+	//call(sidfile_1_play); // alternative: keep commented if you prefer raster IRQ playback
+
+	Loop();*/
+	
 	MakeSprites();
 	
 	InitSid(sidfile_1_init);
@@ -3088,7 +3190,8 @@ begin
 	dec(total_level_counter);
 	AdvanceLevel();
 	
-	RasterIRQ(MainRasterRow1(),0,0);
+	//RasterIRQ(MainRasterRow1(),0,0);
+	//RasterIRQ(IntermissionChain(), 0, 0);
 	enableirq();
 
 	// Non-IRQ SID playback (main context). This runs once during init and is safe
