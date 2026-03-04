@@ -899,7 +899,47 @@ begin
 end;
 
 
-
+// ── Nested: Restore buffered starfield chars beneath get-ready text ───────
+// ---------------------------------------------------------------------------
+// HideGetReadyText
+//   Restores the buffered starfield characters and colors to remove the "Get ready" text.
+// ---------------------------------------------------------------------------
+procedure HideGetReadyText();
+var
+	hgrt_screen_addr : integer;
+	hgrt_color_addr  : integer;
+	hgrt_ptr         : pointer of byte;
+	hgrt_color_ptr   : pointer of byte;
+	hgrt_i           : byte;
+begin
+	// Restore line 1 (13 chars + colors) from GET_READY_LINE1_COL
+	hgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
+	hgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
+	hgrt_ptr := hgrt_screen_addr;
+	hgrt_color_ptr := hgrt_color_addr;
+	hgrt_i := 0;
+	while hgrt_i < 13 do
+	begin
+		hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
+		hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
+		inc(hgrt_i);
+		inc(hgrt_ptr);
+		inc(hgrt_color_ptr);
+	end;
+	// Restore line 2 (8 chars + colors) from GET_READY_LINE2_COL
+	hgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+	hgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
+	hgrt_ptr := hgrt_screen_addr;
+	hgrt_color_ptr := hgrt_color_addr;
+	while hgrt_i < 21 do  // hgrt_i continues from 13
+	begin
+		hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
+		hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
+		inc(hgrt_i);
+		inc(hgrt_ptr);
+		inc(hgrt_color_ptr);
+	end;
+end; // HideGetReadyText
 
 // ---------------------------------------------------------------------------
 // StartLevel
@@ -908,47 +948,7 @@ end;
 // ---------------------------------------------------------------------------
 procedure StartLevel();
 var
-	// ── Nested: Restore buffered starfield chars beneath get-ready text ───────
-	// ---------------------------------------------------------------------------
-	// HideGetReadyText
-	//   Restores the buffered starfield characters and colors to remove the "Get ready" text.
-	// ---------------------------------------------------------------------------
-	procedure HideGetReadyText();
-	var
-		hgrt_screen_addr : integer;
-		hgrt_color_addr  : integer;
-		hgrt_ptr         : pointer of byte;
-		hgrt_color_ptr   : pointer of byte;
-		hgrt_i           : byte;
-	begin
-		// Restore line 1 (13 chars + colors) from GET_READY_LINE1_COL
-		hgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
-		hgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
-		hgrt_ptr := hgrt_screen_addr;
-		hgrt_color_ptr := hgrt_color_addr;
-		hgrt_i := 0;
-		while hgrt_i < 13 do
-		begin
-			hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
-			hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
-			inc(hgrt_i);
-			inc(hgrt_ptr);
-			inc(hgrt_color_ptr);
-		end;
-		// Restore line 2 (8 chars + colors) from GET_READY_LINE2_COL
-		hgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-		hgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-		hgrt_ptr := hgrt_screen_addr;
-		hgrt_color_ptr := hgrt_color_addr;
-		while hgrt_i < 21 do  // hgrt_i continues from 13
-		begin
-			hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
-			hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
-			inc(hgrt_i);
-			inc(hgrt_ptr);
-			inc(hgrt_color_ptr);
-		end;
-	end; // HideGetReadyText
+	
 
 begin
 	HideGetReadyText();
@@ -2634,7 +2634,9 @@ begin
 	if get_ready_mode = 1 then
 		RasterIRQ(IntermissionStarfield(), 100, 0)
 	else
-		RasterIRQ(MainRasterRow1(), monster_base_y - 8, 0);
+		RasterIRQ(MainRasterChain(), 0, 0);
+		//RasterIRQ(MainRasterRow1(), monster_base_y - 8, 0);
+		
 	
 	CloseIRQ();
 end;
