@@ -1278,123 +1278,139 @@ begin
 	end;
 end;
 
+// ---------------------------------------------------------------------------
+// CheckBulletCollision
+//   REFACTORED: Unrolled 4-column while loop to reduce nesting depth.
+//   Original: 1 while loop × 5-6 levels of nested if statements
+//   Refactored: 4 helper method calls with global flag for early exit
+//   Checks player bullet collision against enemy formation blocks.
+// ---------------------------------------------------------------------------
+
+// Global shared state for CheckBulletCollision (avoids TRSE var parameter limitation)
+var
+	cbc_found_hit : byte;
+
+// Helper: Check one block column for bullet collision
+procedure CBC_CheckBlockColumn(cbcc_block_col : byte; cbcc_block_row_base : byte; cbcc_block_x : byte; 
+                                cbcc_block_y : byte; cbcc_rel_y : byte);
+var
+	const EXPLOSION_X_OFFSET       : byte = 6;
+	const EXPLOSION_Y_OFFSET       : byte = 0;
+	const EXPLOSION_PIXELS_FROM_TOP : byte = 13;
+	const BULLET_Y_CONTACT_REACH   : byte = 0;
+	const BULLET_X_CONTACT_REACH   : byte = 11;
+	cbcc_block_index     : byte;
+	cbcc_enemy_alive     : byte;
+	cbcc_rel_x           : byte;
+	cbcc_enemy_col       : byte;
+	cbcc_enemy_row       : byte;
+	cbcc_hit_enemy_index : byte;
+	cbcc_enemy_mask      : byte;
+begin
+	if cbc_found_hit = 0 then
+	begin
+		cbcc_block_index := cbcc_block_row_base + cbcc_block_col;
+		cbcc_enemy_alive := block_enemies[cbcc_block_index];
+		
+		if cbcc_enemy_alive <> 0 then
+		begin
+			// Horizontal range check: contact point within [block_x, block_x+48).
+			if player_bullet_x >= cbcc_block_x - BULLET_X_CONTACT_REACH then
+				if player_bullet_x < cbcc_block_x + 48 - BULLET_X_CONTACT_REACH then
+				begin
+					cbcc_rel_x := player_bullet_x - cbcc_block_x + BULLET_X_CONTACT_REACH;
+					
+					// Enemy column within block (0-2): 12px wide, 6px gaps.
+					if cbcc_rel_x < 12 then
+						cbcc_enemy_col := 0
+					else if cbcc_rel_x < 18 then
+						cbcc_enemy_col := $FF  // gap
+					else if cbcc_rel_x < 30 then
+						cbcc_enemy_col := 1
+					else if cbcc_rel_x < 36 then
+						cbcc_enemy_col := $FF  // gap
+					else
+						cbcc_enemy_col := 2;
+					
+					// Enemy row within block (0=top, 1=bottom).
+					cbcc_enemy_row := $FF;
+					if cbcc_rel_y <= 7 + BULLET_Y_CONTACT_REACH then
+						cbcc_enemy_row := 0
+					else if (cbcc_rel_y >= 8 and cbcc_rel_y <= 21 + BULLET_Y_CONTACT_REACH) then
+						cbcc_enemy_row := 1;
+					
+					if (cbcc_enemy_row <> $FF and cbcc_enemy_col <> $FF) then
+					begin
+						cbcc_hit_enemy_index := cbcc_enemy_col * 2 + cbcc_enemy_row;
+						cbcc_enemy_mask := 1 << cbcc_hit_enemy_index;
+						
+						if (cbcc_enemy_alive & cbcc_enemy_mask) <> 0 then
+						begin
+							ClearMonster(cbcc_block_index, cbcc_hit_enemy_index);
+							player_bullet_x := cbcc_block_x + cbcc_enemy_col * 18 - EXPLOSION_X_OFFSET;
+							player_bullet_y := cbcc_block_y + cbcc_enemy_row * 14 + EXPLOSION_Y_OFFSET - EXPLOSION_PIXELS_FROM_TOP;
+							player_bullet_active := 2;
+							explosion_frame_counter := 0;
+							cbc_found_hit := 1;
+							
+							// Award points for the kill and flag the display for refresh.
+							Score := Score + 12;
+							score_dirty := 1;
+						end;
+					end;
+				end;
+		end;
+	end;
+end;
+
 procedure CheckBulletCollision();
 var
-	const EXPLOSION_X_OFFSET       : byte = 6;  // sprite X alignment (increase = moves left)
-	const EXPLOSION_Y_OFFSET       : byte = 0;  // sprite Y alignment (increase = moves down)
-	const EXPLOSION_PIXELS_FROM_TOP : byte = 13; // pixels from sprite top to lit pixel start
-	const BULLET_Y_CONTACT_REACH   : byte = 0;  // pixels below enemy bottom that still register a hit
-	const BULLET_Y_CONTACT_OFFSET  : byte = 13; // pixels from top of bullet sprite to contact point
-	const BULLET_X_CONTACT_REACH   : byte = 11; // horizontal pixel offset into bullet sprite for contact
-	block_row       : byte;
-	block_col       : byte;
-	block_index     : byte;
-	enemy_alive     : byte;
-	block_x         : byte;
-	block_y         : byte;
-	rel_x           : byte;
-	rel_y           : byte;
-	enemy_col       : byte;
-	enemy_row       : byte;
-	hit_enemy_index : byte;
-	cbc_enemy_mask  : byte;
-	should_check    : byte;
-	found_hit       : byte;
-	block_row_base  : byte;  // block_row << 2, precomputed once
+	const BULLET_Y_CONTACT_OFFSET  : byte = 13;
+	cbc_block_row       : byte;
+	cbc_should_check    : byte;
+	cbc_block_row_base  : byte;
+	cbc_block_y         : byte;
+	cbc_rel_y           : byte;
+	cbc_block_x         : byte;
 begin
-	should_check := 1;
-	found_hit := 0;
-
+	cbc_should_check := 1;
+	cbc_found_hit := 0;
+	
 	// Early exit if bullet outside enemy formation area.
 	if player_bullet_y + BULLET_Y_CONTACT_OFFSET < monster_base_y then
-		should_check := 0;
+		cbc_should_check := 0;
 	// BYTE OVERFLOW GUARD: monster_base_y + 80 wraps when monster_base_y > 175.
 	if monster_base_y <= 175 then
 	begin
 		if player_bullet_y > monster_base_y + 80 then
-			should_check := 0;
+			cbc_should_check := 0;
 	end;
-
-	if should_check <> 0 then
+	
+	if cbc_should_check <> 0 then
 	begin
 		// Determine block row (0-2) from bullet Y.
-		rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - monster_base_y;
-		if rel_y < MONSTER_ROW_OFFSET then
-			block_row := 0
-		else if rel_y < 52 then
-			block_row := 1
+		cbc_rel_y := player_bullet_y + BULLET_Y_CONTACT_OFFSET - monster_base_y;
+		if cbc_rel_y < MONSTER_ROW_OFFSET then
+			cbc_block_row := 0
+		else if cbc_rel_y < 52 then
+			cbc_block_row := 1
 		else
-			block_row := 2;
-
+			cbc_block_row := 2;
+		
 		// Precompute row-constant values ONCE before the column scan.
-		// Eliminates block_col*MONSTER_SPACING (x54, non-power-of-2) and
-		// block_row*MONSTER_ROW_OFFSET (x26) from the inner loop.
-		block_row_base := block_row << 2;                            // block_row * 4
-		block_y        := monster_base_y + block_row * MONSTER_ROW_OFFSET;
-		rel_y          := player_bullet_y + BULLET_Y_CONTACT_OFFSET - block_y;
-
-		// Scan the 4 block columns; accumulate block_x by addition (no multiply).
-		block_col := 0;
-		block_x   := monster_base_x;
-		while (block_col <= 3 and found_hit = 0) do
-		begin
-			block_index := block_row_base + block_col;
-			enemy_alive := block_enemies[block_index];
-
-			if enemy_alive <> 0 then
-			begin
-				// Horizontal range check: contact point within [block_x, block_x+48).
-				if player_bullet_x >= block_x - BULLET_X_CONTACT_REACH then
-					if player_bullet_x < block_x + 48 - BULLET_X_CONTACT_REACH then
-					begin
-						rel_x := player_bullet_x - block_x + BULLET_X_CONTACT_REACH;
-						// rel_y already precomputed above — no recalculation here.
-
-						// Enemy column within block (0-2): 12px wide, 6px gaps.
-						if rel_x < 12 then
-							enemy_col := 0
-						else if rel_x < 18 then
-							enemy_col := $FF  // gap
-						else if rel_x < 30 then
-							enemy_col := 1
-						else if rel_x < 36 then
-							enemy_col := $FF  // gap
-						else
-							enemy_col := 2;
-
-						// Enemy row within block (0=top, 1=bottom).
-						enemy_row := $FF;
-						if rel_y <= 7 + BULLET_Y_CONTACT_REACH then
-							enemy_row := 0
-						else if (rel_y >= 8 and rel_y <= 21 + BULLET_Y_CONTACT_REACH) then
-							enemy_row := 1;
-
-						if (enemy_row <> $FF and enemy_col <> $FF) then
-						begin
-							hit_enemy_index := enemy_col * 2 + enemy_row;
-							cbc_enemy_mask := 1 << hit_enemy_index;
-
-							if (enemy_alive & cbc_enemy_mask) <> 0 then
-							begin
-								ClearMonster(block_index, hit_enemy_index);
-								player_bullet_x := block_x + enemy_col * 18 - EXPLOSION_X_OFFSET;
-								player_bullet_y := block_y + enemy_row * 14 + EXPLOSION_Y_OFFSET - EXPLOSION_PIXELS_FROM_TOP;
-								player_bullet_active := 2;
-								explosion_frame_counter := 0;
-								found_hit := 1;
-								
-								// Award points for the kill and flag the display for refresh.
-								Score := Score + 12;
-								score_dirty := 1;
-							end;
-						end;
-
-					end;
-			end;
-
-			inc(block_col);
-			block_x := block_x + MONSTER_SPACING;  // accumulate — no multiply
-		end;
+		cbc_block_row_base := cbc_block_row << 2;
+		cbc_block_y        := monster_base_y + cbc_block_row * MONSTER_ROW_OFFSET;
+		cbc_rel_y          := player_bullet_y + BULLET_Y_CONTACT_OFFSET - cbc_block_y;
+		
+		// Check all 4 block columns (unrolled loop)
+		cbc_block_x := monster_base_x;
+		CBC_CheckBlockColumn(0, cbc_block_row_base, cbc_block_x, cbc_block_y, cbc_rel_y);
+		cbc_block_x := cbc_block_x + MONSTER_SPACING;
+		CBC_CheckBlockColumn(1, cbc_block_row_base, cbc_block_x, cbc_block_y, cbc_rel_y);
+		cbc_block_x := cbc_block_x + MONSTER_SPACING;
+		CBC_CheckBlockColumn(2, cbc_block_row_base, cbc_block_x, cbc_block_y, cbc_rel_y);
+		cbc_block_x := cbc_block_x + MONSTER_SPACING;
+		CBC_CheckBlockColumn(3, cbc_block_row_base, cbc_block_x, cbc_block_y, cbc_rel_y);
 	end;
 end;
 
