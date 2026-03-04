@@ -43,7 +43,8 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 3;   // 1-9; set to any value before startup to test that level
+	current_level : byte = 32;   // 1-9; set to any value before startup to test that level
+	total_level_counter : byte = 32;  // Persistent counter; never wraps, keeps incrementing indefinitely
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -2101,6 +2102,7 @@ var
 	sgrt_text_msg1 : string = ("GET READY FOR");
 	sgrt_text_msg2 : string = ("LEVEL ");
 	sgrt_level_char : byte;
+	sgrt_temp : byte;
 begin
 	// Disable all sprites to hide them during intermission
 	sprite_bitmask := 0;
@@ -2144,14 +2146,62 @@ begin
 		inc(sgrt_color_ptr);
 	end;
 	Screen::PrintString(#sgrt_text_msg2, GET_READY_LINE2_COL, GET_READY_ROW + 1, #Screen::screen0);
-	// Write level digit (convert byte to screen code: add $30 for digits 0-9)
-	sgrt_level_char := current_level + $30;
+	
+	// Write level number using total_level_counter (supports multi-digit display)
 	sgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL + 6;
 	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL + 6;
 	sgrt_ptr := sgrt_screen_addr;
 	sgrt_color_ptr := sgrt_color_addr;
-	sgrt_ptr[0] := sgrt_level_char;
-	sgrt_color_ptr[0] := GET_READY_COLOR;
+	
+	// Display total_level_counter (handles 1-255)
+	sgrt_temp := total_level_counter;
+	
+	if total_level_counter >= 100 then begin
+		// Three digits: 100-255
+		sgrt_level_char := 0;
+		while sgrt_temp >= 100 do begin
+			sgrt_temp := sgrt_temp - 100;
+			inc(sgrt_level_char);
+		end;
+		sgrt_ptr[0] := sgrt_level_char + $30;  // Hundreds digit
+		sgrt_color_ptr[0] := GET_READY_COLOR;
+		inc(sgrt_ptr);
+		inc(sgrt_color_ptr);
+		
+		sgrt_level_char := 0;
+		while sgrt_temp >= 10 do begin
+			sgrt_temp := sgrt_temp - 10;
+			inc(sgrt_level_char);
+		end;
+		sgrt_ptr[0] := sgrt_level_char + $30;  // Tens digit
+		sgrt_color_ptr[0] := GET_READY_COLOR;
+		inc(sgrt_ptr);
+		inc(sgrt_color_ptr);
+		
+		sgrt_ptr[0] := sgrt_temp + $30;  // Ones digit
+		sgrt_color_ptr[0] := GET_READY_COLOR;
+	end
+	else if total_level_counter >= 10 then begin
+		// Two digits: 10-99
+		sgrt_level_char := 0;
+		while sgrt_temp >= 10 do begin
+			sgrt_temp := sgrt_temp - 10;
+			inc(sgrt_level_char);
+		end;
+		sgrt_ptr[0] := sgrt_level_char + $30;  // Tens digit
+		sgrt_color_ptr[0] := GET_READY_COLOR;
+		inc(sgrt_ptr);
+		inc(sgrt_color_ptr);
+		
+		sgrt_ptr[0] := sgrt_temp + $30;  // Ones digit
+		sgrt_color_ptr[0] := GET_READY_COLOR;
+	end
+	else begin
+		// Single digit: 1-9
+		sgrt_ptr[0] := total_level_counter + $30;
+		sgrt_color_ptr[0] := GET_READY_COLOR;
+	end;
+	
 	// Set color for line 2
 	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
 	sgrt_color_ptr := sgrt_color_addr;
@@ -2846,14 +2896,15 @@ begin
 	//disableirq();
 	//DisableCIAInterrupts(); 
 	
-	// Cycle level 1→2→...→9→1
+	// Increment both the display level (wraps at 9) and the persistent counter (never wraps)
 	inc(current_level);
 	if current_level > LEVEL_LAST then
 		current_level := 1;
+	inc(total_level_counter);
 
 	// Pick starfield palette for the incoming level, repeating every 10 levels.
-	// Mapping: 1..10 where 1 and 2 are the default palette.
-	advancelevel_palette_level := current_level;
+	// Use total_level_counter so all 10 palettes are eventually used.
+	advancelevel_palette_level := total_level_counter;
 	while advancelevel_palette_level > 10 do begin
 		advancelevel_palette_level := advancelevel_palette_level - 10;
 	end;
@@ -2937,8 +2988,8 @@ begin
 	// Reset player position to far left
 	player_sprite_x := PLAYER_MIN_X;
 
-	// Regenerate shields only for levels < 6
-	if current_level < 6 then
+	// Regenerate shields only for levels < 5 (using persistent counter)
+	if total_level_counter < 5 then
 		CopyShieldSprites();
 
 	// Re-enable interrupts before showing intermission screen
@@ -2991,6 +3042,7 @@ begin
 	// Show "Get Ready" screen for the first level before starting play.
 	// AdvanceLevel will increment current_level from 0 to 1 and display the intermission screen.
 	dec(current_level);
+	dec(total_level_counter);
 	AdvanceLevel();
 	
 	RasterIRQ(MainRasterRow1(),0,0);
