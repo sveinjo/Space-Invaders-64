@@ -1429,100 +1429,103 @@ begin
 	if enemy_march_tick <> 0 then
 	begin
 		enemy_march_tick := 0;
-		cesc_done := 0;
-		cesc_form_row := 2;
-		// Scan rows from bottom (2) upward.
-		// Decrement past 0 wraps to 255 (byte underflow) which exits the <= 2 guard.
-		while ((cesc_form_row <= 2) and (cesc_done = 0)) do
+		// Cheap bailout: if one erosion is already queued, skip this contact scan.
+		if pending_shield_erosion = 0 then
 		begin
-			// Compute Y offset for this formation row.
-			if cesc_form_row = 0 then
-				cesc_row_offset := 0
-			else if cesc_form_row = 1 then
-				cesc_row_offset := MONSTER_ROW_OFFSET
-			else
-				cesc_row_offset := 52;
-
-			// Row fast skip: row-20 bottom must reach the tuned shield band.
-			if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE) and
-			    (monster_base_y + cesc_row_offset <= SHIELD_Y_MAX)) then
+			cesc_done := 0;
+			cesc_form_row := 2;
+			// Scan rows from bottom (2) upward.
+			// Decrement past 0 wraps to 255 (byte underflow) which exits the <= 2 guard.
+			while ((cesc_form_row <= 2) and (cesc_done = 0)) do
 			begin
-				cesc_block_col := 0;
-				while ((cesc_block_col <= 3) and (cesc_done = 0)) do
+				// Compute Y offset for this formation row.
+				if cesc_form_row = 0 then
+					cesc_row_offset := 0
+				else if cesc_form_row = 1 then
+					cesc_row_offset := MONSTER_ROW_OFFSET
+				else
+					cesc_row_offset := 52;
+
+				// Row fast skip: row-20 bottom must reach the tuned shield band.
+				if ((monster_base_y + cesc_row_offset + 20 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE) and
+				    (monster_base_y + cesc_row_offset <= SHIELD_Y_MAX)) then
 				begin
-					cesc_block_byte := block_enemies[cesc_form_row * 4 + cesc_block_col];
-					if cesc_block_byte <> 0 then
+					cesc_block_col := 0;
+					while ((cesc_block_col <= 3) and (cesc_done = 0)) do
 					begin
-						cesc_enemy_col := 0;
-						while ((cesc_enemy_col <= 2) and (cesc_done = 0)) do
+						cesc_block_byte := block_enemies[cesc_form_row * 4 + cesc_block_col];
+						if cesc_block_byte <> 0 then
 						begin
-							// col 0: pair=$03 bot=$02  col 1: pair=$0C bot=$08  col 2: pair=$30 bot=$20
-							if cesc_enemy_col = 0 then
+							cesc_enemy_col := 0;
+							while ((cesc_enemy_col <= 2) and (cesc_done = 0)) do
 							begin
-								cesc_col_mask := $03;
-								cesc_bot_mask := $02;
-							end
-							else if cesc_enemy_col = 1 then
-							begin
-								cesc_col_mask := $0C;
-								cesc_bot_mask := $08;
-							end
-							else
-							begin
-								cesc_col_mask := $30;
-								cesc_bot_mask := $20;
-							end;
-
-							if (cesc_block_byte & cesc_col_mask) <> 0 then
-							begin
-								// Y precision: top-only enemy (row 7) may not yet reach the band.
-								// Bottom sub-row alive -> row 20, already covered by row fast skip.
-								if (((cesc_block_byte & cesc_bot_mask) <> 0) or
-								   (monster_base_y + cesc_row_offset + 7 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE)) then
+								// col 0: pair=$03 bot=$02  col 1: pair=$0C bot=$08  col 2: pair=$30 bot=$20
+								if cesc_enemy_col = 0 then
 								begin
-									cesc_enemy_x := monster_base_x + cesc_block_col * MONSTER_SPACING + cesc_enemy_col * 18;
-									if cesc_enemy_x >= CONTACT_X_NUDGE then
-										cesc_enemy_x := cesc_enemy_x - CONTACT_X_NUDGE
-									else
-										cesc_enemy_x := 0;
+									cesc_col_mask := $03;
+									cesc_bot_mask := $02;
+								end
+								else if cesc_enemy_col = 1 then
+								begin
+									cesc_col_mask := $0C;
+									cesc_bot_mask := $08;
+								end
+								else
+								begin
+									cesc_col_mask := $30;
+									cesc_bot_mask := $20;
+								end;
 
-									// Match X against each shield; skip any fully eroded from the top.
-									cesc_shield_s := 0;
-									while ((cesc_shield_s <= 3) and (cesc_done = 0)) do
+								if (cesc_block_byte & cesc_col_mask) <> 0 then
+								begin
+									// Y precision: top-only enemy (row 7) may not yet reach the band.
+									// Bottom sub-row alive -> row 20, already covered by row fast skip.
+									if (((cesc_block_byte & cesc_bot_mask) <> 0) or
+									   (monster_base_y + cesc_row_offset + 7 >= SHIELD_Y_MIN + CONTACT_Y_NUDGE)) then
 									begin
-										if shield_top_eroded[cesc_shield_s] = 0 then
+										cesc_enemy_x := monster_base_x + cesc_block_col * MONSTER_SPACING + cesc_enemy_col * 18;
+										if cesc_enemy_x >= CONTACT_X_NUDGE then
+											cesc_enemy_x := cesc_enemy_x - CONTACT_X_NUDGE
+										else
+											cesc_enemy_x := 0;
+
+										// Match X against each shield; skip any fully eroded from the top.
+										cesc_shield_s := 0;
+										while ((cesc_shield_s <= 3) and (cesc_done = 0)) do
 										begin
-											if ((cesc_enemy_x + 11 >= SHIELD_X_MIN[cesc_shield_s]) and
-											    (cesc_enemy_x < SHIELD_X_MAX[cesc_shield_s])) then
+											if shield_top_eroded[cesc_shield_s] = 0 then
 											begin
-												if cesc_enemy_x >= SHIELD_X_MIN[cesc_shield_s] then
-													cesc_byte_col := (cesc_enemy_x - SHIELD_X_MIN[cesc_shield_s]) >> 3
-												else
-													cesc_byte_col := 0;
-												cesc_col_idx := cesc_shield_s * 3 + cesc_byte_col;
-												if ((shield_surface_bot[cesc_col_idx] <> 255) and
-												   (pending_shield_erosion = 0)) then
+												if ((cesc_enemy_x + 11 >= SHIELD_X_MIN[cesc_shield_s]) and
+												    (cesc_enemy_x < SHIELD_X_MAX[cesc_shield_s])) then
 												begin
-													pending_shield_erosion := 1;
-													pending_erosion_dir    := 1;
-													pending_shield_idx     := cesc_shield_s;
-													pending_byte_col       := cesc_byte_col;
-													pending_erase_top      := shield_surface_bot[cesc_col_idx];
-													cesc_done              := 1;
+													if cesc_enemy_x >= SHIELD_X_MIN[cesc_shield_s] then
+														cesc_byte_col := (cesc_enemy_x - SHIELD_X_MIN[cesc_shield_s]) >> 3
+													else
+														cesc_byte_col := 0;
+													cesc_col_idx := cesc_shield_s * 3 + cesc_byte_col;
+													if shield_surface_bot[cesc_col_idx] <> 255 then
+													begin
+														pending_shield_erosion := 1;
+														pending_erosion_dir    := 1;
+														pending_shield_idx     := cesc_shield_s;
+														pending_byte_col       := cesc_byte_col;
+														pending_erase_top      := shield_surface_bot[cesc_col_idx];
+														cesc_done              := 1;
+													end;
 												end;
 											end;
+											inc(cesc_shield_s);
 										end;
-										inc(cesc_shield_s);
 									end;
 								end;
+								inc(cesc_enemy_col);
 							end;
-							inc(cesc_enemy_col);
 						end;
+						inc(cesc_block_col);
 					end;
-					inc(cesc_block_col);
 				end;
+				dec(cesc_form_row);  // byte underflow at 0 -> 255, exits while cesc_form_row <= 2
 			end;
-			dec(cesc_form_row);  // byte underflow at 0 -> 255, exits while cesc_form_row <= 2
 		end;
 	end;
 end;
@@ -1550,93 +1553,93 @@ begin
 			if ((ufo_bullet_y[esc_i] >= SHIELD_Y_MIN) and (ufo_bullet_y[esc_i] <= SHIELD_Y_MAX)) then
 			begin
 				if ((ufo_bullet_x[esc_i] >= 45) and (ufo_bullet_x[esc_i] < 69)) then
-			begin
-				if shield_top_eroded[0] = 0 then
 				begin
-					esc_byte_col := (ufo_bullet_x[esc_i] - 45) >> 3;
-					esc_col_idx  := esc_byte_col;
-					esc_hit_row  := shield_surface_bot[esc_col_idx];
-					if esc_hit_row <> 255 then
+					if shield_top_eroded[0] = 0 then
 					begin
-						if pending_shield_erosion = 0 then
+						esc_byte_col := (ufo_bullet_x[esc_i] - 45) >> 3;
+						esc_col_idx  := esc_byte_col;
+						esc_hit_row  := shield_surface_bot[esc_col_idx];
+						if esc_hit_row <> 255 then
 						begin
-							pending_shield_erosion := 1;
-							pending_erosion_dir    := 1;
-							pending_shield_idx     := 0;
-							pending_byte_col       := esc_byte_col;
-							pending_erase_top      := esc_hit_row;
+							if pending_shield_erosion = 0 then
+							begin
+								pending_shield_erosion := 1;
+								pending_erosion_dir    := 1;
+								pending_shield_idx     := 0;
+								pending_byte_col       := esc_byte_col;
+								pending_erase_top      := esc_hit_row;
+							end;
+							ufo_bullet_active[esc_i]          := 2;
+							ufo_bullet_explode_counter[esc_i] := 0;
 						end;
-						ufo_bullet_active[esc_i]          := 2;
-						ufo_bullet_explode_counter[esc_i] := 0;
+					end;
+				end
+				else if ((ufo_bullet_x[esc_i] >= 93) and (ufo_bullet_x[esc_i] < 117)) then
+				begin
+					if shield_top_eroded[1] = 0 then
+					begin
+						esc_byte_col := (ufo_bullet_x[esc_i] - 93) >> 3;
+						esc_col_idx  := 3 + esc_byte_col;
+						esc_hit_row  := shield_surface_bot[esc_col_idx];
+						if esc_hit_row <> 255 then
+						begin
+							if pending_shield_erosion = 0 then
+							begin
+								pending_shield_erosion := 1;
+								pending_erosion_dir    := 1;
+								pending_shield_idx     := 1;
+								pending_byte_col       := esc_byte_col;
+								pending_erase_top      := esc_hit_row;
+							end;
+							ufo_bullet_active[esc_i]          := 2;
+							ufo_bullet_explode_counter[esc_i] := 0;
+						end;
+					end;
+				end
+				else if ((ufo_bullet_x[esc_i] >= 141) and (ufo_bullet_x[esc_i] < 165)) then
+				begin
+					if shield_top_eroded[2] = 0 then
+					begin
+						esc_byte_col := (ufo_bullet_x[esc_i] - 141) >> 3;
+						esc_col_idx  := 6 + esc_byte_col;
+						esc_hit_row  := shield_surface_bot[esc_col_idx];
+						if esc_hit_row <> 255 then
+						begin
+							if pending_shield_erosion = 0 then
+							begin
+								pending_shield_erosion := 1;
+								pending_erosion_dir    := 1;
+								pending_shield_idx     := 2;
+								pending_byte_col       := esc_byte_col;
+								pending_erase_top      := esc_hit_row;
+							end;
+							ufo_bullet_active[esc_i]          := 2;
+							ufo_bullet_explode_counter[esc_i] := 0;
+						end;
+					end;
+				end
+				else if ((ufo_bullet_x[esc_i] >= 189) and (ufo_bullet_x[esc_i] < 213)) then
+				begin
+					if shield_top_eroded[3] = 0 then
+					begin
+						esc_byte_col := (ufo_bullet_x[esc_i] - 189) >> 3;
+						esc_col_idx  := 9 + esc_byte_col;
+						esc_hit_row  := shield_surface_bot[esc_col_idx];
+						if esc_hit_row <> 255 then
+						begin
+							if pending_shield_erosion = 0 then
+							begin
+								pending_shield_erosion := 1;
+								pending_erosion_dir    := 1;
+								pending_shield_idx     := 3;
+								pending_byte_col       := esc_byte_col;
+								pending_erase_top      := esc_hit_row;
+							end;
+							ufo_bullet_active[esc_i]          := 2;
+							ufo_bullet_explode_counter[esc_i] := 0;
+						end;
 					end;
 				end;
-			end
-			else if ((ufo_bullet_x[esc_i] >= 93) and (ufo_bullet_x[esc_i] < 117)) then
-			begin
-				if shield_top_eroded[1] = 0 then
-				begin
-					esc_byte_col := (ufo_bullet_x[esc_i] - 93) >> 3;
-					esc_col_idx  := 3 + esc_byte_col;
-					esc_hit_row  := shield_surface_bot[esc_col_idx];
-					if esc_hit_row <> 255 then
-					begin
-						if pending_shield_erosion = 0 then
-						begin
-							pending_shield_erosion := 1;
-							pending_erosion_dir    := 1;
-							pending_shield_idx     := 1;
-							pending_byte_col       := esc_byte_col;
-							pending_erase_top      := esc_hit_row;
-						end;
-						ufo_bullet_active[esc_i]          := 2;
-						ufo_bullet_explode_counter[esc_i] := 0;
-					end;
-				end;
-			end
-			else if ((ufo_bullet_x[esc_i] >= 141) and (ufo_bullet_x[esc_i] < 165)) then
-			begin
-				if shield_top_eroded[2] = 0 then
-				begin
-					esc_byte_col := (ufo_bullet_x[esc_i] - 141) >> 3;
-					esc_col_idx  := 6 + esc_byte_col;
-					esc_hit_row  := shield_surface_bot[esc_col_idx];
-					if esc_hit_row <> 255 then
-					begin
-						if pending_shield_erosion = 0 then
-						begin
-							pending_shield_erosion := 1;
-							pending_erosion_dir    := 1;
-							pending_shield_idx     := 2;
-							pending_byte_col       := esc_byte_col;
-							pending_erase_top      := esc_hit_row;
-						end;
-						ufo_bullet_active[esc_i]          := 2;
-						ufo_bullet_explode_counter[esc_i] := 0;
-					end;
-				end;
-			end
-			else if ((ufo_bullet_x[esc_i] >= 189) and (ufo_bullet_x[esc_i] < 213)) then
-			begin
-				if shield_top_eroded[3] = 0 then
-				begin
-					esc_byte_col := (ufo_bullet_x[esc_i] - 189) >> 3;
-					esc_col_idx  := 9 + esc_byte_col;
-					esc_hit_row  := shield_surface_bot[esc_col_idx];
-					if esc_hit_row <> 255 then
-					begin
-						if pending_shield_erosion = 0 then
-						begin
-							pending_shield_erosion := 1;
-							pending_erosion_dir    := 1;
-							pending_shield_idx     := 3;
-							pending_byte_col       := esc_byte_col;
-							pending_erase_top      := esc_hit_row;
-						end;
-						ufo_bullet_active[esc_i]          := 2;
-						ufo_bullet_explode_counter[esc_i] := 0;
-					end;
-				end;
-			end;
 			end;
 		end;
 		inc(esc_i);
