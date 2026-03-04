@@ -864,7 +864,8 @@ var
 	hgrt_ptr : pointer of byte;
 	hgrt_color_ptr : pointer of byte;
 	hgrt_i : byte;
-begin	
+begin
+	
 	// Restore line 1 (13 chars + colors) from GET_READY_LINE1_COL
 	hgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
 	hgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
@@ -2071,6 +2072,8 @@ begin
 	//Screen::PrintString("/+*",22,20,#Screen::screen0);
 
 	// Place all 4 shield blocks using independent charset glyph ranges for erosion.
+	// Keep IRQs masked during shield charset/screen writes.
+	PreventIRQ();
 	// Shield 1: row 19 col 4,  chars 109-114 (from sprite 18)
 	PlaceShieldBlock($06FC, 112);
 	// Shield 2: row 19 col 10, chars 118-123 (from template)
@@ -2082,6 +2085,7 @@ begin
 
 	// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
 	CopyShieldSprites();
+	EnableIRQ();
 	
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
@@ -2153,46 +2157,37 @@ begin
 	sgrt_ptr := sgrt_screen_addr;
 	sgrt_color_ptr := sgrt_color_addr;
 	
-	// Display total_level_counter (handles 1-255)
+	// Display total_level_counter (handles 1-255) - optimized with division
 	sgrt_temp := total_level_counter;
 	
 	if total_level_counter >= 100 then begin
 		// Three digits: 100-255
-		sgrt_level_char := 0;
-		while sgrt_temp >= 100 do begin
-			sgrt_temp := sgrt_temp - 100;
-			inc(sgrt_level_char);
-		end;
+		sgrt_level_char := sgrt_temp / 100;
 		sgrt_ptr[0] := sgrt_level_char + $30;  // Hundreds digit
 		sgrt_color_ptr[0] := GET_READY_COLOR;
 		inc(sgrt_ptr);
 		inc(sgrt_color_ptr);
 		
-		sgrt_level_char := 0;
-		while sgrt_temp >= 10 do begin
-			sgrt_temp := sgrt_temp - 10;
-			inc(sgrt_level_char);
-		end;
+		sgrt_temp := sgrt_temp - (sgrt_level_char * 100);
+		sgrt_level_char := sgrt_temp / 10;
 		sgrt_ptr[0] := sgrt_level_char + $30;  // Tens digit
 		sgrt_color_ptr[0] := GET_READY_COLOR;
 		inc(sgrt_ptr);
 		inc(sgrt_color_ptr);
 		
+		sgrt_temp := sgrt_temp - (sgrt_level_char * 10);
 		sgrt_ptr[0] := sgrt_temp + $30;  // Ones digit
 		sgrt_color_ptr[0] := GET_READY_COLOR;
 	end
 	else if total_level_counter >= 10 then begin
 		// Two digits: 10-99
-		sgrt_level_char := 0;
-		while sgrt_temp >= 10 do begin
-			sgrt_temp := sgrt_temp - 10;
-			inc(sgrt_level_char);
-		end;
+		sgrt_level_char := sgrt_temp / 10;
 		sgrt_ptr[0] := sgrt_level_char + $30;  // Tens digit
 		sgrt_color_ptr[0] := GET_READY_COLOR;
 		inc(sgrt_ptr);
 		inc(sgrt_color_ptr);
 		
+		sgrt_temp := sgrt_temp - (sgrt_level_char * 10);
 		sgrt_ptr[0] := sgrt_temp + $30;  // Ones digit
 		sgrt_color_ptr[0] := GET_READY_COLOR;
 	end
@@ -2202,11 +2197,11 @@ begin
 		sgrt_color_ptr[0] := GET_READY_COLOR;
 	end;
 	
-	// Set color for line 2
+	// Set remaining color for line 2 "LEVEL " prefix (6 chars)
 	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
 	sgrt_color_ptr := sgrt_color_addr;
-	sgrt_i := 13;
-	while sgrt_i < 21 do
+	sgrt_i := 0;
+	while sgrt_i < 6 do
 	begin
 		sgrt_color_ptr[0] := GET_READY_COLOR;
 		inc(sgrt_i);
@@ -2889,7 +2884,7 @@ var
 begin
 	// Disable all sprites IMMEDIATELY to prevent flicker when entering intermission
 	sprite_bitmask := 0;
-	preventirq();  
+	
 	//poke(^$D019, 0, 0);  
 	
 	// Disable interrupts during heavy initialization to prevent sound hickup
@@ -2902,8 +2897,10 @@ begin
 		current_level := 1;
 	inc(total_level_counter);
 
+	preventirq(); 
 	// Pick starfield palette for the incoming level, repeating every 10 levels.
 	// Use total_level_counter so all 10 palettes are eventually used.
+	 
 	advancelevel_palette_level := total_level_counter;
 	while advancelevel_palette_level > 10 do begin
 		advancelevel_palette_level := advancelevel_palette_level - 10;
@@ -2992,13 +2989,13 @@ begin
 	if total_level_counter < 5 then
 		CopyShieldSprites();
 
-	// Re-enable interrupts before showing intermission screen
-	enableirq();
-	
 	// Finally, show the get-ready screen and enter intermission mode.
 	get_ready_mode := 1;
 	get_ready_prev_fire := 0;
 	ShowGetReadyText();
+	
+	// Re-enable interrupts after intermission screen setup is complete
+	enableirq();
 end;
 
 

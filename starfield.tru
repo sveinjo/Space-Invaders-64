@@ -181,8 +181,8 @@ begin
 			color_offset := color_row * 40 + color_col;
 			
 			// Set color memory pointer and write
-			colormemory := $D800 + color_offset;
-			colormemory[0] := colorPattern[colorIndex];
+			color_mem := $D800 + color_offset;
+			color_mem[0] := colorPattern[colorIndex];
 			
 			inc(color_row);
 		end;
@@ -224,7 +224,9 @@ var
 	col : byte;
 	row : byte;
 	saddr : array[18] of integer;
-	caddr : array[18] of integer;		
+	caddr : array[18] of integer;
+	screenmemory : pointer of byte;
+	colormemory : pointer of byte;		
 
 begin
 	clearscreen( $20, ^$0400 );
