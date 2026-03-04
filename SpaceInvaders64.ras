@@ -1544,9 +1544,11 @@ var
 	esc_col_idx  : byte;  // shield_idx*3 + byte_col
 	esc_hit_row  : byte;  // surface cache result; 255 = fully eroded
 begin
-	esc_i := 0;
-	while esc_i <= 2 do
+	if pending_shield_erosion = 0 then
 	begin
+		esc_i := 0;
+		while esc_i <= 2 do
+		begin
 		if ufo_bullet_active[esc_i] = 1 then
 		begin
 			// Y check first — bullets spend most travel outside the shield band.
@@ -1561,14 +1563,11 @@ begin
 						esc_hit_row  := shield_surface_bot[esc_col_idx];
 						if esc_hit_row <> 255 then
 						begin
-							if pending_shield_erosion = 0 then
-							begin
-								pending_shield_erosion := 1;
-								pending_erosion_dir    := 1;
-								pending_shield_idx     := 0;
-								pending_byte_col       := esc_byte_col;
-								pending_erase_top      := esc_hit_row;
-							end;
+							pending_shield_erosion := 1;
+							pending_erosion_dir    := 1;
+							pending_shield_idx     := 0;
+							pending_byte_col       := esc_byte_col;
+							pending_erase_top      := esc_hit_row;
 							ufo_bullet_active[esc_i]          := 2;
 							ufo_bullet_explode_counter[esc_i] := 0;
 						end;
@@ -1583,14 +1582,11 @@ begin
 						esc_hit_row  := shield_surface_bot[esc_col_idx];
 						if esc_hit_row <> 255 then
 						begin
-							if pending_shield_erosion = 0 then
-							begin
-								pending_shield_erosion := 1;
-								pending_erosion_dir    := 1;
-								pending_shield_idx     := 1;
-								pending_byte_col       := esc_byte_col;
-								pending_erase_top      := esc_hit_row;
-							end;
+							pending_shield_erosion := 1;
+							pending_erosion_dir    := 1;
+							pending_shield_idx     := 1;
+							pending_byte_col       := esc_byte_col;
+							pending_erase_top      := esc_hit_row;
 							ufo_bullet_active[esc_i]          := 2;
 							ufo_bullet_explode_counter[esc_i] := 0;
 						end;
@@ -1605,14 +1601,11 @@ begin
 						esc_hit_row  := shield_surface_bot[esc_col_idx];
 						if esc_hit_row <> 255 then
 						begin
-							if pending_shield_erosion = 0 then
-							begin
-								pending_shield_erosion := 1;
-								pending_erosion_dir    := 1;
-								pending_shield_idx     := 2;
-								pending_byte_col       := esc_byte_col;
-								pending_erase_top      := esc_hit_row;
-							end;
+							pending_shield_erosion := 1;
+							pending_erosion_dir    := 1;
+							pending_shield_idx     := 2;
+							pending_byte_col       := esc_byte_col;
+							pending_erase_top      := esc_hit_row;
 							ufo_bullet_active[esc_i]          := 2;
 							ufo_bullet_explode_counter[esc_i] := 0;
 						end;
@@ -1627,22 +1620,20 @@ begin
 						esc_hit_row  := shield_surface_bot[esc_col_idx];
 						if esc_hit_row <> 255 then
 						begin
-							if pending_shield_erosion = 0 then
-							begin
-								pending_shield_erosion := 1;
-								pending_erosion_dir    := 1;
-								pending_shield_idx     := 3;
-								pending_byte_col       := esc_byte_col;
-								pending_erase_top      := esc_hit_row;
-							end;
+							pending_shield_erosion := 1;
+							pending_erosion_dir    := 1;
+							pending_shield_idx     := 3;
+							pending_byte_col       := esc_byte_col;
+							pending_erase_top      := esc_hit_row;
 							ufo_bullet_active[esc_i]          := 2;
 							ufo_bullet_explode_counter[esc_i] := 0;
 						end;
 					end;
 				end;
 			end;
+			end;
+			inc(esc_i);
 		end;
-		inc(esc_i);
 	end;
 end;
 
@@ -1685,8 +1676,10 @@ var
 	csc_col_idx  : byte;  // shield_idx*3 + byte_col (index into surface cache)
 	csc_hit_row  : byte;  // surface cache result; 255 = fully eroded
 begin
-	if player_bullet_active = 1 then
+	if pending_shield_erosion = 0 then
 	begin
+		if player_bullet_active = 1 then
+		begin
 		// Y check ONCE at the top — bullet spends most of its travel above the
 		// shield band, so this bails out cheaply before any X work is done.
 		if ((player_bullet_y >= SHIELD_Y_MIN) and (player_bullet_y <= SHIELD_Y_MAX)) then
@@ -1702,14 +1695,11 @@ begin
 				csc_hit_row  := shield_surface_top[csc_col_idx];
 				if csc_hit_row <> 255 then
 				begin
-					if pending_shield_erosion = 0 then
-					begin
-						pending_shield_erosion := 1;
-						pending_erosion_dir    := 0;
-						pending_shield_idx     := 0;
-						pending_byte_col       := csc_byte_col;
-						pending_erase_top      := csc_hit_row;
-					end;
+					pending_shield_erosion := 1;
+					pending_erosion_dir    := 0;
+					pending_shield_idx     := 0;
+					pending_byte_col       := csc_byte_col;
+					pending_erase_top      := csc_hit_row;
 					player_bullet_active    := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1722,14 +1712,11 @@ begin
 				csc_hit_row  := shield_surface_top[csc_col_idx];
 				if csc_hit_row <> 255 then
 				begin
-					if pending_shield_erosion = 0 then
-					begin
-						pending_shield_erosion := 1;
-						pending_erosion_dir    := 0;
-						pending_shield_idx     := 1;
-						pending_byte_col       := csc_byte_col;
-						pending_erase_top      := csc_hit_row;
-					end;
+					pending_shield_erosion := 1;
+					pending_erosion_dir    := 0;
+					pending_shield_idx     := 1;
+					pending_byte_col       := csc_byte_col;
+					pending_erase_top      := csc_hit_row;
 					player_bullet_active    := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1742,14 +1729,11 @@ begin
 				csc_hit_row  := shield_surface_top[csc_col_idx];
 				if csc_hit_row <> 255 then
 				begin
-					if pending_shield_erosion = 0 then
-					begin
-						pending_shield_erosion := 1;
-						pending_erosion_dir    := 0;
-						pending_shield_idx     := 2;
-						pending_byte_col       := csc_byte_col;
-						pending_erase_top      := csc_hit_row;
-					end;
+					pending_shield_erosion := 1;
+					pending_erosion_dir    := 0;
+					pending_shield_idx     := 2;
+					pending_byte_col       := csc_byte_col;
+					pending_erase_top      := csc_hit_row;
 					player_bullet_active    := 3;
 					explosion_frame_counter := 0;
 				end;
@@ -1762,16 +1746,14 @@ begin
 				csc_hit_row  := shield_surface_top[csc_col_idx];
 				if csc_hit_row <> 255 then
 				begin
-					if pending_shield_erosion = 0 then
-					begin
-						pending_shield_erosion := 1;
-						pending_erosion_dir    := 0;
-						pending_shield_idx     := 3;
-						pending_byte_col       := csc_byte_col;
-						pending_erase_top      := csc_hit_row;
-					end;
+					pending_shield_erosion := 1;
+					pending_erosion_dir    := 0;
+					pending_shield_idx     := 3;
+					pending_byte_col       := csc_byte_col;
+					pending_erase_top      := csc_hit_row;
 					player_bullet_active    := 3;
 					explosion_frame_counter := 0;
+				end;
 				end;
 			end;
 		end;
