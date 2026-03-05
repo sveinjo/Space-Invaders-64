@@ -157,6 +157,30 @@ if player_bullet_x >= cbcc_block_x - BULLET_X_CONTACT_REACH then
 ```
 The `cbcc_rel_x` calculation that follows is safe: if the guard passes, the subtraction `player_bullet_x - cbcc_block_x + BULLET_X_CONTACT_REACH` always produces a value in [0..47].
 
+## IRQ Safety of Formation Procedures
+
+### `ClearMonster` — already IRQ-safe
+`ClearMonster` uses `sprite_data_ptr` at ZP **$22** (confirmed from compiled ASM — not $24). It is called from within `MainRasterPlayer` interrupt during gameplay. The only unsafe part is the `LevelAdvance()` call it makes when the **last** enemy is killed, because `LevelAdvance` calls `ShowGetReadyText` which uses ZP $24 via Screen::PrintString. That specific path is acceptable because it only fires on the last kill of a level.
+
+### `PreclearLeftmostAndBottomEnemies` — rewritten to be IRQ-safe
+The original version called `ClearMonster` 17 times, which used ZP $22/$24 pointers. The replacement directly writes `block_enemies[]` array values and sets `numberOfEnemies := 17` and `pending_edge_rescan := 1` — no pointer variables used, no ZP touched. Fully IRQ-safe.
+
+**Why sprite pixel zeroing is skipped in the IRQ-safe version:**
+- `ReadyMonsters()` already wrote the full alive template to all 24 sprite slots before this function runs.
+- During the intermission phase (`get_ready_mode = 1`) the game raster chain is not active, so enemy sprites are never rendered.
+- When gameplay starts the raster chain gates rendering on `block_enemies`, so dead enemies are never drawn regardless of their pixel data.
+
+### `ReadyMonsters` — NOT IRQ-safe
+Uses `source_sprite_ptr` and `destination_sprite_ptr` at ZP **$24/$68**. These are shared with every other pointer-type local in the program. Must be called with IRQs disabled or from a context where the SID play routine cannot interrupt it (e.g., at I=1 inside `LevelAdvance()`).
+
+### Recommended call sequence (IRQ-safe level setup)
+```pascal
+// All three called from the main polling loop with IRQs enabled:
+ReadyMonsters();                    // ZP $24/$68 — needs PreventIRQ wrap if SID is active
+PreclearLeftmostAndBottomEnemies(); // No ZP pointers — fully IRQ-safe
+MakeMonsters();                     // No ZP pointers — fully IRQ-safe
+```
+
 ## Zero-Page Pointer Collision Map (from compiled SpaceInvaders64.asm)
 TRSE allocates ZP addresses to pointer-type locals at compile time. Multiple procedures share the same ZP slot:
 - `$22–$23`: `sprite_data_ptr` (ClearMonster) — **NOTE: differs from $24 in older builds; always re-check after recompile**
