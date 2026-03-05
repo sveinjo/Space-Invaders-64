@@ -3166,20 +3166,27 @@ begin
 		
 	// IO area visible at $D000-$DFFF, RAM visible at $A000-$BFFF (NO BASIC) and RAM visible at $E000-$FFFF (NO KERNAL). 
 	// This is the typical memory configuration for demo/game development. 
-	SetMemoryConfig(1, 0, 0);	
-	
-	EnableRasterIrq();	
+	SetMemoryConfig(1, 0, 0);
+
+	// SEI: keep I=1 for the entire init sequence.
+	// InitSid (jsr $1000) is opaque SID machine code that may call CLI internally.
+	// We must ensure I=1 from here until we have a valid IRQ handler installed,
+	// otherwise any raster interrupt (once armed) jumps through a garbage $FFFE/$FFFF
+	// vector (Kernal is banked out, that address is uninitialized RAM) and crashes.
+	PreventIRQ();
+
 	DisplayText();
-	
+
 	// Show "Get Ready" screen for the first level before starting play.
 	// AdvanceLevel will increment current_level from 0 to 1 and display the intermission screen.
 	dec(current_level);
 	dec(total_level_counter);
-	LevelAdvance();
-	
-	//RasterIRQ(MainRasterRow1(),0,0);
-	//RasterIRQ(IntermissionChain(), 0, 0);
-	//EnableIRQ();
+	LevelAdvance();   // ← installs IntermissionChain into $FFFE/$FFFF
+
+	// ONLY NOW arm the VIC raster IRQ hardware, and ONLY NOW open the CPU interrupt gate.
+	// This order is mandatory: vector first, hardware enable second, CLI last.
+	EnableRasterIrq();
+	EnableIRQ();      // CLI — first raster interrupt fires safely into IntermissionChain
 
 	// Non-IRQ SID playback (main context). This runs once during init and is safe
 	// to execute outside the raster IRQ. Comment/uncomment to test.
