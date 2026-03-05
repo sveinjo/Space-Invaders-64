@@ -88,8 +88,8 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 7;   // 1-9; set to any value before startup to test that level
-	total_level_counter : byte = 7;  // Persistent counter; never wraps, keeps incrementing indefinitely
+	current_level : byte = 8;   // 1-9; set to any value before startup to test that level
+	total_level_counter : byte = 8;  // Persistent counter; never wraps, keeps incrementing indefinitely
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -837,29 +837,35 @@ begin
 end;
 
 
+// ---------------------------------------------------------------------------
+// AnimateMonsters — sets sprite image pointers for the 4 block-column sprites.
+// IRQ-SAFE inline ASM: no ZP touched, no temp vars.
+//   base = @spriteLoc/64 + 26 + enemyRow*8 + monster_animation_frame
+//        = 154 + enemyRow*8 + monster_animation_frame
+//   Writes: $07F9/$07FA/$07FB/$07FC (sprite 1-4 pointer slots in screen RAM)
+// ---------------------------------------------------------------------------
 procedure AnimateMonsters(enemyRow: byte);
-var
-	sprite_ptr_base: byte;
-	current_sprite_ptr: byte;
 begin
-	// Calculate the base sprite pointer once for this row
-	// Row 0: blocks 0-3 (sprites 26-33)
-	// Row 1: blocks 4-7 (sprites 34-41)
-	// Row 2: blocks 8-11 (sprites 42-49)
-	sprite_ptr_base := @spriteLoc/64 + 26 + (enemyRow << 3) + monster_animation_frame;
-    
-	// Set sprite locations using pre-calculated base + incremental additions
-	current_sprite_ptr := sprite_ptr_base;
-	SetSpriteLoc(monsterSprite1, current_sprite_ptr, useBank);
-    
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite2, current_sprite_ptr, useBank);
-    
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite3, current_sprite_ptr, useBank);
-    
-	current_sprite_ptr := current_sprite_ptr + 2;
-	SetSpriteLoc(monsterSprite4, current_sprite_ptr, useBank);
+	asm("
+        lda enemyRow
+        asl
+        asl
+        asl
+        clc
+        adc #154
+        clc
+        adc monster_animation_frame
+        sta $07F9
+        clc
+        adc #2
+        sta $07FA
+        clc
+        adc #2
+        sta $07FB
+        clc
+        adc #2
+        sta $07FC
+");
 end;
 
 // ---------------------------------------------------------------------------
@@ -872,26 +878,39 @@ end;
 // PreclearLeftmostAndBottomEnemies: Clears initial 16 enemies at startup (reduces 72 to 55)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// UpdateMonsters — sets sprite X/Y screen positions for the 4 block-column sprites.
+// IRQ-SAFE inline ASM: no ZP touched, no temp vars.
+//   Consolidates the 4 separate $D010 9th-bit clears into one AND mask.
+//   X: monster_base_x, +54, +108, +162 → $D002,$D004,$D006,$D008
+//   Y: monster_base_y + rowOffset (same for all 4) → $D003,$D005,$D007,$D009
+//   $D010 bits 1-4 (sprites 1-4): always clear — monsters never exceed 255px X.
+// ---------------------------------------------------------------------------
 procedure UpdateMonsters(rowOffset: byte);
-var
-	y_position: byte;
-	x_position: byte;
 begin
-	// Pre-calculate Y position to avoid repeated additions
-	y_position := monster_base_y + rowOffset;
-    
-	// Update sprites using incremental X positions instead of multiplications
-	x_position := monster_base_x;
-	SpritePos(x_position, y_position, monsterSprite1);
-    
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite2);
-    
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite3);
-    
-	x_position := x_position + MONSTER_SPACING;
-	SpritePos(x_position, y_position, monsterSprite4);
+	asm("
+        lda $D010
+        and #$E1
+        sta $D010
+        lda monster_base_x
+        sta $D002
+        clc
+        adc #54
+        sta $D004
+        clc
+        adc #54
+        sta $D006
+        clc
+        adc #54
+        sta $D008
+        lda monster_base_y
+        clc
+        adc rowOffset
+        sta $D003
+        sta $D005
+        sta $D007
+        sta $D009
+");
 end;
 	
 procedure MakeSprites();
@@ -3010,7 +3029,7 @@ begin
 	
 
 	//RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
-	RasterIRQ(MainRasterPlayer(), 223, 0);
+	RasterIRQ(MainRasterPlayer(), 222, 0);
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := GREEN;
 		
@@ -3045,9 +3064,9 @@ begin
 
 	// If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	if row_has_monsters[2] <> 0 then
-		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0)
+		RasterIRQ(MainRasterRow3(), 45 + monster_base_y, 0)
 	else
-		RasterIRQ(MainRasterPlayer(), 223, 0);
+		RasterIRQ(MainRasterPlayer(), 222, 0);
 
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := BLUE;
@@ -3069,11 +3088,11 @@ begin
 	
 	// Choose next raster handler based on which subsequent rows still have monsters
 	if row_has_monsters[1] <> 0 then
-		RasterIRQ(MainRasterRow2(), 15 + monster_base_y, 0)
+		RasterIRQ(MainRasterRow2(), 19 + monster_base_y, 0)
 	else if row_has_monsters[2] <> 0 then
-		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0)
+		RasterIRQ(MainRasterRow3(), 45 + monster_base_y, 0)
 	else
-		RasterIRQ(MainRasterPlayer(), 223, 0);
+		RasterIRQ(MainRasterPlayer(), 222, 0);
 
 
 	if DEBUG_ENABLE = 1 then
@@ -3091,10 +3110,10 @@ begin
 		SCREEN_BG_COL := BLACK;
 
 	// Game logic runs unconditionally — intermission uses separate chain
-		ShowBullet();	
+	ShowBullet();	
 		
-		// Apply erosion every frame — now just a charset write, fast enough to run unconditionally.
-		ApplyShieldErosion();
+	// Apply erosion every frame — now just a charset write, fast enough to run unconditionally.
+	ApplyShieldErosion();
 	
 	//peek(^$D01F, 0);
 	
@@ -3131,20 +3150,20 @@ begin
 		if row_has_monsters[0] <> 0 then
 		begin
 			//mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
-			RasterIRQ(MainRasterRow1(), monster_base_y - 8, 0); // There is room between 33 and 13 for tuning if needed.
+			RasterIRQ(MainRasterRow1(), monster_base_y - 4, 0); // There is room between 33 and 13 for tuning if needed.
 		end
 		else if row_has_monsters[1] <> 0 then
 		begin
 			//mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
-			RasterIRQ(MainRasterRow2(), 15 + monster_base_y, 0);
+			RasterIRQ(MainRasterRow2(), 19 + monster_base_y, 0);
 		end
 		else if row_has_monsters[2] <> 0 then
 		begin
 			//mc_row_target := Helpers::Clamp(39 + monster_base_y, 40, 222);
-			RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0);
+			RasterIRQ(MainRasterRow3(), 45 + monster_base_y, 0);
 		end
 		else
-			RasterIRQ(MainRasterPlayer(), 223, 0);
+			RasterIRQ(MainRasterPlayer(), 222, 0);
 	end;
 
 	
