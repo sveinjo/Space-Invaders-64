@@ -51,6 +51,7 @@ var
 	sidfile: incsid("sid/Courier.sid",2);
 	
 	advancelevel_palette_level : byte;
+	flagGotoNextLevel : byte = 0;
 	
 	//const useKernal:byte=0;
 	
@@ -1120,7 +1121,7 @@ Begin
 				if row_has_monsters[0] = 0 then
 					if row_has_monsters[1] = 0 then
 						if row_has_monsters[2] = 0 then
-							LevelAdvance();
+							flagGotoNextLevel := 1;							
 			end;
 		end;
 	end;
@@ -1129,52 +1130,31 @@ end;
 
 // ---------------------------------------------------------------------------
 // PreclearLeftmostAndBottomEnemies
-//   Removes the 17 pre-cleared enemies from block_enemies directly, without
-//   using any pointer variables (no ZP $22/$24/$68 touched).
-//   This makes the procedure IRQ-safe — it can run with interrupts fully
-//   enabled, so the SID play routine is never blocked.
+//   Calls ClearMonster for each of the 17 pre-removed enemies.  ClearMonster
+//   zeroes the sprite pixel data in both animation frames, clears the
+//   block_enemies bit, increments numberOfEnemies, and sets
+//   pending_edge_rescan — all handled correctly by its normal path.
+//   No block ever becomes fully empty here (each retains ≥2 enemies), so
+//   the LevelAdvance() branch inside ClearMonster never fires.
 //
 //   Enemies removed (reduces effective count from 72 to 55):
-//     Block  0: enemies 0,1  (left column, all 3 rows)
+//     Block  0: enemies 0,1
 //     Block  4: enemies 0,1
 //     Block  8: enemies 0,1,3,5
-//     Blocks 9,10,11: enemies 1,3,5  (bottom sub-row of rightmost blocks)
+//     Blocks 9,10,11: enemies 1,3,5
 //
-//   Sprite pixel data for these slots is NOT zeroed here — it is not needed
-//   because:
-//     a) ReadyMonsters() already wrote the full alive template to all 24 slots.
-//     b) During intermission (get_ready_mode=1) the game raster chain is not
-//        running, so enemy sprites are never rendered.
-//     c) When gameplay starts the raster chain gates on block_enemies, so
-//        dead enemies are never drawn regardless of their pixel data.
+//   ClearMonster uses sprite_data_ptr at ZP $22 (verify after each recompile).
+//   Safe to call with IRQs enabled as long as SID player does not use ZP $22.
 // ---------------------------------------------------------------------------
 procedure PreclearLeftmostAndBottomEnemies();
 begin
-	// Row 0 blocks (indices 0-3)
-	// Block 0: remove enemies 0,1 (bits 0,1 = mask $03) → $3F & $FC = $3C
-	block_enemies[0] := $3C;
-
-	// Row 1 blocks (indices 4-7)
-	// Block 4: remove enemies 0,1 → $3C
-	block_enemies[4] := $3C;
-
-	// Row 2 blocks (indices 8-11)
-	// Block 8: remove enemies 0,1 (bits 0,1) then 3,5 (bits 3,5 = mask $28)
-	//          $3F & ~$03 = $3C, $3C & ~$28 = $3C & $D7 = $14
-	block_enemies[8]  := $14;
-	// Blocks 9-11: remove enemies 1,3,5 (bits 1,3,5 = mask $2A) → $3F & $D5 = $15
-	block_enemies[9]  := $15;
-	block_enemies[10] := $15;
-	block_enemies[11] := $15;
-
-	// 17 enemies have been removed (2+2+4+3+3+3).
-	// ReadyMonsters reset numberOfEnemies to 0; increment it to account for
-	// the pre-cleared slots so speed and reload calculations stay accurate.
-	numberOfEnemies := 17;
-
-	// Trigger an edge-cache refresh on the next UpdateTick so cached_leftmost_offset
-	// and cached_rightmost_offset reflect the thinned-out formation correctly.
-	pending_edge_rescan := 1;
+	ClearMonster(0, 0);  ClearMonster(0, 1);
+	ClearMonster(4, 0);  ClearMonster(4, 1);
+	ClearMonster(8, 0);  ClearMonster(8, 1);
+	ClearMonster(8, 3);  ClearMonster(8, 5);
+	ClearMonster(9,  1); ClearMonster(9,  3); ClearMonster(9,  5);
+	ClearMonster(10, 1); ClearMonster(10, 3); ClearMonster(10, 5);
+	ClearMonster(11, 1); ClearMonster(11, 3); ClearMonster(11, 5);
 end;
 
 
@@ -1197,32 +1177,49 @@ end;
 
 procedure ReadyMonsters();
 var
-	block_loop_counter, copy_loop_counter : byte;
-	source_sprite_ptr, destination_sprite_ptr : ^byte;
+	rm_block  : byte;   // block counter 0..12
+	rm_i      : byte;   // byte counter within each 64-byte sprite
+	rm_sprite_src : ^byte;  // local — compiles to ZP $24 (shared pool)
+	rm_sprite_dst : ^byte;  // local — compiles to ZP $68 (shared pool)
+	// ⚠ CALLER MUST wrap with PreventIRQ()/EnableIRQ().
+	//   These locals use ZP $24/$68 which the SID play routine also touches.
+	//   TRSE's ZP pointer pool has no free slots for new global pointers; locals
+	//   reuse existing allocations without consuming new pool entries.
 begin
-	// Copy monster sprite data (frames 1 and 2) into 24 consecutive sprite locations
-	// Each of the 12 monster blocks gets 2 animation frames
-	for block_loop_counter := 0 to 12 do
+	// ---------------------------------------------------------------------------
+	// Copy master enemy sprite templates into all 13 block sprite pairs.
+	//   Frame 1 master: sprite 24 @ $2600  →  sprites 26,28,30,...,50
+	//   Frame 2 master: sprite 25 @ $2640  →  sprites 27,29,31,...,51
+	// ---------------------------------------------------------------------------
+	rm_sprite_dst := @spriteLoc + 1664;   // sprite 26 = block 0, frame 1  ($2680)
+	rm_block := 0;
+	while rm_block <= 12 do
 	begin
-		// Copy frame 1 (sprite index 24 from spritesheet)
-		source_sprite_ptr := @spriteLoc + 1536;  // Source: sprite 24
-		destination_sprite_ptr := @spriteLoc + 1664 + (block_loop_counter << 7);  // Destination: sprite 26, 28, 30, 32...
-		for copy_loop_counter := 0 to 63 do
+		// ── Frame 1: copy sprite 24 ($2600) into current block's frame-1 slot ──
+		// After 64 bytes rm_sprite_dst lands exactly on the frame-2 slot — no skip needed.
+		rm_sprite_src := @spriteLoc + 1536;  // sprite 24 base  ($2600)
+		rm_i := 0;
+		while rm_i < 64 do
 		begin
-			destination_sprite_ptr^ := source_sprite_ptr^;
-			source_sprite_ptr := source_sprite_ptr + 1;
-			destination_sprite_ptr := destination_sprite_ptr + 1;
+			rm_sprite_dst^ := rm_sprite_src^;
+			inc(rm_sprite_src);
+			inc(rm_sprite_dst);
+			inc(rm_i);
 		end;
-		
-		// Copy frame 2 (sprite index 25 from spritesheet)
-		source_sprite_ptr := @spriteLoc + 1600;  // Source: sprite 25
-		destination_sprite_ptr := @spriteLoc + 1728 + (block_loop_counter << 7);  // Destination: sprite 27, 29, 31, 33...
-		for copy_loop_counter := 0 to 63 do
+
+		// ── Frame 2: copy sprite 25 ($2640) into current block's frame-2 slot ──
+		// After 64 bytes rm_sprite_dst lands exactly on the next block's frame-1 slot.
+		rm_sprite_src := @spriteLoc + 1600;  // sprite 25 base  ($2640)
+		rm_i := 0;
+		while rm_i < 64 do
 		begin
-			destination_sprite_ptr^ := source_sprite_ptr^;
-			source_sprite_ptr := source_sprite_ptr + 1;
-			destination_sprite_ptr := destination_sprite_ptr + 1;
+			rm_sprite_dst^ := rm_sprite_src^;
+			inc(rm_sprite_src);
+			inc(rm_sprite_dst);
+			inc(rm_i);
 		end;
+
+		rm_block := rm_block + 1;
 	end;
 
 	// Reset enemy grid to full rack
@@ -2243,8 +2240,8 @@ procedure ShowGetReadyText();
 var	
 	sgrt_screen_addr : integer;
 	sgrt_color_addr : integer;
-	sgrt_ptr : pointer of byte;
-	sgrt_color_ptr : pointer of byte;
+	//sgrt_ptr : pointer of byte;
+	//sgrt_color_ptr : pointer of byte;
 	sgrt_i : byte;
 	sgrt_text_msg1 : string = ("GET READY FOR");
 	sgrt_text_msg2 : string = ("LEVEL ");
@@ -2973,23 +2970,31 @@ begin
 	// target scanline has already passed, causing Row1/2/3 to fire a full frame late.
 	// Clamping to [40, 222] guards against byte underflow (monster_base_y < 13) and
 	// byte overflow (40 + monster_base_y > 255), and keeps targets below player IRQ at 223.
-	if row_has_monsters[0] <> 0 then
+	
+	if (flagGotoNextLevel = 1) then
 	begin
-		//mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
-		RasterIRQ(MainRasterRow1(), monster_base_y - 8, 0); // There is room between 33 and 13 for tuning if needed.
+		flagGotoNextLevel := 0;
+		LevelAdvance();
 	end
-	else if row_has_monsters[1] <> 0 then
-	begin
-		//mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
-		RasterIRQ(MainRasterRow2(), 15 + monster_base_y, 0);
-	end
-	else if row_has_monsters[2] <> 0 then
-	begin
-		//mc_row_target := Helpers::Clamp(39 + monster_base_y, 40, 222);
-		RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0);
-	end
-	else
-		RasterIRQ(MainRasterPlayer(), 223, 0);
+	else begin
+		if row_has_monsters[0] <> 0 then
+		begin
+			//mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
+			RasterIRQ(MainRasterRow1(), monster_base_y - 8, 0); // There is room between 33 and 13 for tuning if needed.
+		end
+		else if row_has_monsters[1] <> 0 then
+		begin
+			//mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
+			RasterIRQ(MainRasterRow2(), 15 + monster_base_y, 0);
+		end
+		else if row_has_monsters[2] <> 0 then
+		begin
+			//mc_row_target := Helpers::Clamp(39 + monster_base_y, 40, 222);
+			RasterIRQ(MainRasterRow3(), 41 + monster_base_y, 0);
+		end
+		else
+			RasterIRQ(MainRasterPlayer(), 223, 0);
+	end;
 
 	
 
@@ -3092,7 +3097,8 @@ begin
 	// Stage the 6 colour bytes into globals and set pending_palette := 1.
 	// IntermissionChain will call SetStarfieldColors at I=1 on the next frame,
 	// avoiding the ZP $24 (StarField_color_mem) collision with the SID play routine.
-	advancelevel_palette_level := total_level_counter;
+	
+	/*advancelevel_palette_level := total_level_counter;
 	while advancelevel_palette_level > 10 do begin
 		advancelevel_palette_level := advancelevel_palette_level - 10;
 	end;
@@ -3136,11 +3142,11 @@ begin
 		pal_col1:=RED;    pal_col2:=GREEN;  pal_col3:=LIGHT_BLUE;
 		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BLUE;               // RGB
 	end;
-	pending_palette := 1;
+	pending_palette := 1;*/
 
 	// Restore shields (uses ZP $24/$68 for csg_src_ptr / csg_dst_ptr / css_scan_ptr).
-	//if total_level_counter < 50 then
-	//	CopyShieldSprites();
+	if total_level_counter < 50 then
+		CopyShieldSprites();
 
 	// Signal the main-context polling loop to run ReadyMonsters + MakeMonsters.
 	// Those are wrapped in PreventIRQ/EnableIRQ there to protect ZP $24/$68 from
@@ -3270,11 +3276,12 @@ begin
 			// sprite_data_ptr) and ZP $68 (destination_sprite_ptr) with every other pointer
 			// variable in the program.  PreventIRQ/EnableIRQ prevents the SID play routine
 			// (called from IntermissionChain each frame) from corrupting those addresses mid-use.
-			//PreventIRQ();
+			PreventIRQ();
 			//EnableRasterIrq();
-			//ReadyMonsters();
+			ReadyMonsters();
+			EnableIRQ();
 			PreclearLeftmostAndBottomEnemies();
-			//EnableIRQ();
+			
 			// MakeMonsters uses no ZP pointer variables — runs safely with IRQs enabled.
 			MakeMonsters();
 			level_advance_ready := 1;  // ungate fire-to-start in IntermissionChain

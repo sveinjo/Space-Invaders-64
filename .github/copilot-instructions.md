@@ -162,22 +162,31 @@ The `cbcc_rel_x` calculation that follows is safe: if the guard passes, the subt
 ### `ClearMonster` — already IRQ-safe
 `ClearMonster` uses `sprite_data_ptr` at ZP **$22** (confirmed from compiled ASM — not $24). It is called from within `MainRasterPlayer` interrupt during gameplay. The only unsafe part is the `LevelAdvance()` call it makes when the **last** enemy is killed, because `LevelAdvance` calls `ShowGetReadyText` which uses ZP $24 via Screen::PrintString. That specific path is acceptable because it only fires on the last kill of a level.
 
-### `PreclearLeftmostAndBottomEnemies` — rewritten to be IRQ-safe
-The original version called `ClearMonster` 17 times, which used ZP $22/$24 pointers. The replacement directly writes `block_enemies[]` array values and sets `numberOfEnemies := 17` and `pending_edge_rescan := 1` — no pointer variables used, no ZP touched. Fully IRQ-safe.
+### `PreclearLeftmostAndBottomEnemies` — calls ClearMonster for sprite data
+Calls `ClearMonster` 17 times directly. `ClearMonster` handles everything via its normal `was_alive` path: zeroes sprite pixel data in both animation frames, clears the `block_enemies` bit, increments `numberOfEnemies`, and sets `pending_edge_rescan`. No block ever becomes fully empty from this preclear (each retains ≥2 enemies), so `LevelAdvance()` never fires.
 
-**Why sprite pixel zeroing is skipped in the IRQ-safe version:**
-- `ReadyMonsters()` already wrote the full alive template to all 24 sprite slots before this function runs.
-- During the intermission phase (`get_ready_mode = 1`) the game raster chain is not active, so enemy sprites are never rendered.
-- When gameplay starts the raster chain gates rendering on `block_enemies`, so dead enemies are never drawn regardless of their pixel data.
+`ClearMonster` uses `sprite_data_ptr` at ZP **$22**. The call site runs with IRQs enabled; safe as long as the SID player does not use ZP $22 (verify ZP address in compiled ASM after each recompile).
 
-### `ReadyMonsters` — NOT IRQ-safe
-Uses `source_sprite_ptr` and `destination_sprite_ptr` at ZP **$24/$68**. These are shared with every other pointer-type local in the program. Must be called with IRQs disabled or from a context where the SID play routine cannot interrupt it (e.g., at I=1 inside `LevelAdvance()`).
+### `ReadyMonsters` — rewritten to be IRQ-safe
+Uses a **global** `^byte` pointer pair (`rm_sprite_src`, `rm_sprite_dst`) declared in the main `var` block instead of local pointer variables. This is the key distinction:
+
+- **Local** `^byte` pointer variables all compile to the shared ZP $24/$68 pool (regardless of what you name them), which the SID play routine corrupts.
+- **Global** `^byte` pointer variables get unique, fixed ZP addresses that can be verified from the compiled ASM. With the current source ordering they land in the $18–$21 gap (confirmed unused by Screen, StarField, Memory units, and SID).
+- **`poke`/`peek` with an integer variable address generates bad ASM in TRSE** — explicitly documented in helpers.tru. Do NOT use that form for variable-address writes.
+- **TRSE's ZP pointer pool has a hard limit**. Adding global `^byte` variables consumes pool slots permanently. If the build reports "Could not allocate more free pointers", increase the pool size in TRSE settings **or** change global pointer vars back to locals (which reuse existing allocations without consuming new slots — but then need `PreventIRQ`/`EnableIRQ` at call sites).
+
+Address progression (verified):
+- Frame 1 starts at `$2680` (sprite 26); after each 64-byte copy, `+64` skips the frame-2 slot → next frame-1 slot every 128 bytes.
+- Frame 2 starts at `$26C0` (sprite 27); same skip pattern.
+- 13 iterations total (blocks 0–12), matching the original `for 0 to 12 do` behaviour.
+
+**After every recompile**: check `rm_sprite_src` and `rm_sprite_dst` ZP addresses in the compiled ASM to confirm they remain in the $18–$21 range and haven't migrated to $24/$68.
 
 ### Recommended call sequence (IRQ-safe level setup)
 ```pascal
-// All three called from the main polling loop with IRQs enabled:
-ReadyMonsters();                    // ZP $24/$68 — needs PreventIRQ wrap if SID is active
-PreclearLeftmostAndBottomEnemies(); // No ZP pointers — fully IRQ-safe
+// All three safe to call from the main polling loop with IRQs enabled:
+ReadyMonsters();                    // ZP $18–$21 via global ptrs — safe
+PreclearLeftmostAndBottomEnemies(); // No ZP at all — fully IRQ-safe
 MakeMonsters();                     // No ZP pointers — fully IRQ-safe
 ```
 
