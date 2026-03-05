@@ -969,7 +969,7 @@ var
 	
 
 begin
-	HideGetReadyText();
+	//HideGetReadyText();
 	
 	
 
@@ -1176,51 +1176,149 @@ Begin
 end;
 
 procedure ReadyMonsters();
-var
-	rm_block  : byte;   // block counter 0..12
-	rm_i      : byte;   // byte counter within each 64-byte sprite
-	rm_sprite_src : ^byte;  // local — compiles to ZP $24 (shared pool)
-	rm_sprite_dst : ^byte;  // local — compiles to ZP $68 (shared pool)
-	// ⚠ CALLER MUST wrap with PreventIRQ()/EnableIRQ().
-	//   These locals use ZP $24/$68 which the SID play routine also touches.
-	//   TRSE's ZP pointer pool has no free slots for new global pointers; locals
-	//   reuse existing allocations without consuming new pool entries.
 begin
 	// ---------------------------------------------------------------------------
 	// Copy master enemy sprite templates into all 13 block sprite pairs.
-	//   Frame 1 master: sprite 24 @ $2600  →  sprites 26,28,30,...,50
-	//   Frame 2 master: sprite 25 @ $2640  →  sprites 27,29,31,...,51
+	//   Frame 1 master: sprite 24 @ $2600  →  sprites 26,28,30,...,50  (even slots)
+	//   Frame 2 master: sprite 25 @ $2640  →  sprites 27,29,31,...,51  (odd slots)
+	//   Sprite N base address: $2000 + N*64.  Block B: frame1=$2680+B*$80, frame2=$26C0+B*$80
+	//
+	// IRQ-SAFE: uses absolute indexed addressing (lda $abs,x / sta $abs,x).
+	//   No ZP pointers used — X register only.  ZP $24/$68 never touched.
+	//   PreventIRQ()/EnableIRQ() no longer required at the call site.
 	// ---------------------------------------------------------------------------
-	rm_sprite_dst := @spriteLoc + 1664;   // sprite 26 = block 0, frame 1  ($2680)
-	rm_block := 0;
-	while rm_block <= 12 do
-	begin
-		// ── Frame 1: copy sprite 24 ($2600) into current block's frame-1 slot ──
-		// After 64 bytes rm_sprite_dst lands exactly on the frame-2 slot — no skip needed.
-		rm_sprite_src := @spriteLoc + 1536;  // sprite 24 base  ($2600)
-		rm_i := 0;
-		while rm_i < 64 do
-		begin
-			rm_sprite_dst^ := rm_sprite_src^;
-			inc(rm_sprite_src);
-			inc(rm_sprite_dst);
-			inc(rm_i);
-		end;
-
-		// ── Frame 2: copy sprite 25 ($2640) into current block's frame-2 slot ──
-		// After 64 bytes rm_sprite_dst lands exactly on the next block's frame-1 slot.
-		rm_sprite_src := @spriteLoc + 1600;  // sprite 25 base  ($2640)
-		rm_i := 0;
-		while rm_i < 64 do
-		begin
-			rm_sprite_dst^ := rm_sprite_src^;
-			inc(rm_sprite_src);
-			inc(rm_sprite_dst);
-			inc(rm_i);
-		end;
-
-		rm_block := rm_block + 1;
-	end;
+	asm("
+        ldx #63
+rm_b0f1 lda $2600,x
+        sta $2680,x
+        dex
+        bpl rm_b0f1
+        ldx #63
+rm_b0f2 lda $2640,x
+        sta $26C0,x
+        dex
+        bpl rm_b0f2
+        ldx #63
+rm_b1f1 lda $2600,x
+        sta $2700,x
+        dex
+        bpl rm_b1f1
+        ldx #63
+rm_b1f2 lda $2640,x
+        sta $2740,x
+        dex
+        bpl rm_b1f2
+        ldx #63
+rm_b2f1 lda $2600,x
+        sta $2780,x
+        dex
+        bpl rm_b2f1
+        ldx #63
+rm_b2f2 lda $2640,x
+        sta $27C0,x
+        dex
+        bpl rm_b2f2
+        ldx #63
+rm_b3f1 lda $2600,x
+        sta $2800,x
+        dex
+        bpl rm_b3f1
+        ldx #63
+rm_b3f2 lda $2640,x
+        sta $2840,x
+        dex
+        bpl rm_b3f2
+        ldx #63
+rm_b4f1 lda $2600,x
+        sta $2880,x
+        dex
+        bpl rm_b4f1
+        ldx #63
+rm_b4f2 lda $2640,x
+        sta $28C0,x
+        dex
+        bpl rm_b4f2
+        ldx #63
+rm_b5f1 lda $2600,x
+        sta $2900,x
+        dex
+        bpl rm_b5f1
+        ldx #63
+rm_b5f2 lda $2640,x
+        sta $2940,x
+        dex
+        bpl rm_b5f2
+        ldx #63
+rm_b6f1 lda $2600,x
+        sta $2980,x
+        dex
+        bpl rm_b6f1
+        ldx #63
+rm_b6f2 lda $2640,x
+        sta $29C0,x
+        dex
+        bpl rm_b6f2
+        ldx #63
+rm_b7f1 lda $2600,x
+        sta $2A00,x
+        dex
+        bpl rm_b7f1
+        ldx #63
+rm_b7f2 lda $2640,x
+        sta $2A40,x
+        dex
+        bpl rm_b7f2
+        ldx #63
+rm_b8f1 lda $2600,x
+        sta $2A80,x
+        dex
+        bpl rm_b8f1
+        ldx #63
+rm_b8f2 lda $2640,x
+        sta $2AC0,x
+        dex
+        bpl rm_b8f2
+        ldx #63
+rm_b9f1 lda $2600,x
+        sta $2B00,x
+        dex
+        bpl rm_b9f1
+        ldx #63
+rm_b9f2 lda $2640,x
+        sta $2B40,x
+        dex
+        bpl rm_b9f2
+        ldx #63
+rm_bAf1 lda $2600,x
+        sta $2B80,x
+        dex
+        bpl rm_bAf1
+        ldx #63
+rm_bAf2 lda $2640,x
+        sta $2BC0,x
+        dex
+        bpl rm_bAf2
+        ldx #63
+rm_bBf1 lda $2600,x
+        sta $2C00,x
+        dex
+        bpl rm_bBf1
+        ldx #63
+rm_bBf2 lda $2640,x
+        sta $2C40,x
+        dex
+        bpl rm_bBf2
+        ldx #63
+rm_bCf1 lda $2600,x
+        sta $2C80,x
+        dex
+        bpl rm_bCf1
+        ldx #63
+rm_bCf2 lda $2640,x
+        sta $2CC0,x
+        dex
+        bpl rm_bCf2
+");
 
 	// Reset enemy grid to full rack
 	block_enemies[0]  := $3F;
@@ -3254,19 +3352,15 @@ begin
 			// Palette, ShowGetReadyText, and CopyShieldSprites were moved to LevelAdvance()
 			// so they run at I=1 — immune to the SID play routine corrupting ZP $24/$68.
 			//
-			// ReadyMonsters and PreclearLeftmostAndBottomEnemies share ZP $24 (source_sprite_ptr,
-			// sprite_data_ptr) and ZP $68 (destination_sprite_ptr) with every other pointer
-			// variable in the program.  PreventIRQ/EnableIRQ prevents the SID play routine
-			// (called from IntermissionChain each frame) from corrupting those addresses mid-use.
-			PreventIRQ();
-			//EnableRasterIrq();
+			// ReadyMonsters uses inline ASM with absolute indexed addressing — no ZP
+			// pointers touched, fully IRQ-safe. PreventIRQ/EnableIRQ no longer needed.
 			ReadyMonsters();
-			EnableIRQ();
 			PreclearLeftmostAndBottomEnemies();
 			
 			// MakeMonsters uses no ZP pointer variables — runs safely with IRQs enabled.
 			MakeMonsters();
 			level_advance_ready := 1;  // ungate fire-to-start in IntermissionChain
 		end;
+		DisplayScore();
 	end;
 end.

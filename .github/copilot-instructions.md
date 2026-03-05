@@ -169,26 +169,31 @@ Calls `ClearMonster` 17 times directly. `ClearMonster` handles everything via it
 `ClearMonster` uses `sprite_data_ptr` at ZP **$22**. The call site runs with IRQs enabled; safe as long as the SID player does not use ZP $22 (verify ZP address in compiled ASM after each recompile).
 
 ### `ReadyMonsters` — rewritten to be IRQ-safe
-Uses a **global** `^byte` pointer pair (`rm_sprite_src`, `rm_sprite_dst`) declared in the main `var` block instead of local pointer variables. This is the key distinction:
+Uses **inline assembler** with absolute indexed addressing (`lda $2600,x` / `sta $2680,x` / `dex` / `bpl`) — no ZP pointers touched at all. 26 fixed-address loops (13 blocks × 2 frames), each copying 64 bytes using only the X register. Fully IRQ-safe; `PreventIRQ`/`EnableIRQ` no longer needed at the call site.
+
+TRSE multi-line asm syntax (labels go in column 0, instructions are indented):
+```pascal
+asm("
+        ldx #63
+rm_b0f1 lda $2600,x
+        sta $2680,x
+        dex
+        bpl rm_b0f1
+");
+```
+
+**Old approach (kept for reference):** used local `^byte` pointer pair:
 
 - **Local** `^byte` pointer variables all compile to the shared ZP $24/$68 pool (regardless of what you name them), which the SID play routine corrupts.
-- **Global** `^byte` pointer variables get unique, fixed ZP addresses that can be verified from the compiled ASM. With the current source ordering they land in the $18–$21 gap (confirmed unused by Screen, StarField, Memory units, and SID).
 - **`poke`/`peek` with an integer variable address generates bad ASM in TRSE** — explicitly documented in helpers.tru. Do NOT use that form for variable-address writes.
-- **TRSE's ZP pointer pool has a hard limit**. Adding global `^byte` variables consumes pool slots permanently. If the build reports "Could not allocate more free pointers", increase the pool size in TRSE settings **or** change global pointer vars back to locals (which reuse existing allocations without consuming new slots — but then need `PreventIRQ`/`EnableIRQ` at call sites).
-
-Address progression (verified):
-- Frame 1 starts at `$2680` (sprite 26); after each 64-byte copy, `+64` skips the frame-2 slot → next frame-1 slot every 128 bytes.
-- Frame 2 starts at `$26C0` (sprite 27); same skip pattern.
-- 13 iterations total (blocks 0–12), matching the original `for 0 to 12 do` behaviour.
-
-**After every recompile**: check `rm_sprite_src` and `rm_sprite_dst` ZP addresses in the compiled ASM to confirm they remain in the $18–$21 range and haven't migrated to $24/$68.
+- **TRSE's ZP pointer pool has a hard limit**. Adding global `^byte` variables consumes pool slots permanently.
 
 ### Recommended call sequence (IRQ-safe level setup)
 ```pascal
 // All three safe to call from the main polling loop with IRQs enabled:
-ReadyMonsters();                    // ZP $18–$21 via global ptrs — safe
-PreclearLeftmostAndBottomEnemies(); // No ZP at all — fully IRQ-safe
-MakeMonsters();                     // No ZP pointers — fully IRQ-safe
+ReadyMonsters();                    // inline ASM, no ZP — fully IRQ-safe
+PreclearLeftmostAndBottomEnemies(); // no ZP at all — fully IRQ-safe
+MakeMonsters();                     // no ZP pointers — fully IRQ-safe
 ```
 
 ## Zero-Page Pointer Collision Map (from compiled SpaceInvaders64.asm)
