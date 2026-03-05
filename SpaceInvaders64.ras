@@ -51,7 +51,7 @@ var
 	sidfile: incsid("sid/Courier.sid",2);
 	
 	advancelevel_palette_level : byte;
-	flagGotoNextLevel : byte = 1;
+	flagGotoNextLevel : byte = 0;
 	
 	//const useKernal:byte=0;
 	
@@ -3127,8 +3127,8 @@ begin
 	pending_palette := 1;
 
 	// Restore shields (uses ZP $24/$68 for csg_src_ptr / csg_dst_ptr / css_scan_ptr).
-	if total_level_counter < 50 then
-		CopyShieldSprites();
+	//if total_level_counter < 50 then
+	//	CopyShieldSprites();
 
 	// Signal the main-context polling loop to run ReadyMonsters + MakeMonsters.
 	// Those are wrapped in PreventIRQ/EnableIRQ there to protect ZP $24/$68 from
@@ -3193,8 +3193,8 @@ begin
 	MakeSprites();
 	
 	InitSid(sidfile_1_init);
-	disableciainterrupts();
-	setmemoryconfig(1,0,0);
+	//disableciainterrupts();
+	//setmemoryconfig(1,0,0);
 	
 	DisableCIAInterrupts();
 	
@@ -3202,8 +3202,8 @@ begin
     SCREEN_FG_COL:=BLACK;
 	
 	// Clear sprite collision registers to remove garbage data
-	asm(" lda $D01E");
-	asm(" lda $D01F");
+	//asm(" lda $D01E");
+	//asm(" lda $D01F");
 		
 	
 	StarField::CreateStarScreen();	
