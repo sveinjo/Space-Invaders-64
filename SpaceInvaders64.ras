@@ -100,6 +100,16 @@ var
 	// Keeps heavy monster init out of the interrupt handler so music plays uninterrupted.
 	level_advance_pending : byte = 0;  // 1 = main loop must run MakeMonsters()
 	level_advance_ready   : byte = 0;  // 1 = MakeMonsters() done, fire-to-start allowed
+	// Deferred palette staging: LevelAdvance() writes these 6 colour bytes and sets
+	// pending_palette := 1.  IntermissionChain flushes them to SetStarfieldColors at
+	// I=1 — immune to the SID play routine corrupting ZP $24/$68 (StarField_color_mem).
+	pending_palette  : byte = 0;  // 1 = staged colours waiting to be applied
+	pal_col1 : byte = 0;
+	pal_col2 : byte = 0;
+	pal_col3 : byte = 0;
+	pal_col4 : byte = 0;
+	pal_col5 : byte = 0;
+	pal_col6 : byte = 0;
 	// Buffer for screen chars and colors replaced by "Get ready" text (50 chars + 50 colors)
 	get_ready_char_buffer : array[50] of byte;
 	get_ready_color_buffer : array[50] of byte;
@@ -2671,6 +2681,18 @@ interrupt IntermissionChain();
 begin
 	StartIRQ(0);
 	
+	// Flush deferred palette update before advancing the SID engine.
+	// Running at I=1 here (inside interrupt) — immune to the SID play routine
+	// corrupting ZP $24 (StarField_color_mem).  Clear the flag first so a
+	// concurrently-written pending_palette := 1 from LevelAdvance() is never lost.
+	if pending_palette = 1 then
+	begin
+		pending_palette := 0;
+		StarField::SetStarfieldColors(pal_col1, pal_col2, pal_col3, pal_col4, pal_col5, pal_col6);		
+		// Show get-ready text (uses ZP $24/$68 for sgrt_ptr / sgrt_color_ptr).
+		ShowGetReadyText();
+	end;	
+
 	// Play music during intermission
 	if DEBUG_ENABLE = 0 then
 		call(sidfile_1_play);
@@ -2682,7 +2704,7 @@ begin
 	if joystickbutton = 1 then
 	begin
 		if (get_ready_prev_fire = 0 and level_advance_ready = 1) then
-		begin
+		begin			
 			LevelStart();  // Exits intermission, switches to full game chain
 			get_ready_prev_fire := 1;
 		end;
@@ -3038,43 +3060,54 @@ begin
 	// -----------------------------------------------------------------------
 
 	// Pick starfield palette for the incoming level, repeating every 10 levels.
-	/*advancelevel_palette_level := total_level_counter;
+	// Stage the 6 colour bytes into globals and set pending_palette := 1.
+	// IntermissionChain will call SetStarfieldColors at I=1 on the next frame,
+	// avoiding the ZP $24 (StarField_color_mem) collision with the SID play routine.
+	advancelevel_palette_level := total_level_counter;
 	while advancelevel_palette_level > 10 do begin
 		advancelevel_palette_level := advancelevel_palette_level - 10;
 	end;
 	if advancelevel_palette_level = 1 then begin
-		StarField::SetStarfieldColors(BLUE,PURPLE,GREY,LIGHT_GREY,LIGHT_BLUE,DARK_GREY); // Default (Purple Haze)
+		pal_col1:=BLUE;   pal_col2:=PURPLE; pal_col3:=GREY;
+		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_BLUE; pal_col6:=DARK_GREY;  // Purple Haze
 	end
 	else if advancelevel_palette_level = 2 then begin
-		StarField::SetStarfieldColors(RED,PURPLE,GREY,LIGHT_GREY,LIGHT_RED,BROWN); // Red
+		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=GREY;
+		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_RED;  pal_col6:=BROWN;      // Red
 	end
 	else if advancelevel_palette_level = 3 then begin
-		StarField::SetStarfieldColors(DARK_GREY,LIGHT_BLUE,GREY,WHITE,LIGHT_GREY,DARK_GREY); // Christmas
+		pal_col1:=DARK_GREY; pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
+		pal_col4:=WHITE; pal_col5:=LIGHT_GREY; pal_col6:=DARK_GREY;       // Christmas
 	end
 	else if advancelevel_palette_level = 4 then begin
-		StarField::SetStarfieldColors(BROWN,GREEN,GREY,LIGHT_GREY,LIGHT_GREEN,DARK_GREY); // Jungle Green
+		pal_col1:=BROWN;  pal_col2:=GREEN;  pal_col3:=GREY;
+		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_GREEN; pal_col6:=DARK_GREY; // Jungle Green
 	end
 	else if advancelevel_palette_level = 5 then begin
-		StarField::SetStarfieldColors(RED,ORANGE,WHITE,YELLOW,YELLOW,BROWN); // Gold
+		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=WHITE;
+		pal_col4:=YELLOW; pal_col5:=YELLOW; pal_col6:=BROWN;              // Gold
 	end
 	else if advancelevel_palette_level = 6 then begin
-		StarField::SetStarfieldColors(BLUE,LIGHT_BLUE,GREY,WHITE,CYAN,DARK_GREY); // Ice Blue
+		pal_col1:=BLUE;   pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
+		pal_col4:=WHITE;  pal_col5:=CYAN;   pal_col6:=DARK_GREY;          // Ice Blue
 	end
 	else if advancelevel_palette_level = 7 then begin
-		StarField::SetStarfieldColors(RED,ORANGE,GREY,WHITE,YELLOW,BROWN); // Lava
+		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=GREY;
+		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BROWN;              // Lava
 	end
 	else if advancelevel_palette_level = 8 then begin
-		StarField::SetStarfieldColors(DARK_GREY,ORANGE,GREY,WHITE,LIGHT_GREY,BROWN); // Bronze
+		pal_col1:=DARK_GREY; pal_col2:=ORANGE; pal_col3:=GREY;
+		pal_col4:=WHITE; pal_col5:=LIGHT_GREY; pal_col6:=BROWN;           // Bronze
 	end
 	else if advancelevel_palette_level = 9 then begin
-		StarField::SetStarfieldColors(RED,PURPLE,YELLOW,WHITE,LIGHT_BLUE,BLUE); // Various
+		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=YELLOW;
+		pal_col4:=WHITE;  pal_col5:=LIGHT_BLUE; pal_col6:=BLUE;           // Various
 	end
 	else if advancelevel_palette_level = 10 then begin
-		StarField::SetStarfieldColors(RED,GREEN,LIGHT_BLUE,WHITE,YELLOW,BLUE); // RGB
-	end;*/
-
-	// Show get-ready text (uses ZP $24/$68 for sgrt_ptr / sgrt_color_ptr).
-	ShowGetReadyText();
+		pal_col1:=RED;    pal_col2:=GREEN;  pal_col3:=LIGHT_BLUE;
+		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BLUE;               // RGB
+	end;
+	pending_palette := 1;
 
 	// Restore shields (uses ZP $24/$68 for csg_src_ptr / csg_dst_ptr / css_scan_ptr).
 	//if total_level_counter < 50 then
