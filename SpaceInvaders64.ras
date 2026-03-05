@@ -88,8 +88,8 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 1;   // 1-9; set to any value before startup to test that level
-	total_level_counter : byte = 1;  // Persistent counter; never wraps, keeps incrementing indefinitely
+	current_level : byte = 7;   // 1-9; set to any value before startup to test that level
+	total_level_counter : byte = 7;  // Persistent counter; never wraps, keeps incrementing indefinitely
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -945,7 +945,7 @@ hgrt_l2 lda get_ready_char_buffer+13,x
         sta $DA13,x
         dex
         bpl hgrt_l2
-");
+	");
 end; // HideGetReadyText
 
 // ---------------------------------------------------------------------------
@@ -1040,45 +1040,52 @@ Begin
 	sprite_base_address := sprite_base_address << 6;  // * 64
 	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
     
-	// Unrolled loop for 8 pixel rows - faster than loop overhead
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-    
+	// Y-indexed zero stores — no pointer advances needed.
+	asm("
+        lda #0
+        ldy #0
+        sta (sprite_data_ptr),y
+        ldy #3
+        sta (sprite_data_ptr),y
+        ldy #6
+        sta (sprite_data_ptr),y
+        ldy #9
+        sta (sprite_data_ptr),y
+        ldy #12
+        sta (sprite_data_ptr),y
+        ldy #15
+        sta (sprite_data_ptr),y
+        ldy #18
+        sta (sprite_data_ptr),y
+        ldy #21
+        sta (sprite_data_ptr),y
+	");
+
 	// Clear second animation frame — sprite index is frame1+1, address is frame2_sprite_index*64
 	sprite_base_address := frame2_sprite_index;
 	sprite_base_address := sprite_base_address << 6;  // * 64
 	sprite_data_ptr := @spriteLoc + sprite_base_address + sprite_offset_start;
     
-	// Unrolled loop for 8 pixel rows
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-	sprite_data_ptr := sprite_data_ptr + 3;
-	sprite_data_ptr^ := 0;
-    
+	asm("
+        lda #0
+        ldy #0
+        sta (sprite_data_ptr),y
+        ldy #3
+        sta (sprite_data_ptr),y
+        ldy #6
+        sta (sprite_data_ptr),y
+        ldy #9
+        sta (sprite_data_ptr),y
+        ldy #12
+        sta (sprite_data_ptr),y
+        ldy #15
+        sta (sprite_data_ptr),y
+        ldy #18
+        sta (sprite_data_ptr),y
+        ldy #21
+        sta (sprite_data_ptr),y
+	");
+
 	// Speed up as enemies decrease
 	// Update block_enemies bitmask for this enemy and increment cleared count
 	enemy_mask := 1 << enemyIndex;
@@ -1307,7 +1314,7 @@ rm_bCf2 lda $2640,x
         sta $2CC0,x
         dex
         bpl rm_bCf2
-");
+	");
 
 	// Reset enemy grid to full rack
 	block_enemies[0]  := $3F;
@@ -2281,7 +2288,7 @@ csg_s3  lda shield_glyph_stage,x
         sta $3410,x
         dex
         bpl csg_s3
-");
+	");
 
 	// ── Surface scan: css_scan_ptr uses ZP $24 — protect with PreventIRQ ────
 	PreventIRQ();
@@ -2431,7 +2438,7 @@ sgrt_buf1 lda $05E8,x
         sta get_ready_color_buffer,x
         dex
         bpl sgrt_buf1
-");
+	");
 	Screen::PrintString(#sgrt_text_msg1, GET_READY_LINE1_COL, GET_READY_ROW, #Screen::screen0);
 	asm("
         ldx #12
@@ -2439,7 +2446,7 @@ sgrt_buf1 lda $05E8,x
 sgrt_col1 sta $D9E8,x
         dex
         bpl sgrt_col1
-");
+	");
 
 	// ── Buffer line 2 (8 chars+colors) then print it ─────────────────────────
 	asm("
@@ -2450,7 +2457,7 @@ sgrt_buf2 lda $0613,x
         sta get_ready_color_buffer+13,x
         dex
         bpl sgrt_buf2
-");
+	");
 	Screen::PrintString(#sgrt_text_msg2, GET_READY_LINE2_COL, GET_READY_ROW + 1, #Screen::screen0);
 
 	// ── Level number at col 17 ($0619) — computed, stays Pascal ─────────────
@@ -2490,7 +2497,7 @@ sgrt_buf2 lda $0613,x
 sgrt_col2 sta $DA13,x
         dex
         bpl sgrt_col2
-");
+	");
 end;
 
 

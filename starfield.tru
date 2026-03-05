@@ -275,7 +275,7 @@ ssc_r17 lda StarField_colorPatternExt,x
         sta $DAA8,x
         dex
         bpl ssc_r17
-");
+	");
 	StarfieldColours[0] := StarColour1;
 	StarfieldColours[1] := StarColour2;
 	StarfieldColours[2] := StarColour3;
