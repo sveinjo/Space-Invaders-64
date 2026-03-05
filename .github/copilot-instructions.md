@@ -196,19 +196,31 @@ Uses **inline assembler** with absolute indexed addressing — no ZP pointers at
 Row base addresses (row 0→$D800, row 1→$D828, ..., row 17→$DAA8; stride = 40 = $28):
 - `$D800, $D828, $D850, $D878, $D8A0, $D8C8, $D8F0, $D918, $D940, $D968, $D990, $D9B8, $D9E0, $DA08, $DA30, $DA58, $DA80, $DAA8`
 
+### `CopyShieldSprites` — rewritten to be IRQ-safe
+Two-phase approach:
+1. **Glyph copy** (48 bytes × 4 shields): inline ASM, no ZP at all.
+   - 48 explicit `lda $src` / `sta shield_glyph_stage+N` pairs linearise the stride-3 template bytes (3 bytes/row × 16 rows at `$2440`) into the global `shield_glyph_stage[48]` staging buffer.
+   - Stage layout: `[0-7]` col0 top, `[8-15]` col1 top, `[16-23]` col2 top, `[24-31]` col0 bot, `[32-39]` col1 bot, `[40-47]` col2 bot.
+   - 4 × `ldx #47` / `lda shield_glyph_stage,x` / `sta $ShieldDst,x` / `dex` / `bpl` loops replicate stage to all 4 charset destinations (`$3380`, `$33B0`, `$33E0`, `$3410`).
+2. **Surface scan** (≤ 32 iterations × 3 columns): `PreventIRQ()`/`EnableIRQ()` around the `css_bc` while loop. `css_scan_ptr : pointer of byte` still uses ZP $24 — critical section is short.
+
+Removed: `CopyShieldGlyph` nested procedure (and its `csg_src_ptr`/`csg_dst_ptr : pointer of integer` at ZP $24/$68), `css_src`, `css_dst` vars.
+
 ### Recommended call sequence (IRQ-safe level setup)
 ```pascal
 // All three safe to call from the main polling loop with IRQs enabled:
 ReadyMonsters();                    // inline ASM, no ZP — fully IRQ-safe
 PreclearLeftmostAndBottomEnemies(); // no ZP at all — fully IRQ-safe
 MakeMonsters();                     // no ZP pointers — fully IRQ-safe
+// CopyShieldSprites is called separately (level transition only):
+CopyShieldSprites();                // inline ASM glyph copy + short PreventIRQ scan
 ```
 
 ## Zero-Page Pointer Collision Map (from compiled SpaceInvaders64.asm)
 TRSE allocates ZP addresses to pointer-type locals at compile time. Multiple procedures share the same ZP slot:
 - `$22–$23`: `sprite_data_ptr` (ClearMonster) — **NOTE: differs from $24 in older builds; always re-check after recompile**. `StarField_color_mem` also mapped here in the old `SetStarfieldColors` — **eliminated by inline ASM rewrite**.
-- `$24–$25`: `StarField_StaticStarPtr`, `source_sprite_ptr`, `csg_src_ptr`, `sgrt_ptr`, and others — all mapped to the same ZP pair
-- `$68–$69`: `csg_dst_ptr`, `destination_sprite_ptr`, `sgrt_color_ptr` — same ZP pair
+- `$24–$25`: `StarField_StaticStarPtr`, `source_sprite_ptr`, `css_scan_ptr`, `sgrt_ptr`, and others — all mapped to the same ZP pair. `csg_src_ptr`/`csg_dst_ptr` were here too — **eliminated by inline ASM rewrite of CopyShieldSprites**.
+- `$68–$69`: `destination_sprite_ptr`, `sgrt_color_ptr` — same ZP pair. `csg_dst_ptr` was here too — **eliminated**.
 - `$02–$03`: `Screen_p1` (Screen unit PrintString pointer)
 - `$04–$05`: `Screen_sp`, `$08–$09`: `Screen_p2`
 - ZP aliasing causes corruption if an IRQ fires between the low/high byte writes of a pointer load. Any procedure using ZP $24/$68 pointers that runs in the main context while the SID IRQ is active must be wrapped with `PreventIRQ()`/`EnableIRQ()`.

@@ -73,8 +73,7 @@ var
 	const ENEMIES_TO_CLEAR : byte = 0;  // How many enemies to clear (out of 72 total)
 	const MONSTER_SPACING : byte = 54;
 	const MONSTER_ROW_OFFSET : byte = 26;
-	//const PLAYER_MIN_X : byte = 39;
-	const PLAYER_MIN_X : byte = 0;
+	const PLAYER_MIN_X : byte = 39;	
 	const PLAYER_MAX_X : byte = 218;
 	const PLAYER_POS_Y : byte = 226; // 213 is where I it would be if sprite is at the bottom of it's box
 
@@ -89,8 +88,8 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 7;   // 1-9; set to any value before startup to test that level
-	total_level_counter : byte = 7;  // Persistent counter; never wraps, keeps incrementing indefinitely
+	current_level : byte = 1;   // 1-9; set to any value before startup to test that level
+	total_level_counter : byte = 1;  // Persistent counter; never wraps, keeps incrementing indefinitely
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -157,6 +156,7 @@ var
 	SHIELD_X_MIN : array[4] of byte = (45, 93, 141, 189);
 	SHIELD_X_MAX : array[4] of byte = (69, 117, 165, 213);
 	SHIELD_DST : array[4] of integer = ($3380, $33B0, $33E0, $3410);
+	shield_glyph_stage : array[48] of byte; // CopyShieldSprites staging buffer (stride-3 → linear)
 	ufo_bullet_next_to_fire : byte = 0;     // Which bullet fires next (0-2)
 	es_plunger_step  : byte = 0;  // Current index into arcade_plunger_columns table (0-15)
 	es_squiggly_step : byte = 0;  // Current index into arcade_squiggly_columns table (0-15)
@@ -2140,75 +2140,151 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-//   Copies the pristine shield sprite (17 at $2440) to sprites 18-21.
-//   Each shield gets its own sprite data that can be eroded independently.
-//   Call once at startup before PaintShieldChars.
+//   Copies the pristine shield sprite (17 at $2440) to 4 shield charset ranges.
+//   IRQ-SAFE rewrite:
+//     Glyph copy (4 shields × 48 bytes): inline ASM, no ZP touched.
+//       Template stride-3 bytes are first staged into shield_glyph_stage[0..47]
+//       using explicit absolute lda/sta pairs, then copied to all 4 shield
+//       charset destinations with 4 indexed ldx/lda/sta/dex/bpl loops.
+//     Surface scan (≤ 32 iters × 3 cols): wrapped in PreventIRQ/EnableIRQ.
+//       css_scan_ptr still uses ZP $24 — critical section is short.
 // ---------------------------------------------------------------------------
 procedure CopyShieldSprites();
 var
 	const SHIELD_TEMPLATE_SRC : integer = $2440; // sprite 17 (pristine, read-only)
-	css_src       : integer;    // CopyShieldGlyph source address
-	css_dst       : integer;    // CopyShieldGlyph dest address
 	css_scan_addr : integer;
-	css_scan_ptr  : pointer of byte;   // only pointer var needed
+	css_scan_ptr  : pointer of byte;
 	css_row       : byte;
-	css_bc        : byte;       // byte column 0-2
-	css_found     : byte;       // scan result sentinel
-
-	// ── Nested: Copy 8 rows of one charset glyph from sprite data ───────────
-	procedure CopyShieldGlyph(csg_src : integer; csg_dst : integer);
-	var
-		csg_src_ptr : pointer of integer;
-		csg_dst_ptr : pointer of integer;
-	begin
-		// Fully unrolled — no loop counter, no compare, no branch.
-		csg_src_ptr := csg_src;
-		csg_dst_ptr := csg_dst;
-		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-		csg_dst_ptr[0] := csg_src_ptr[0]; inc(csg_dst_ptr); inc(csg_src_ptr); inc(csg_src_ptr); inc(csg_src_ptr);
-		csg_dst_ptr[0] := csg_src_ptr[0];
-	end; // CopyShieldGlyph
+	css_bc        : byte;
+	css_found     : byte;
 
 begin
-	// Paint all 4 shield charsets directly from the single pristine template.
-	// Sprite slot copies are no longer needed — erosion operates on charset bytes.
-	// Top band = template bytes 0,1,2 (cols 0-2, rows 0-7, stride 3).
-	// Bot band = template bytes 24,25,26 (cols 0-2, rows 8-15, stride 3).
+	// ── Glyph copy: linearise 48 stride-3 template bytes into stage, ───────
+	// then blast stage to each shield destination with a single indexed loop.
+	// Template layout: 3 bytes/row × 16 rows starting at $2440.
+	// Stage layout: [0-7] col0 top, [8-15] col1 top, [16-23] col2 top,
+	//               [24-31] col0 bot, [32-39] col1 bot, [40-47] col2 bot.
+	asm("
+        lda $2440
+        sta shield_glyph_stage+0
+        lda $2443
+        sta shield_glyph_stage+1
+        lda $2446
+        sta shield_glyph_stage+2
+        lda $2449
+        sta shield_glyph_stage+3
+        lda $244C
+        sta shield_glyph_stage+4
+        lda $244F
+        sta shield_glyph_stage+5
+        lda $2452
+        sta shield_glyph_stage+6
+        lda $2455
+        sta shield_glyph_stage+7
+        lda $2441
+        sta shield_glyph_stage+8
+        lda $2444
+        sta shield_glyph_stage+9
+        lda $2447
+        sta shield_glyph_stage+10
+        lda $244A
+        sta shield_glyph_stage+11
+        lda $244D
+        sta shield_glyph_stage+12
+        lda $2450
+        sta shield_glyph_stage+13
+        lda $2453
+        sta shield_glyph_stage+14
+        lda $2456
+        sta shield_glyph_stage+15
+        lda $2442
+        sta shield_glyph_stage+16
+        lda $2445
+        sta shield_glyph_stage+17
+        lda $2448
+        sta shield_glyph_stage+18
+        lda $244B
+        sta shield_glyph_stage+19
+        lda $244E
+        sta shield_glyph_stage+20
+        lda $2451
+        sta shield_glyph_stage+21
+        lda $2454
+        sta shield_glyph_stage+22
+        lda $2457
+        sta shield_glyph_stage+23
+        lda $2458
+        sta shield_glyph_stage+24
+        lda $245B
+        sta shield_glyph_stage+25
+        lda $245E
+        sta shield_glyph_stage+26
+        lda $2461
+        sta shield_glyph_stage+27
+        lda $2464
+        sta shield_glyph_stage+28
+        lda $2467
+        sta shield_glyph_stage+29
+        lda $246A
+        sta shield_glyph_stage+30
+        lda $246D
+        sta shield_glyph_stage+31
+        lda $2459
+        sta shield_glyph_stage+32
+        lda $245C
+        sta shield_glyph_stage+33
+        lda $245F
+        sta shield_glyph_stage+34
+        lda $2462
+        sta shield_glyph_stage+35
+        lda $2465
+        sta shield_glyph_stage+36
+        lda $2468
+        sta shield_glyph_stage+37
+        lda $246B
+        sta shield_glyph_stage+38
+        lda $246E
+        sta shield_glyph_stage+39
+        lda $245A
+        sta shield_glyph_stage+40
+        lda $245D
+        sta shield_glyph_stage+41
+        lda $2460
+        sta shield_glyph_stage+42
+        lda $2463
+        sta shield_glyph_stage+43
+        lda $2466
+        sta shield_glyph_stage+44
+        lda $2469
+        sta shield_glyph_stage+45
+        lda $246C
+        sta shield_glyph_stage+46
+        lda $246F
+        sta shield_glyph_stage+47
+        ldx #47
+csg_s0  lda shield_glyph_stage,x
+        sta $3380,x
+        dex
+        bpl csg_s0
+        ldx #47
+csg_s1  lda shield_glyph_stage,x
+        sta $33B0,x
+        dex
+        bpl csg_s1
+        ldx #47
+csg_s2  lda shield_glyph_stage,x
+        sta $33E0,x
+        dex
+        bpl csg_s2
+        ldx #47
+csg_s3  lda shield_glyph_stage,x
+        sta $3410,x
+        dex
+        bpl csg_s3
+");
 
-	// Shield 1
-	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD_DST[0];          CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD_DST[0] + 8;      CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD_DST[0] + 16;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD_DST[0] + 24;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD_DST[0] + 32;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD_DST[0] + 40;     CopyShieldGlyph(css_src, css_dst);
-	// Shield 2
-	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD_DST[1];          CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD_DST[1] + 8;      CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD_DST[1] + 16;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD_DST[1] + 24;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD_DST[1] + 32;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD_DST[1] + 40;     CopyShieldGlyph(css_src, css_dst);
-	// Shield 3
-	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD_DST[2];          CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD_DST[2] + 8;      CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD_DST[2] + 16;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD_DST[2] + 24;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD_DST[2] + 32;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD_DST[2] + 40;     CopyShieldGlyph(css_src, css_dst);
-	// Shield 4
-	css_src := SHIELD_TEMPLATE_SRC;      css_dst := SHIELD_DST[3];          CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 1;  css_dst := SHIELD_DST[3] + 8;      CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 2;  css_dst := SHIELD_DST[3] + 16;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 24; css_dst := SHIELD_DST[3] + 24;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 25; css_dst := SHIELD_DST[3] + 32;     CopyShieldGlyph(css_src, css_dst);
-	css_src := SHIELD_TEMPLATE_SRC + 26; css_dst := SHIELD_DST[3] + 40;     CopyShieldGlyph(css_src, css_dst);
-
+	// ── Surface scan: css_scan_ptr uses ZP $24 — protect with PreventIRQ ────
+	PreventIRQ();
 	// Scan the template once per column (all shields identical at startup).
 	// Replicate each result to the 4 shields' cache slots.
 	css_bc := 0;
@@ -2262,6 +2338,7 @@ begin
 
 		inc(css_bc);
 	end;
+	EnableIRQ();
 
 	// Reset per-shield top-eroded skip flags (all shields freshly painted = none eroded).
 	shield_top_eroded[0] := 0;
@@ -2311,7 +2388,7 @@ begin
 	Helpers::PlaceShieldBlock($070E, 130);
 
 	// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
-	CopyShieldSprites();
+	//CopyShieldSprites();
 	EnableIRQ();
 	
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
@@ -3211,9 +3288,10 @@ begin
 	end;
 	pending_palette := 1;
 
-	// Restore shields (uses ZP $24/$68 for csg_src_ptr / csg_dst_ptr / css_scan_ptr).
-	//if total_level_counter < 50 then
-	//	CopyShieldSprites();
+	// Restore shields — IRQ-safe: glyph copies use inline ASM (no ZP);
+	// surface scan wrapped in PreventIRQ/EnableIRQ inside CopyShieldSprites.
+	if total_level_counter < 50 then
+		CopyShieldSprites();
 
 	// Signal the main-context polling loop to run ReadyMonsters + MakeMonsters.
 	// Those are wrapped in PreventIRQ/EnableIRQ there to protect ZP $24/$68 from
@@ -3348,6 +3426,7 @@ begin
 			MakeMonsters();
 			level_advance_ready := 1;  // ungate fire-to-start in IntermissionChain
 		end;
-		DisplayScore();
+		if (score_dirty = 1) then
+			DisplayScore();
 	end;
 end.
