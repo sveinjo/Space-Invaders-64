@@ -50,6 +50,8 @@ program SpaceInvaders64;
 var
 	sidfile: incsid("sid/Courier.sid",2);
 	
+	advancelevel_palette_level : byte;
+	
 	//const useKernal:byte=0;
 	
 	Score : integer = 0;    // Player score (integer — byte overflows at a 300pt saucer hit)
@@ -94,6 +96,10 @@ var
 	// Get Ready intermission state
 	get_ready_mode : byte = 0;  // 0 = normal play, 1 = showing "Get ready" screen
 	get_ready_prev_fire : byte = 0;  // Track fire button state in get-ready mode
+	// Deferred MakeMonsters() flag: set by LevelAdvance(), cleared by main context.
+	// Keeps heavy monster init out of the interrupt handler so music plays uninterrupted.
+	level_advance_pending : byte = 0;  // 1 = main loop must run MakeMonsters()
+	level_advance_ready   : byte = 0;  // 1 = MakeMonsters() done, fire-to-start allowed
 	// Buffer for screen chars and colors replaced by "Get ready" text (50 chars + 50 colors)
 	get_ready_char_buffer : array[50] of byte;
 	get_ready_color_buffer : array[50] of byte;
@@ -2665,7 +2671,7 @@ begin
 	Joystick(joystickPort);
 	if joystickbutton = 1 then
 	begin
-		if get_ready_prev_fire = 0 then
+		if (get_ready_prev_fire = 0 and level_advance_ready = 1) then
 		begin
 			LevelStart();  // Exits intermission, switches to full game chain
 			get_ready_prev_fire := 1;
@@ -3002,7 +3008,7 @@ end;
 // ---------------------------------------------------------------------------
 procedure LevelAdvance();
 var
-	advancelevel_palette_level : byte;
+	
 begin
 	// Disable all sprites IMMEDIATELY to prevent flicker when entering intermission
 	//sprite_bitmask := 0;
@@ -3020,72 +3026,24 @@ begin
 		current_level := 1;
 	inc(total_level_counter);
 
-	preventirq(); 
-	// Pick starfield palette for the incoming level, repeating every 10 levels.
-	// Use total_level_counter so all 10 palettes are eventually used.
-	 
-	advancelevel_palette_level := total_level_counter;
-	while advancelevel_palette_level > 10 do begin
-		advancelevel_palette_level := advancelevel_palette_level - 10;
-	end;
-
-	if advancelevel_palette_level = 1 then begin
-		StarField::SetStarfieldColors(BLUE,PURPLE,GREY,LIGHT_GREY,LIGHT_BLUE,DARK_GREY); // Default (Purple Haze)
-	end
-	else if advancelevel_palette_level = 2 then begin
-		StarField::SetStarfieldColors(RED,PURPLE,GREY,LIGHT_GREY,LIGHT_RED,BROWN); // Red
-	end
-	else if advancelevel_palette_level = 3 then begin
-		StarField::SetStarfieldColors(DARK_GREY,LIGHT_BLUE,GREY,WHITE,LIGHT_GREY,DARK_GREY); // Christmas		
-	end
-	else if advancelevel_palette_level = 4 then begin
-		StarField::SetStarfieldColors(BROWN,GREEN,GREY,LIGHT_GREY,LIGHT_GREEN,DARK_GREY); // Jungle Green
-	end
-	else if advancelevel_palette_level = 5 then begin
-		StarField::SetStarfieldColors(RED,ORANGE,WHITE,YELLOW,YELLOW,BROWN); // Gold	
-	end
-	else if advancelevel_palette_level = 6 then begin
-		StarField::SetStarfieldColors(BLUE,LIGHT_BLUE,GREY,WHITE,CYAN,DARK_GREY); // Ice Blue
-	end
-	else if advancelevel_palette_level = 7 then begin
-		StarField::SetStarfieldColors(RED,ORANGE,GREY,WHITE,YELLOW,BROWN); // Lava
-	end
-	else if advancelevel_palette_level = 8 then begin
-		StarField::SetStarfieldColors(DARK_GREY,ORANGE,GREY,WHITE,LIGHT_GREY,BROWN); // Bronze
-	end
-	else if advancelevel_palette_level = 9 then begin
-		StarField::SetStarfieldColors(RED,PURPLE,YELLOW,WHITE,LIGHT_BLUE,BLUE); // Various
-	end
-	else if advancelevel_palette_level = 10 then begin		
-		StarField::SetStarfieldColors(RED,GREEN,LIGHT_BLUE,WHITE,YELLOW,BLUE); // RGB
-	end;
-
+	
 	
 	
 	// Disable all sprites during intermission; LevelStart() re-enables them when
-	// the player presses fire.  Monster init is intentionally deferred to LevelStart()
-	// so this function stays fast enough to call from within the raster interrupt
-	// (ClearMonster path) without stalling for multiple frames.
+	// the player presses fire.
 	sprite_bitmask := 0;
-	
-	// Regenerate shields only for levels < 5 (using persistent counter)
-	//if total_level_counter < 50 then
-	//	CopyShieldSprites();
 
-
-	// Build the monster formation for the new level.
-	// These are the heavy calls (~3 frames combined) — safe here because the
-	// player just pressed fire and the game is transitioning, not mid-play.
-	//ReadyMonsters();
-	//PreclearLeftmostAndBottomEnemies();
-	MakeMonsters();
+	// Signal main context to run MakeMonsters() with IRQs enabled so music
+	// continues uninterrupted.  level_advance_ready gates fire-to-start until done.
+	level_advance_ready   := 0;
+	level_advance_pending := 1;
 
 	// Show the get-ready screen and enter intermission mode.
 	get_ready_mode := 1;
 	get_ready_prev_fire := 0;
 	ShowGetReadyText();
-	
-	// Install intermission raster chain.
+
+	// Install intermission raster chain — music resumes on the very next frame.
 	RasterIRQ(IntermissionChain(), 0, 0);
 end;
 
@@ -3174,12 +3132,80 @@ begin
 	
 	//RasterIRQ(MainRasterRow1(),0,0);
 	//RasterIRQ(IntermissionChain(), 0, 0);
-	enableirq();
+	//EnableIRQ();
 
 	// Non-IRQ SID playback (main context). This runs once during init and is safe
 	// to execute outside the raster IRQ. Comment/uncomment to test.
 	//call(sidfile_1_play); // main-context playback (disabled)
 	//call(sidfile_1_play); // alternative: keep commented if you prefer raster IRQ playback
 
-	Loop();
+	//loop();
+	// Main context spin-loop: raster IRQs preempt freely here, so music advances
+	// every frame while MakeMonsters() is executing.
+	while 1 do
+	begin
+		if level_advance_pending = 1 then
+		begin
+			level_advance_pending := 0;
+			// Regenerate shields only for levels < 5 (using persistent counter)
+			
+			PreventIRQ();
+			
+			
+			// Pick starfield palette for the incoming level, repeating every 10 levels.
+			// Use total_level_counter so all 10 palettes are eventually used.
+	 
+			advancelevel_palette_level := total_level_counter;
+			while advancelevel_palette_level > 10 do begin
+				advancelevel_palette_level := advancelevel_palette_level - 10;
+			end;
+		
+			if advancelevel_palette_level = 1 then begin
+				StarField::SetStarfieldColors(BLUE,PURPLE,GREY,LIGHT_GREY,LIGHT_BLUE,DARK_GREY); // Default (Purple Haze)
+			end
+			else if advancelevel_palette_level = 2 then begin
+				StarField::SetStarfieldColors(RED,PURPLE,GREY,LIGHT_GREY,LIGHT_RED,BROWN); // Red
+			end
+			else if advancelevel_palette_level = 3 then begin
+				StarField::SetStarfieldColors(DARK_GREY,LIGHT_BLUE,GREY,WHITE,LIGHT_GREY,DARK_GREY); // Christmas		
+			end
+			else if advancelevel_palette_level = 4 then begin
+				StarField::SetStarfieldColors(BROWN,GREEN,GREY,LIGHT_GREY,LIGHT_GREEN,DARK_GREY); // Jungle Green
+			end
+			else if advancelevel_palette_level = 5 then begin
+				StarField::SetStarfieldColors(RED,ORANGE,WHITE,YELLOW,YELLOW,BROWN); // Gold	
+			end
+			else if advancelevel_palette_level = 6 then begin
+				StarField::SetStarfieldColors(BLUE,LIGHT_BLUE,GREY,WHITE,CYAN,DARK_GREY); // Ice Blue
+			end
+			else if advancelevel_palette_level = 7 then begin
+				StarField::SetStarfieldColors(RED,ORANGE,GREY,WHITE,YELLOW,BROWN); // Lava
+			end
+			else if advancelevel_palette_level = 8 then begin
+				StarField::SetStarfieldColors(DARK_GREY,ORANGE,GREY,WHITE,LIGHT_GREY,BROWN); // Bronze
+			end
+			else if advancelevel_palette_level = 9 then begin
+				StarField::SetStarfieldColors(RED,PURPLE,YELLOW,WHITE,LIGHT_BLUE,BLUE); // Various
+			end
+			else if advancelevel_palette_level = 10 then begin		
+				StarField::SetStarfieldColors(RED,GREEN,LIGHT_BLUE,WHITE,YELLOW,BLUE); // RGB
+			end;
+
+			EnableRasterIrq();
+			
+			if total_level_counter < 50 then
+				CopyShieldSprites();
+		
+		
+			// Build the monster formation for the new level.
+			// These are the heavy calls (~3 frames combined) — safe here because the
+			// player just pressed fire and the game is transitioning, not mid-play.
+			ReadyMonsters();
+			PreclearLeftmostAndBottomEnemies();
+			MakeMonsters();
+			EnableIRQ();
+			
+			level_advance_ready := 1;  // ungate fire-to-start in IntermissionChain
+		end;
+	end;
 end.
