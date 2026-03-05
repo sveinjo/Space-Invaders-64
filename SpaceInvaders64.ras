@@ -1399,7 +1399,8 @@ var
 			if cbcc_enemy_alive <> 0 then
 			begin
 				// Horizontal range check: contact point within [block_x, block_x+48).
-				if player_bullet_x >= cbcc_block_x - BULLET_X_CONTACT_REACH then
+				// Addition form avoids byte underflow when cbcc_block_x < BULLET_X_CONTACT_REACH.
+				if player_bullet_x + BULLET_X_CONTACT_REACH >= cbcc_block_x then
 					if player_bullet_x < cbcc_block_x + 48 - BULLET_X_CONTACT_REACH then
 					begin
 						cbcc_rel_x := player_bullet_x - cbcc_block_x + BULLET_X_CONTACT_REACH;
@@ -2559,7 +2560,7 @@ begin
 			prev_direction := enemy_direction;
 			if right_edge >= 242 then
 				enemy_direction := 0
-			else if left_edge <= 36 then
+			else if left_edge <= 36 then  // 47 = 36 + BULLET_X_CONTACT_REACH; ensures cbcc_block_x >= 11 for leftmost survivors
 				enemy_direction := 1;
 
 			// If direction changed, drop instead of moving horizontally this tick.

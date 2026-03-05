@@ -117,6 +117,56 @@ end;
 - `CheckEnemyShieldContact()`: Uses `PreventIRQ`/`EnableIRQ` to protect `cesc_contact_done` flag and `pending_shield_erosion` state
 - `ShowGetReadyText()` / `HideGetReadyText()`: Must NOT use nested `PreventIRQ`/`EnableIRQ` - caused crashes when called from IRQ-protected contexts
 
+## Enemy Formation — Coordinate System and Edge Boundaries
+
+### Formation coordinates
+- `monster_base_x` (byte): X pixel coordinate of sprite 1 (block-column 0). Sprites 2–4 are at `+54`, `+108`, `+162`.
+- `monster_base_y` (byte): Y pixel coordinate of row 0. Rows 1 and 2 are `+MONSTER_ROW_OFFSET (26)` and `+52`.
+- `MONSTER_SPACING = 54` pixels per block-column. `MONSTER_ROW_OFFSET = 26` pixels per block-row.
+- Each block has 6 enemies in a 3×2 grid (columns 0–2, each 18px wide; rows 0–1). Block pixel width = 48px.
+- Bullet hit window per block: `[cbcc_block_x - 11, cbcc_block_x + 37)` where `BULLET_X_CONTACT_REACH = 11`.
+
+### Edge-detection boundary values (intentional / do not change)
+- **Right-edge turn**: `right_edge >= 242` where `right_edge = monster_base_x + cached_rightmost_offset + 10`.
+- **Left-edge turn**: `left_edge <= 36` where `left_edge = monster_base_x + cached_leftmost_offset`.
+  - `36` is the minimum viable value: ensures all 3 enemy sub-columns reach the same turn point without underflowing the `cbcc_block_x - 11` bullet check on any normal play column.
+  - This is 1–2 px narrower than the arcade original, but correct given the sprite-based approach.
+  - **Do not raise this value** — it would make the play area too narrow.
+
+### `cached_leftmost_offset` values
+- All 4 block-columns alive with left-column enemies (bits 0–1): offset = `block_col * 54 + 0`
+- Only middle-column enemies (bits 2–3) in leftmost block: offset = `block_col * 54 + 18`
+- Only right-column enemies (bits 4–5) in leftmost block: offset = `block_col * 54 + 36`
+
+### Known edge case — `monster_base_x` underflow at max speed
+At maximum speed (1 enemy remaining, `enemy_count_diff = 0`), movement is 2 px/tick. If only the far-left enemy column survives (`cached_leftmost_offset = 36`) and direction changes on an even `monster_base_x`, it is possible for the decrement path to reach `monster_base_x = 0`, then have the 2px step underflow to `255`. Effect: formation teleports to far right for one frame before the turn fires. This is a known/accepted limitation:
+- It only occurs at extreme end-of-level speed.
+- Raising the left-edge boundary to prevent it would make the play area too narrow.
+- Future mitigation options (not yet implemented):
+  1. Clamp after move: `if monster_base_x > 200 then monster_base_x := 36;` (catches 255-side underflow).
+  2. Align moves: after a direction change always snap `monster_base_x` to the nearest even/odd value matching the march parity, so 2px steps never land below 0.
+
+## Bullet Collision — X Range Check
+The horizontal hit-window check in `CBC_CheckBlockColumn` must use the **addition form** to avoid byte underflow:
+```pascal
+// CORRECT — no underflow possible:
+if player_bullet_x + BULLET_X_CONTACT_REACH >= cbcc_block_x then
+
+// WRONG — underflows to 245 when cbcc_block_x < 11:
+if player_bullet_x >= cbcc_block_x - BULLET_X_CONTACT_REACH then
+```
+The `cbcc_rel_x` calculation that follows is safe: if the guard passes, the subtraction `player_bullet_x - cbcc_block_x + BULLET_X_CONTACT_REACH` always produces a value in [0..47].
+
+## Zero-Page Pointer Collision Map (from compiled SpaceInvaders64.asm)
+TRSE allocates ZP addresses to pointer-type locals at compile time. Multiple procedures share the same ZP slot:
+- `$22–$23`: `sprite_data_ptr` (ClearMonster) — **NOTE: differs from $24 in older builds; always re-check after recompile**
+- `$24–$25`: `StarField_StaticStarPtr`, `source_sprite_ptr`, `csg_src_ptr`, `sgrt_ptr`, and others — all mapped to the same ZP pair
+- `$68–$69`: `csg_dst_ptr`, `destination_sprite_ptr`, `sgrt_color_ptr` — same ZP pair
+- `$02–$03`: `Screen_p1` (Screen unit PrintString pointer)
+- `$04–$05`: `Screen_sp`, `$08–$09`: `Screen_p2`
+- ZP aliasing causes corruption if an IRQ fires between the low/high byte writes of a pointer load. Any procedure using ZP $24/$68 pointers that runs in the main context while the SID IRQ is active must be wrapped with `PreventIRQ()`/`EnableIRQ()`.
+- The ClearMonster `<<6` shift on `sprite_base_address : integer` is implemented as 6× `asl`/`rol` pairs — correctly 16-bit. Not a source of corruption.
+
 ## Architecture
 - Main program entry is the TRSE project file pointing at the .ras source and output type.
 - Starfield is isolated in a Turbo Rascal unit with its own procedures (e.g., `CreateStarScreen`).
