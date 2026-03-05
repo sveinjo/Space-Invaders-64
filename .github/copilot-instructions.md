@@ -188,6 +188,14 @@ rm_b0f1 lda $2600,x
 - **`poke`/`peek` with an integer variable address generates bad ASM in TRSE** — explicitly documented in helpers.tru. Do NOT use that form for variable-address writes.
 - **TRSE's ZP pointer pool has a hard limit**. Adding global `^byte` variables consumes pool slots permanently.
 
+### `SetStarfieldColors` — rewritten to be IRQ-safe
+Uses **inline assembler** with absolute indexed addressing — no ZP pointers at all. The original used a `color_mem : pointer of byte` (ZP $22) with nested while loops (29 cols × 18 rows = 522 pointer writes). The rewrite:
+1. Pre-builds a 29-entry `colorPatternExt` array from the 6 color params (handles the 20-entry wrap: cols 20–28 = pattern[0–8]).
+2. Writes all 18 screen rows with 18 unrolled `ldx #28` / `lda StarField_colorPatternExt,x` / `sta $Dxxx,x` / `dex` / `bpl` loops.
+
+Row base addresses (row 0→$D800, row 1→$D828, ..., row 17→$DAA8; stride = 40 = $28):
+- `$D800, $D828, $D850, $D878, $D8A0, $D8C8, $D8F0, $D918, $D940, $D968, $D990, $D9B8, $D9E0, $DA08, $DA30, $DA58, $DA80, $DAA8`
+
 ### Recommended call sequence (IRQ-safe level setup)
 ```pascal
 // All three safe to call from the main polling loop with IRQs enabled:
@@ -198,7 +206,7 @@ MakeMonsters();                     // no ZP pointers — fully IRQ-safe
 
 ## Zero-Page Pointer Collision Map (from compiled SpaceInvaders64.asm)
 TRSE allocates ZP addresses to pointer-type locals at compile time. Multiple procedures share the same ZP slot:
-- `$22–$23`: `sprite_data_ptr` (ClearMonster) — **NOTE: differs from $24 in older builds; always re-check after recompile**
+- `$22–$23`: `sprite_data_ptr` (ClearMonster) — **NOTE: differs from $24 in older builds; always re-check after recompile**. `StarField_color_mem` also mapped here in the old `SetStarfieldColors` — **eliminated by inline ASM rewrite**.
 - `$24–$25`: `StarField_StaticStarPtr`, `source_sprite_ptr`, `csg_src_ptr`, `sgrt_ptr`, and others — all mapped to the same ZP pair
 - `$68–$69`: `csg_dst_ptr`, `destination_sprite_ptr`, `sgrt_color_ptr` — same ZP pair
 - `$02–$03`: `Screen_p1` (Screen unit PrintString pointer)
