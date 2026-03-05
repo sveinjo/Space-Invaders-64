@@ -921,42 +921,31 @@ end;
 // ---------------------------------------------------------------------------
 // HideGetReadyText
 //   Restores the buffered starfield characters and colors to remove the "Get ready" text.
+//
+//   IRQ-SAFE: uses absolute indexed addressing on the buffer arrays whose ASM
+//   labels match their TRSE names exactly (confirmed from compiled ASM).
+//   No ZP pointers — X register only.
+//     Line 1: get_ready_char/color_buffer[0..12]  → screen $05E8, color $D9E8
+//     Line 2: get_ready_char/color_buffer[13..20] → screen $0613, color $DA13
 // ---------------------------------------------------------------------------
 procedure HideGetReadyText();
-var
-	hgrt_screen_addr : integer;
-	hgrt_color_addr  : integer;
-	hgrt_ptr         : pointer of byte;
-	hgrt_color_ptr   : pointer of byte;
-	hgrt_i           : byte;
 begin
-	// Restore line 1 (13 chars + colors) from GET_READY_LINE1_COL
-	hgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
-	hgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
-	hgrt_ptr := hgrt_screen_addr;
-	hgrt_color_ptr := hgrt_color_addr;
-	hgrt_i := 0;
-	while hgrt_i < 13 do
-	begin
-		hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
-		hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
-		inc(hgrt_i);
-		inc(hgrt_ptr);
-		inc(hgrt_color_ptr);
-	end;
-	// Restore line 2 (8 chars + colors) from GET_READY_LINE2_COL
-	hgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-	hgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-	hgrt_ptr := hgrt_screen_addr;
-	hgrt_color_ptr := hgrt_color_addr;
-	while hgrt_i < 21 do  // hgrt_i continues from 13
-	begin
-		hgrt_ptr[0] := get_ready_char_buffer[hgrt_i];
-		hgrt_color_ptr[0] := get_ready_color_buffer[hgrt_i];
-		inc(hgrt_i);
-		inc(hgrt_ptr);
-		inc(hgrt_color_ptr);
-	end;
+	asm("
+        ldx #12
+hgrt_l1 lda get_ready_char_buffer,x
+        sta $05E8,x
+        lda get_ready_color_buffer,x
+        sta $D9E8,x
+        dex
+        bpl hgrt_l1
+        ldx #7
+hgrt_l2 lda get_ready_char_buffer+13,x
+        sta $0613,x
+        lda get_ready_color_buffer+13,x
+        sta $DA13,x
+        dex
+        bpl hgrt_l2
+");
 end; // HideGetReadyText
 
 // ---------------------------------------------------------------------------
@@ -969,7 +958,7 @@ var
 	
 
 begin
-	//HideGetReadyText();
+	HideGetReadyText();
 	
 	
 
@@ -2333,17 +2322,18 @@ end;
 //   Displays "GET READY FOR LEVEL X" centered on screen rows 12-13.
 //   Buffers the starfield characters/colors underneath for later restoration.
 //
-//   IRQ-SAFE: uses poke/peek with constant integer addresses only.
-//   No ^byte / pointer-of-byte locals → ZP $24/$68 never touched.
-//   Screen::PrintString uses ZP $02-$09 (Screen unit), not the shared pool.
+//   IRQ-SAFE: buffer reads and color fills use inline ASM with absolute indexed
+//   addressing — no ZP pointers touched.  Screen::PrintString uses ZP $02-$09
+//   (Screen unit), not the shared pool.  Level-number digit logic stays Pascal.
 //
 //   Address constants (baked in — do not change GET_READY_ROW/COL without updating):
 //     Line 1 screen $05E8...$05F4  ($0400 + 12*40 + 8,  13 chars)
 //     Line 1 color  $D9E8...$D9F4
 //     Line 2 screen $0613...$061A  ($0400 + 13*40 + 11,  8 chars)
 //     Line 2 color  $DA13...$DA1A
-//     Level digit   $0619...$061B  (col 11+6=17, 1-3 digits)
+//     Level digit   $0619...$061B  (col 17, 1-3 digits)
 //     Level d.color $DA19...$DA1B
+//     GET_READY_COLOR = light_blue = $0E
 // ---------------------------------------------------------------------------
 procedure ShowGetReadyText();
 var
@@ -2355,45 +2345,38 @@ begin
 	// Disable all sprites to hide them during intermission
 	sprite_bitmask := 0;
 
-	// ── Buffer line 1 (13 chars): screen $05E8, color $D9E8 ─────────────────
-	get_ready_char_buffer[0]  := peek(^$05E8, 0);  get_ready_char_buffer[1]  := peek(^$05E9, 0);
-	get_ready_char_buffer[2]  := peek(^$05EA, 0);  get_ready_char_buffer[3]  := peek(^$05EB, 0);
-	get_ready_char_buffer[4]  := peek(^$05EC, 0);  get_ready_char_buffer[5]  := peek(^$05ED, 0);
-	get_ready_char_buffer[6]  := peek(^$05EE, 0);  get_ready_char_buffer[7]  := peek(^$05EF, 0);
-	get_ready_char_buffer[8]  := peek(^$05F0, 0);  get_ready_char_buffer[9]  := peek(^$05F1, 0);
-	get_ready_char_buffer[10] := peek(^$05F2, 0);  get_ready_char_buffer[11] := peek(^$05F3, 0);
-	get_ready_char_buffer[12] := peek(^$05F4, 0);
-	get_ready_color_buffer[0]  := peek(^$D9E8, 0); get_ready_color_buffer[1]  := peek(^$D9E9, 0);
-	get_ready_color_buffer[2]  := peek(^$D9EA, 0); get_ready_color_buffer[3]  := peek(^$D9EB, 0);
-	get_ready_color_buffer[4]  := peek(^$D9EC, 0); get_ready_color_buffer[5]  := peek(^$D9ED, 0);
-	get_ready_color_buffer[6]  := peek(^$D9EE, 0); get_ready_color_buffer[7]  := peek(^$D9EF, 0);
-	get_ready_color_buffer[8]  := peek(^$D9F0, 0); get_ready_color_buffer[9]  := peek(^$D9F1, 0);
-	get_ready_color_buffer[10] := peek(^$D9F2, 0); get_ready_color_buffer[11] := peek(^$D9F3, 0);
-	get_ready_color_buffer[12] := peek(^$D9F4, 0);
-
+	// ── Buffer line 1 (13 chars+colors) then print it ────────────────────────
+	asm("
+        ldx #12
+sgrt_buf1 lda $05E8,x
+        sta get_ready_char_buffer,x
+        lda $D9E8,x
+        sta get_ready_color_buffer,x
+        dex
+        bpl sgrt_buf1
+");
 	Screen::PrintString(#sgrt_text_msg1, GET_READY_LINE1_COL, GET_READY_ROW, #Screen::screen0);
+	asm("
+        ldx #12
+        lda #$0E
+sgrt_col1 sta $D9E8,x
+        dex
+        bpl sgrt_col1
+");
 
-	poke(^$D9E8, 0, GET_READY_COLOR); poke(^$D9E9, 0, GET_READY_COLOR);
-	poke(^$D9EA, 0, GET_READY_COLOR); poke(^$D9EB, 0, GET_READY_COLOR);
-	poke(^$D9EC, 0, GET_READY_COLOR); poke(^$D9ED, 0, GET_READY_COLOR);
-	poke(^$D9EE, 0, GET_READY_COLOR); poke(^$D9EF, 0, GET_READY_COLOR);
-	poke(^$D9F0, 0, GET_READY_COLOR); poke(^$D9F1, 0, GET_READY_COLOR);
-	poke(^$D9F2, 0, GET_READY_COLOR); poke(^$D9F3, 0, GET_READY_COLOR);
-	poke(^$D9F4, 0, GET_READY_COLOR);
-
-	// ── Buffer line 2 (8 chars): screen $0613, color $DA13 ──────────────────
-	get_ready_char_buffer[13] := peek(^$0613, 0); get_ready_char_buffer[14] := peek(^$0614, 0);
-	get_ready_char_buffer[15] := peek(^$0615, 0); get_ready_char_buffer[16] := peek(^$0616, 0);
-	get_ready_char_buffer[17] := peek(^$0617, 0); get_ready_char_buffer[18] := peek(^$0618, 0);
-	get_ready_char_buffer[19] := peek(^$0619, 0); get_ready_char_buffer[20] := peek(^$061A, 0);
-	get_ready_color_buffer[13] := peek(^$DA13, 0); get_ready_color_buffer[14] := peek(^$DA14, 0);
-	get_ready_color_buffer[15] := peek(^$DA15, 0); get_ready_color_buffer[16] := peek(^$DA16, 0);
-	get_ready_color_buffer[17] := peek(^$DA17, 0); get_ready_color_buffer[18] := peek(^$DA18, 0);
-	get_ready_color_buffer[19] := peek(^$DA19, 0); get_ready_color_buffer[20] := peek(^$DA1A, 0);
-
+	// ── Buffer line 2 (8 chars+colors) then print it ─────────────────────────
+	asm("
+        ldx #7
+sgrt_buf2 lda $0613,x
+        sta get_ready_char_buffer+13,x
+        lda $DA13,x
+        sta get_ready_color_buffer+13,x
+        dex
+        bpl sgrt_buf2
+");
 	Screen::PrintString(#sgrt_text_msg2, GET_READY_LINE2_COL, GET_READY_ROW + 1, #Screen::screen0);
 
-	// ── Level number at col 17 ($0619) ───────────────────────────────────────
+	// ── Level number at col 17 ($0619) — computed, stays Pascal ─────────────
 	sgrt_temp := total_level_counter;
 	if total_level_counter >= 100 then
 	begin
@@ -2424,9 +2407,13 @@ begin
 	end;
 
 	// ── Line 2 color for "LEVEL " prefix (6 chars $DA13-$DA18) ─────────────
-	poke(^$DA13, 0, GET_READY_COLOR); poke(^$DA14, 0, GET_READY_COLOR);
-	poke(^$DA15, 0, GET_READY_COLOR); poke(^$DA16, 0, GET_READY_COLOR);
-	poke(^$DA17, 0, GET_READY_COLOR); poke(^$DA18, 0, GET_READY_COLOR);
+	asm("
+        ldx #5
+        lda #$0E
+sgrt_col2 sta $DA13,x
+        dex
+        bpl sgrt_col2
+");
 end;
 
 
@@ -2794,7 +2781,7 @@ begin
 	if pending_palette = 1 then
 	begin
 		pending_palette := 0;
-		//StarField::SetStarfieldColors(pal_col1, pal_col2, pal_col3, pal_col4, pal_col5, pal_col6);		
+		StarField::SetStarfieldColors(pal_col1, pal_col2, pal_col3, pal_col4, pal_col5, pal_col6);		
 		// Show get-ready text (uses ZP $24/$68 for sgrt_ptr / sgrt_color_ptr).
 		ShowGetReadyText();
 	end;	
@@ -3178,7 +3165,7 @@ begin
 	// IntermissionChain will call SetStarfieldColors at I=1 on the next frame,
 	// avoiding the ZP $24 (StarField_color_mem) collision with the SID play routine.
 	
-	/*advancelevel_palette_level := total_level_counter;
+	advancelevel_palette_level := total_level_counter;
 	while advancelevel_palette_level > 10 do begin
 		advancelevel_palette_level := advancelevel_palette_level - 10;
 	end;
@@ -3221,7 +3208,7 @@ begin
 	else if advancelevel_palette_level = 10 then begin
 		pal_col1:=RED;    pal_col2:=GREEN;  pal_col3:=LIGHT_BLUE;
 		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BLUE;               // RGB
-	end;*/
+	end;
 	pending_palette := 1;
 
 	// Restore shields (uses ZP $24/$68 for csg_src_ptr / csg_dst_ptr / css_scan_ptr).

@@ -115,8 +115,8 @@ end;
 
 ### Examples in Codebase
 - `CheckEnemyShieldContact()`: Uses `PreventIRQ`/`EnableIRQ` to protect `cesc_contact_done` flag and `pending_shield_erosion` state
-- `ShowGetReadyText()`: IRQ-safe — rewritten to use `poke`/`peek` with constant integer addresses only. No `^byte`/`pointer of byte` locals; ZP $24/$68 never touched. `Screen::PrintString` uses ZP $02–$09 (Screen unit), not the shared pool.
-- `HideGetReadyText()`: Still uses local `pointer of byte` vars (ZP $24/$68) — not yet IRQ-safe.
+- `ShowGetReadyText()`: IRQ-safe — buffer reads and color fills use inline ASM with absolute indexed addressing (`ldx #12` / `lda $05E8,x` / `sta get_ready_char_buffer,x` etc.). `Screen::PrintString` uses ZP $02–$09 (Screen unit). Level-number digit logic stays Pascal via `poke`. No `^byte`/`pointer of byte` locals; ZP $24/$68 never touched. `GET_READY_COLOR` = light_blue = `$0E` (verified from compiled ASM).
+- `HideGetReadyText()`: IRQ-safe — rewritten to use inline ASM with absolute indexed addressing. Reads `get_ready_char_buffer` / `get_ready_color_buffer` arrays by their ASM labels (verified to match TRSE variable names exactly). Two loops: X=12→0 for line 1, X=7→0 for line 2. No ZP touched.
 
 ## Enemy Formation — Coordinate System and Edge Boundaries
 
