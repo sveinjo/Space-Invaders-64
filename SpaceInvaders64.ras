@@ -260,10 +260,10 @@ var
 	interrupt MainRasterChain();
 	interrupt MainRasterRow1();
 	procedure PreclearLeftmostAndBottomEnemies();
-	procedure AdvanceLevel();
+	procedure LevelAdvance();
 	procedure CopyShieldSprites();
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
-	procedure initializeMonsters();
+	procedure ReadyMonsters();
 	procedure MakeMonsters();
 	interrupt IntermissionStarfield();
 
@@ -942,76 +942,25 @@ begin
 end; // HideGetReadyText
 
 // ---------------------------------------------------------------------------
-// StartLevel
+// LevelStart
 //   Called from IntermissionChain when the player presses fire.
 //   HideGetReadyText nested inside — sole caller.
 // ---------------------------------------------------------------------------
-procedure StartLevel();
+procedure LevelStart();
 var
 	
 
 begin
 	HideGetReadyText();
 	
-	// Reset enemy grid to full rack
-	block_enemies[0]  := $3F;
-	block_enemies[1]  := $3F;
-	block_enemies[2]  := $3F;
-	block_enemies[3]  := $3F;
-	block_enemies[4]  := $3F;
-	block_enemies[5]  := $3F;
-	block_enemies[6]  := $3F;
-	block_enemies[7]  := $3F;
-	block_enemies[8]  := $3F;
-	block_enemies[9]  := $3F;
-	block_enemies[10] := $3F;
-	block_enemies[11] := $3F;
-	numberOfEnemies := 0;
-
-	// Reset march / movement state
-	enemy_direction      := 1;
-	enemyMoveCounter     := INITIAL_INVADER_COUNT;
-	current_speed_delay  := 50;
-	pending_edge_rescan  := 0;
-	enemy_march_tick     := 0;
-	monster_animation_frame := 0;
-
-	// Reset enemy shot state
-	ufo_bullet_active[0]       := 0;
-	ufo_bullet_active[1]       := 0;
-	ufo_bullet_active[2]       := 0;
-	ufo_bullet_reload_timer[0] := 0;
-	ufo_bullet_reload_timer[1] := 0;
-	ufo_bullet_reload_timer[2] := 0;
-	ufo_bullet_next_to_fire    := 0;
-	ufo_bullet_stagger_counter := 0;
-	es_plunger_step  := 0;
-	es_squiggly_step := 0;
-
-	// Reset player bullet
-	player_bullet_active := 0;
-
-	// Reset UFO
-	ufo_active := 0;
-	ufo_spawn_timer := 1536;
+	
 
 
 	
 
 	// Reset player position to far left
 	player_sprite_x := PLAYER_MIN_X;
-
-	// Regenerate shields only for levels < 5 (using persistent counter)
-	if total_level_counter < 5 then
-		CopyShieldSprites();
-
-
-	// Build the monster formation for the new level.
-	// These are the heavy calls (~3 frames combined) — safe here because the
-	// player just pressed fire and the game is transitioning, not mid-play.
-	initializeMonsters();
-	PreclearLeftmostAndBottomEnemies();
-	MakeMonsters();
+	
 
 	// Re-enable all sprites for gameplay
 	togglebit(sprite_bitmask, useSprite, 1);
@@ -1144,7 +1093,7 @@ Begin
 				if row_has_monsters[0] = 0 then
 					if row_has_monsters[1] = 0 then
 						if row_has_monsters[2] = 0 then
-							AdvanceLevel();
+							LevelAdvance();
 			end;
 		end;
 	end;
@@ -1192,7 +1141,7 @@ Begin
 	end;
 end;
 
-procedure initializeMonsters();
+procedure ReadyMonsters();
 var
 	block_loop_counter, copy_loop_counter : byte;
 	source_sprite_ptr, destination_sprite_ptr : ^byte;
@@ -1221,6 +1170,48 @@ begin
 			destination_sprite_ptr := destination_sprite_ptr + 1;
 		end;
 	end;
+
+	// Reset enemy grid to full rack
+	block_enemies[0]  := $3F;
+	block_enemies[1]  := $3F;
+	block_enemies[2]  := $3F;
+	block_enemies[3]  := $3F;
+	block_enemies[4]  := $3F;
+	block_enemies[5]  := $3F;
+	block_enemies[6]  := $3F;
+	block_enemies[7]  := $3F;
+	block_enemies[8]  := $3F;
+	block_enemies[9]  := $3F;
+	block_enemies[10] := $3F;
+	block_enemies[11] := $3F;
+	numberOfEnemies := 0;
+
+	// Reset march / movement state
+	enemy_direction      := 1;
+	enemyMoveCounter     := INITIAL_INVADER_COUNT;
+	current_speed_delay  := 50;
+	pending_edge_rescan  := 0;
+	enemy_march_tick     := 0;
+	monster_animation_frame := 0;
+
+	// Reset enemy shot state
+	ufo_bullet_active[0]       := 0;
+	ufo_bullet_active[1]       := 0;
+	ufo_bullet_active[2]       := 0;
+	ufo_bullet_reload_timer[0] := 0;
+	ufo_bullet_reload_timer[1] := 0;
+	ufo_bullet_reload_timer[2] := 0;
+	ufo_bullet_next_to_fire    := 0;
+	ufo_bullet_stagger_counter := 0;
+	es_plunger_step  := 0;
+	es_squiggly_step := 0;
+
+	// Reset player bullet
+	player_bullet_active := 0;
+
+	// Reset UFO
+	ufo_active := 0;
+	ufo_spawn_timer := 1536;
 end;
 
 
@@ -2667,6 +2658,8 @@ begin
 	// Play music during intermission
 	if DEBUG_ENABLE = 0 then
 		call(sidfile_1_play);
+			
+	
 	
 	// Check fire button to start the level (debounced)
 	Joystick(joystickPort);
@@ -2674,7 +2667,7 @@ begin
 	begin
 		if get_ready_prev_fire = 0 then
 		begin
-			StartLevel();  // Exits intermission, switches to full game chain
+			LevelStart();  // Exits intermission, switches to full game chain
 			get_ready_prev_fire := 1;
 		end;
 	end
@@ -2682,10 +2675,10 @@ begin
 		get_ready_prev_fire := 0;
 	
 	// Schedule next step based on current mode.
-	// If StartLevel() just ran, get_ready_mode is now 0 and we must not overwrite
+	// If LevelStart() just ran, get_ready_mode is now 0 and we must not overwrite
 	// the game-chain handoff with another intermission IRQ.
 	if get_ready_mode = 1 then
-		RasterIRQ(IntermissionStarfield(), 100, 0)
+		RasterIRQ(IntermissionStarfield(), 250, 0)
 	else
 		RasterIRQ(MainRasterChain(), 0, 0);
 		//RasterIRQ(MainRasterRow1(), monster_base_y - 8, 0);
@@ -2697,6 +2690,8 @@ end;
 interrupt IntermissionStarfield();
 begin
 	StartIRQ(0);
+	
+	
 	
 	// Animate starfield
 	inc(StarField_RasterCount);
@@ -3000,12 +2995,12 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// AdvanceLevel
+// LevelAdvance
 //   Called when all enemies are cleared.  Cycles current_level (1→9→1),
 //   resets board/bullet/march state, and repositions the formation for
 //   the new level (each level starts LEVEL_Y_STEP pixels lower).
 // ---------------------------------------------------------------------------
-procedure AdvanceLevel();
+procedure LevelAdvance();
 var
 	advancelevel_palette_level : byte;
 begin
@@ -3066,11 +3061,24 @@ begin
 	end;
 
 	
-	// Disable all sprites during intermission; StartLevel() re-enables them when
-	// the player presses fire.  Monster init is intentionally deferred to StartLevel()
+	
+	// Disable all sprites during intermission; LevelStart() re-enables them when
+	// the player presses fire.  Monster init is intentionally deferred to LevelStart()
 	// so this function stays fast enough to call from within the raster interrupt
 	// (ClearMonster path) without stalling for multiple frames.
 	sprite_bitmask := 0;
+	
+	// Regenerate shields only for levels < 5 (using persistent counter)
+	//if total_level_counter < 50 then
+	//	CopyShieldSprites();
+
+
+	// Build the monster formation for the new level.
+	// These are the heavy calls (~3 frames combined) — safe here because the
+	// player just pressed fire and the game is transitioning, not mid-play.
+	//ReadyMonsters();
+	//PreclearLeftmostAndBottomEnemies();
+	MakeMonsters();
 
 	// Show the get-ready screen and enter intermission mode.
 	get_ready_mode := 1;
@@ -3162,7 +3170,7 @@ begin
 	// AdvanceLevel will increment current_level from 0 to 1 and display the intermission screen.
 	dec(current_level);
 	dec(total_level_counter);
-	AdvanceLevel();
+	LevelAdvance();
 	
 	//RasterIRQ(MainRasterRow1(),0,0);
 	//RasterIRQ(IntermissionChain(), 0, 0);
