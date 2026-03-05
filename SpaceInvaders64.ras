@@ -51,7 +51,7 @@ var
 	sidfile: incsid("sid/Courier.sid",2);
 	
 	advancelevel_palette_level : byte;
-	flagGotoNextLevel : byte = 0;
+	flagGotoNextLevel : byte = 1;
 	
 	//const useKernal:byte=0;
 	
@@ -2232,121 +2232,103 @@ end;
 
 // ---------------------------------------------------------------------------
 // ShowGetReadyText
-//   Displays "GET READY FOR LEVEL X" centered on screen row 12.
-//   Buffers the starfield characters underneath and stores them in
-//   get_ready_char_buffer for later restoration.
+//   Displays "GET READY FOR LEVEL X" centered on screen rows 12-13.
+//   Buffers the starfield characters/colors underneath for later restoration.
+//
+//   IRQ-SAFE: uses poke/peek with constant integer addresses only.
+//   No ^byte / pointer-of-byte locals → ZP $24/$68 never touched.
+//   Screen::PrintString uses ZP $02-$09 (Screen unit), not the shared pool.
+//
+//   Address constants (baked in — do not change GET_READY_ROW/COL without updating):
+//     Line 1 screen $05E8...$05F4  ($0400 + 12*40 + 8,  13 chars)
+//     Line 1 color  $D9E8...$D9F4
+//     Line 2 screen $0613...$061A  ($0400 + 13*40 + 11,  8 chars)
+//     Line 2 color  $DA13...$DA1A
+//     Level digit   $0619...$061B  (col 11+6=17, 1-3 digits)
+//     Level d.color $DA19...$DA1B
 // ---------------------------------------------------------------------------
 procedure ShowGetReadyText();
-var	
-	sgrt_screen_addr : integer;
-	sgrt_color_addr : integer;
-	//sgrt_ptr : pointer of byte;
-	//sgrt_color_ptr : pointer of byte;
-	sgrt_i : byte;
-	sgrt_text_msg1 : string = ("GET READY FOR");
-	sgrt_text_msg2 : string = ("LEVEL ");
+var
 	sgrt_level_char : byte;
 	sgrt_temp : byte;
+	sgrt_text_msg1 : string = ("GET READY FOR");
+	sgrt_text_msg2 : string = ("LEVEL ");
 begin
 	// Disable all sprites to hide them during intermission
 	sprite_bitmask := 0;
 
-	// Buffer and replace line 1: "GET READY FOR" (13 chars) at column 8
-	sgrt_screen_addr := $0400 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
-	sgrt_color_addr := $D800 + GET_READY_ROW * 40 + GET_READY_LINE1_COL;
-	sgrt_ptr := sgrt_screen_addr;
-	sgrt_color_ptr := sgrt_color_addr;
-	sgrt_i := 0;
-	while sgrt_i < 13 do
-	begin
-		get_ready_char_buffer[sgrt_i] := sgrt_ptr[0];
-		get_ready_color_buffer[sgrt_i] := sgrt_color_ptr[0];
-		inc(sgrt_i);
-		inc(sgrt_ptr);
-		inc(sgrt_color_ptr);
-	end;
-	Screen::PrintString(#sgrt_text_msg1, GET_READY_LINE1_COL, GET_READY_ROW, #Screen::screen0);
-	// Set color for line 1
-	sgrt_color_ptr := sgrt_color_addr;
-	sgrt_i := 0;
-	while sgrt_i < 13 do
-	begin
-		sgrt_color_ptr[0] := GET_READY_COLOR;
-		inc(sgrt_i);
-		inc(sgrt_color_ptr);
-	end;
+	// ── Buffer line 1 (13 chars): screen $05E8, color $D9E8 ─────────────────
+	get_ready_char_buffer[0]  := peek(^$05E8, 0);  get_ready_char_buffer[1]  := peek(^$05E9, 0);
+	get_ready_char_buffer[2]  := peek(^$05EA, 0);  get_ready_char_buffer[3]  := peek(^$05EB, 0);
+	get_ready_char_buffer[4]  := peek(^$05EC, 0);  get_ready_char_buffer[5]  := peek(^$05ED, 0);
+	get_ready_char_buffer[6]  := peek(^$05EE, 0);  get_ready_char_buffer[7]  := peek(^$05EF, 0);
+	get_ready_char_buffer[8]  := peek(^$05F0, 0);  get_ready_char_buffer[9]  := peek(^$05F1, 0);
+	get_ready_char_buffer[10] := peek(^$05F2, 0);  get_ready_char_buffer[11] := peek(^$05F3, 0);
+	get_ready_char_buffer[12] := peek(^$05F4, 0);
+	get_ready_color_buffer[0]  := peek(^$D9E8, 0); get_ready_color_buffer[1]  := peek(^$D9E9, 0);
+	get_ready_color_buffer[2]  := peek(^$D9EA, 0); get_ready_color_buffer[3]  := peek(^$D9EB, 0);
+	get_ready_color_buffer[4]  := peek(^$D9EC, 0); get_ready_color_buffer[5]  := peek(^$D9ED, 0);
+	get_ready_color_buffer[6]  := peek(^$D9EE, 0); get_ready_color_buffer[7]  := peek(^$D9EF, 0);
+	get_ready_color_buffer[8]  := peek(^$D9F0, 0); get_ready_color_buffer[9]  := peek(^$D9F1, 0);
+	get_ready_color_buffer[10] := peek(^$D9F2, 0); get_ready_color_buffer[11] := peek(^$D9F3, 0);
+	get_ready_color_buffer[12] := peek(^$D9F4, 0);
 
-	// Buffer and replace line 2: "LEVEL X" (7 chars) at column 11
-	sgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-	sgrt_ptr := sgrt_screen_addr;
-	sgrt_color_ptr := sgrt_color_addr;
-	while sgrt_i < 21 do  // sgrt_i continues from 13, so buffer 8 more chars
-	begin
-		get_ready_char_buffer[sgrt_i] := sgrt_ptr[0];
-		get_ready_color_buffer[sgrt_i] := sgrt_color_ptr[0];
-		inc(sgrt_i);
-		inc(sgrt_ptr);
-		inc(sgrt_color_ptr);
-	end;
+	Screen::PrintString(#sgrt_text_msg1, GET_READY_LINE1_COL, GET_READY_ROW, #Screen::screen0);
+
+	poke(^$D9E8, 0, GET_READY_COLOR); poke(^$D9E9, 0, GET_READY_COLOR);
+	poke(^$D9EA, 0, GET_READY_COLOR); poke(^$D9EB, 0, GET_READY_COLOR);
+	poke(^$D9EC, 0, GET_READY_COLOR); poke(^$D9ED, 0, GET_READY_COLOR);
+	poke(^$D9EE, 0, GET_READY_COLOR); poke(^$D9EF, 0, GET_READY_COLOR);
+	poke(^$D9F0, 0, GET_READY_COLOR); poke(^$D9F1, 0, GET_READY_COLOR);
+	poke(^$D9F2, 0, GET_READY_COLOR); poke(^$D9F3, 0, GET_READY_COLOR);
+	poke(^$D9F4, 0, GET_READY_COLOR);
+
+	// ── Buffer line 2 (8 chars): screen $0613, color $DA13 ──────────────────
+	get_ready_char_buffer[13] := peek(^$0613, 0); get_ready_char_buffer[14] := peek(^$0614, 0);
+	get_ready_char_buffer[15] := peek(^$0615, 0); get_ready_char_buffer[16] := peek(^$0616, 0);
+	get_ready_char_buffer[17] := peek(^$0617, 0); get_ready_char_buffer[18] := peek(^$0618, 0);
+	get_ready_char_buffer[19] := peek(^$0619, 0); get_ready_char_buffer[20] := peek(^$061A, 0);
+	get_ready_color_buffer[13] := peek(^$DA13, 0); get_ready_color_buffer[14] := peek(^$DA14, 0);
+	get_ready_color_buffer[15] := peek(^$DA15, 0); get_ready_color_buffer[16] := peek(^$DA16, 0);
+	get_ready_color_buffer[17] := peek(^$DA17, 0); get_ready_color_buffer[18] := peek(^$DA18, 0);
+	get_ready_color_buffer[19] := peek(^$DA19, 0); get_ready_color_buffer[20] := peek(^$DA1A, 0);
+
 	Screen::PrintString(#sgrt_text_msg2, GET_READY_LINE2_COL, GET_READY_ROW + 1, #Screen::screen0);
-	
-	// Write level number using total_level_counter (supports multi-digit display)
-	sgrt_screen_addr := $0400 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL + 6;
-	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL + 6;
-	sgrt_ptr := sgrt_screen_addr;
-	sgrt_color_ptr := sgrt_color_addr;
-	
-	// Display total_level_counter (handles 1-255) - optimized with division
+
+	// ── Level number at col 17 ($0619) ───────────────────────────────────────
 	sgrt_temp := total_level_counter;
-	
-	if total_level_counter >= 100 then begin
-		// Three digits: 100-255
+	if total_level_counter >= 100 then
+	begin
 		sgrt_level_char := sgrt_temp / 100;
-		sgrt_ptr[0] := sgrt_level_char + $30;  // Hundreds digit
-		sgrt_color_ptr[0] := GET_READY_COLOR;
-		inc(sgrt_ptr);
-		inc(sgrt_color_ptr);
-		
+		poke(^$0619, 0, sgrt_level_char + $30);
+		poke(^$DA19, 0, GET_READY_COLOR);
 		sgrt_temp := sgrt_temp - (sgrt_level_char * 100);
 		sgrt_level_char := sgrt_temp / 10;
-		sgrt_ptr[0] := sgrt_level_char + $30;  // Tens digit
-		sgrt_color_ptr[0] := GET_READY_COLOR;
-		inc(sgrt_ptr);
-		inc(sgrt_color_ptr);
-		
+		poke(^$061A, 0, sgrt_level_char + $30);
+		poke(^$DA1A, 0, GET_READY_COLOR);
 		sgrt_temp := sgrt_temp - (sgrt_level_char * 10);
-		sgrt_ptr[0] := sgrt_temp + $30;  // Ones digit
-		sgrt_color_ptr[0] := GET_READY_COLOR;
+		poke(^$061B, 0, sgrt_temp + $30);
+		poke(^$DA1B, 0, GET_READY_COLOR);
 	end
-	else if total_level_counter >= 10 then begin
-		// Two digits: 10-99
-		sgrt_level_char := sgrt_temp / 10;
-		sgrt_ptr[0] := sgrt_level_char + $30;  // Tens digit
-		sgrt_color_ptr[0] := GET_READY_COLOR;
-		inc(sgrt_ptr);
-		inc(sgrt_color_ptr);
-		
-		sgrt_temp := sgrt_temp - (sgrt_level_char * 10);
-		sgrt_ptr[0] := sgrt_temp + $30;  // Ones digit
-		sgrt_color_ptr[0] := GET_READY_COLOR;
-	end
-	else begin
-		// Single digit: 1-9
-		sgrt_ptr[0] := total_level_counter + $30;
-		sgrt_color_ptr[0] := GET_READY_COLOR;
-	end;
-	
-	// Set remaining color for line 2 "LEVEL " prefix (6 chars)
-	sgrt_color_addr := $D800 + (GET_READY_ROW + 1) * 40 + GET_READY_LINE2_COL;
-	sgrt_color_ptr := sgrt_color_addr;
-	sgrt_i := 0;
-	while sgrt_i < 6 do
+	else if total_level_counter >= 10 then
 	begin
-		sgrt_color_ptr[0] := GET_READY_COLOR;
-		inc(sgrt_i);
-		inc(sgrt_color_ptr);
+		sgrt_level_char := sgrt_temp / 10;
+		poke(^$0619, 0, sgrt_level_char + $30);
+		poke(^$DA19, 0, GET_READY_COLOR);
+		sgrt_temp := sgrt_temp - (sgrt_level_char * 10);
+		poke(^$061A, 0, sgrt_temp + $30);
+		poke(^$DA1A, 0, GET_READY_COLOR);
+	end
+	else
+	begin
+		poke(^$0619, 0, total_level_counter + $30);
+		poke(^$DA19, 0, GET_READY_COLOR);
 	end;
+
+	// ── Line 2 color for "LEVEL " prefix (6 chars $DA13-$DA18) ─────────────
+	poke(^$DA13, 0, GET_READY_COLOR); poke(^$DA14, 0, GET_READY_COLOR);
+	poke(^$DA15, 0, GET_READY_COLOR); poke(^$DA16, 0, GET_READY_COLOR);
+	poke(^$DA17, 0, GET_READY_COLOR); poke(^$DA18, 0, GET_READY_COLOR);
 end;
 
 
@@ -3141,8 +3123,8 @@ begin
 	else if advancelevel_palette_level = 10 then begin
 		pal_col1:=RED;    pal_col2:=GREEN;  pal_col3:=LIGHT_BLUE;
 		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BLUE;               // RGB
-	end;
-	pending_palette := 1;*/
+	end;*/
+	pending_palette := 1;
 
 	// Restore shields (uses ZP $24/$68 for csg_src_ptr / csg_dst_ptr / css_scan_ptr).
 	if total_level_counter < 50 then

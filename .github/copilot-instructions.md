@@ -4,7 +4,7 @@
 - Turbo Rascal syntax in .ras/.tru files; keep unit imports at the top via `@use`.
 - Declare all variables at the beginning of procedures using `var` statements. TRSE uses a global variable namespace—use method-appropriate long descriptive names (e.g., `rightmost_block_column` not `col`) to avoid conflicts between functions.
 - Interrupt handlers are declared explicitly and drive raster timing; follow the same naming style.
-- Memory access uses `peek(address, bank)` and `poke(address, value, bank)` for reading/writing bytes; bank is 0 for current memory configuration. Avoid `Memory::ReadByte`/`WriteByte` as they may not be available.
+- Memory access uses `peek(^address, bank)` and `poke(^address, bank, value)` for reading/writing bytes; bank is 0 for current memory configuration. The `^` prefix is required — it marks the first argument as an address type. Without it TRSE rejects the call with "Parameter 0 must be a variable or address". Avoid `Memory::ReadByte`/`WriteByte` as they may not be available.
 
 ## TRSE Compiler Requirements
 - **Bitwise operators**: Use `&` for bitwise AND, `|` for OR, `xor` for XOR, and `<<`/`>>` for shifts. The `and` keyword is for boolean logic only.
@@ -115,7 +115,8 @@ end;
 
 ### Examples in Codebase
 - `CheckEnemyShieldContact()`: Uses `PreventIRQ`/`EnableIRQ` to protect `cesc_contact_done` flag and `pending_shield_erosion` state
-- `ShowGetReadyText()` / `HideGetReadyText()`: Must NOT use nested `PreventIRQ`/`EnableIRQ` - caused crashes when called from IRQ-protected contexts
+- `ShowGetReadyText()`: IRQ-safe — rewritten to use `poke`/`peek` with constant integer addresses only. No `^byte`/`pointer of byte` locals; ZP $24/$68 never touched. `Screen::PrintString` uses ZP $02–$09 (Screen unit), not the shared pool.
+- `HideGetReadyText()`: Still uses local `pointer of byte` vars (ZP $24/$68) — not yet IRQ-safe.
 
 ## Enemy Formation — Coordinate System and Edge Boundaries
 
@@ -160,7 +161,7 @@ The `cbcc_rel_x` calculation that follows is safe: if the guard passes, the subt
 ## IRQ Safety of Formation Procedures
 
 ### `ClearMonster` — already IRQ-safe
-`ClearMonster` uses `sprite_data_ptr` at ZP **$22** (confirmed from compiled ASM — not $24). It is called from within `MainRasterPlayer` interrupt during gameplay. The only unsafe part is the `LevelAdvance()` call it makes when the **last** enemy is killed, because `LevelAdvance` calls `ShowGetReadyText` which uses ZP $24 via Screen::PrintString. That specific path is acceptable because it only fires on the last kill of a level.
+`ClearMonster` uses `sprite_data_ptr` at ZP **$22** (confirmed from compiled ASM — not $24). It is called from within `MainRasterPlayer` interrupt during gameplay. The `LevelAdvance()` path (triggered on the last kill of a level) is now safe because `ShowGetReadyText` no longer uses ZP $24/$68.
 
 ### `PreclearLeftmostAndBottomEnemies` — calls ClearMonster for sprite data
 Calls `ClearMonster` 17 times directly. `ClearMonster` handles everything via its normal `was_alive` path: zeroes sprite pixel data in both animation frames, clears the `block_enemies` bit, increments `numberOfEnemies`, and sets `pending_edge_rescan`. No block ever becomes fully empty from this preclear (each retains ≥2 enemies), so `LevelAdvance()` never fires.
