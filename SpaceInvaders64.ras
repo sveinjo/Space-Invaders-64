@@ -225,6 +225,9 @@ var
 	// Cached row-present flags: 1 = row has alive enemies, 0 = row completely cleared.
 	// Maintained by ClearMonster; avoids scanning 4 blocks per row for every RowHasMonsters check.
 	row_has_monsters : array[3] of byte = (1, 1, 1);
+	// Safe Player raster target — computed dynamically in MainRasterRow3 to prevent
+	// the raster chain from deadlocking when monster_base_y >= 178 (level 13+).
+	player_raster_target : byte = 222;
 	
 	const monsterSprite1:byte = 1;
 	const monsterSprite2:byte = 2;
@@ -3025,11 +3028,10 @@ begin
 		UpdateMonsters(52);  // Set screen positions for row 2
 		AnimateMonsters(2); // Set image pointers for row 2
 	end;
-	
-	
 
-	//RasterIRQ(MainRasterJoystick(), 43 + monster_base_y, @useKernal);
+	
 	RasterIRQ(MainRasterPlayer(), 222, 0);
+	
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := GREEN;
 		
@@ -3103,9 +3105,32 @@ end;
 interrupt MainRasterChain();
 begin
 	
-	StartIRQ(0);	
+	StartIRQ(0);
+
+	// Schedule the next raster IRQ FIRST — before the SID player, before any game logic.
+	// Reason: call(sidfile_1_play) takes 1000–3000 cycles (16–50 raster lines) and varies
+	// per note.  If it runs before the RasterIRQ write and the target line is already past,
+	// Row1/2/3 fires a full frame late → sprites show stale positions → visible flicker.
+	// All inputs (flagGotoNextLevel, row_has_monsters, monster_base_y) are stable here:
+	// UpdateTick and ClearMonster ran in MainRasterPlayer, which has already completed.
+	if (flagGotoNextLevel = 1) then
+	begin
+		flagGotoNextLevel := 0;
+		LevelAdvance();
+	end
+	else begin
+		if row_has_monsters[0] <> 0 then
+			RasterIRQ(MainRasterRow1(), monster_base_y - 4, 0)
+		else if row_has_monsters[1] <> 0 then
+			RasterIRQ(MainRasterRow2(), 19 + monster_base_y, 0)
+		else if row_has_monsters[2] <> 0 then
+			RasterIRQ(MainRasterRow3(), 45 + monster_base_y, 0)
+		else
+			RasterIRQ(MainRasterPlayer(), 222, 0);
+	end;
+
 	if DEBUG_ENABLE = 0 then
-		call(sidfile_1_play) // main-context playback (disabled)		
+		call(sidfile_1_play)
 	else 
 		SCREEN_BG_COL := BLACK;
 
@@ -3115,14 +3140,8 @@ begin
 	// Apply erosion every frame — now just a charset write, fast enough to run unconditionally.
 	ApplyShieldErosion();
 	
-	//peek(^$D01F, 0);
-	
-	// Shield erosion is applied directly to charset bytes in ApplyShieldErosion — no repaint step needed.
-	
-
-	// Position and animate the UFO BEFORE scheduling Row1, so sprite 1
-	// registers hold the UFO values while the VIC-II scans through UFO_Y.
-	// Row1/2/3 interrupts will repurpose sprite 1 for enemy blocks later.
+	// Position and animate the UFO BEFORE Row1 fires, so sprite 1 registers hold the
+	// UFO values while the VIC-II scans through UFO_Y.
 	ShowUFO();
 	UpdateUFO();
 	ShowUFOBullet();
@@ -3132,39 +3151,6 @@ begin
 
 	// Fire enemy shots from alien positions (column-table / player-tracking logic)
 	TickEnemyShotFiring();
-
-	// Schedule the next raster IRQ FIRST, before any heavy game logic.
-	// Reason: CheckBulletCollision (on a kill frame) calls ClearMonster which runs two
-	// full edge scans, and UpdateTick may call GetLowestEnemyBottomY on a drop tick.
-	// If these run BEFORE the RasterIRQ call, the VIC-II latch can be written after the
-	// target scanline has already passed, causing Row1/2/3 to fire a full frame late.
-	// Clamping to [40, 222] guards against byte underflow (monster_base_y < 13) and
-	// byte overflow (40 + monster_base_y > 255), and keeps targets below player IRQ at 223.
-	
-	if (flagGotoNextLevel = 1) then
-	begin
-		flagGotoNextLevel := 0;
-		LevelAdvance();
-	end
-	else begin
-		if row_has_monsters[0] <> 0 then
-		begin
-			//mc_row_target := Helpers::Clamp(monster_base_y - 13, 40, 222);
-			RasterIRQ(MainRasterRow1(), monster_base_y - 4, 0); // There is room between 33 and 13 for tuning if needed.
-		end
-		else if row_has_monsters[1] <> 0 then
-		begin
-			//mc_row_target := Helpers::Clamp(13 + monster_base_y, 40, 222);
-			RasterIRQ(MainRasterRow2(), 19 + monster_base_y, 0);
-		end
-		else if row_has_monsters[2] <> 0 then
-		begin
-			//mc_row_target := Helpers::Clamp(39 + monster_base_y, 40, 222);
-			RasterIRQ(MainRasterRow3(), 45 + monster_base_y, 0);
-		end
-		else
-			RasterIRQ(MainRasterPlayer(), 222, 0);
-	end;
 
 	
 
