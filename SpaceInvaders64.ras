@@ -3089,10 +3089,6 @@ begin
 end;
 
 interrupt StartupChain();
-var
-	startup_left_now : byte;
-	startup_right_now : byte;
-	startup_fire_now : byte;
 begin
 	StartIRQ(0);
 
@@ -3100,11 +3096,8 @@ begin
 		call(sidfile_1_play);
 
 	Joystick(joystickPort);
-	startup_left_now := joystickleft;
-	startup_right_now := joystickright;
-	startup_fire_now := joystickbutton;
 
-	if startup_left_now = 1 then
+	if joystickleft = 1 then
 	begin
 		if (startup_prev_inputs & STARTUP_INPUT_LEFT) = 0 then
 		begin
@@ -3119,7 +3112,7 @@ begin
 	else
 		startup_prev_inputs := startup_prev_inputs & (STARTUP_INPUT_LEFT xor $FF);
 
-	if startup_right_now = 1 then
+	if joystickright = 1 then
 	begin
 		if (startup_prev_inputs & STARTUP_INPUT_RIGHT) = 0 then
 		begin
@@ -3134,7 +3127,7 @@ begin
 	else
 		startup_prev_inputs := startup_prev_inputs & (STARTUP_INPUT_RIGHT xor $FF);
 
-	if startup_fire_now = 1 then
+	if joystickbutton = 1 then
 	begin
 		if (startup_prev_inputs & STARTUP_INPUT_FIRE) = 0 then
 		begin
@@ -3204,7 +3197,7 @@ begin
 	RasterIRQ(MainRasterChain(), 0, 0);
 
 	// Run game logic unconditionally — intermission uses separate chain
-	//CheckShieldCollision();	
+	CheckShieldCollision();	
 	UpdateTick();
 	
 	// Check collisions AFTER all sprite rows have been displayed
