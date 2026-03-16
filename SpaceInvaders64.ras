@@ -2524,11 +2524,11 @@ begin
 	
 	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
 	
-	Screen::PrintString("  HI-SCORE",29,11,#Screen::screen0);
-	Screen::PrintString("       300",29,13,#Screen::screen0);
+	Screen::PrintString("     LEVEL",29,11,#Screen::screen0);
+	Screen::PrintString("         1",29,13,#Screen::screen0);
 	
-	Screen::PrintString("  SCORE(2)",29,21,#Screen::screen0);
-	Screen::PrintString("       150",29,23,#Screen::screen0);
+	Screen::PrintString("     LIVES",29,21,#Screen::screen0);
+	Screen::PrintString("         3",29,23,#Screen::screen0);
 	
 	//Screen::PrintString("¤¤¤",4,18,#Screen::screen0);
 	//Screen::PrintString("lmn",4,19,#Screen::screen0);
