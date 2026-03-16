@@ -3479,48 +3479,45 @@ begin
 	// avoiding the ZP $24 (StarField_color_mem) collision with the SID play routine.
 	
 	advancelevel_palette_level := total_level_counter;
-	while advancelevel_palette_level > 10 do begin
-		advancelevel_palette_level := advancelevel_palette_level - 10;
+	while advancelevel_palette_level > 9 do begin
+		advancelevel_palette_level := advancelevel_palette_level - 9;
 	end;
 	if advancelevel_palette_level = 1 then begin
 		pal_col1:=BLUE;   pal_col2:=PURPLE; pal_col3:=GREY;
 		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_BLUE; pal_col6:=DARK_GREY;  // Purple Haze
 	end
 	else if advancelevel_palette_level = 2 then begin
-		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=GREY;
-		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_RED;  pal_col6:=BROWN;      // Red
+		pal_col1:=DARK_GREY;    pal_col2:=GREEN;  pal_col3:=LIGHT_BLUE;
+		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BLUE;               // RGB
 	end
 	else if advancelevel_palette_level = 3 then begin
-		pal_col1:=DARK_GREY; pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
-		pal_col4:=WHITE; pal_col5:=LIGHT_GREY; pal_col6:=DARK_GREY;       // Christmas
+		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=YELLOW;
+		pal_col4:=WHITE;  pal_col5:=LIGHT_BLUE; pal_col6:=BLUE;           // Various			
 	end
 	else if advancelevel_palette_level = 4 then begin
-		pal_col1:=BLUE;  pal_col2:=GREEN;  pal_col3:=GREY;
-		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_GREEN; pal_col6:=DARK_GREY; // Jungle Green
+		pal_col1:=BLUE;   pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
+		pal_col4:=WHITE;  pal_col5:=CYAN;   pal_col6:=DARK_GREY;          // Ice Blue			
 	end
 	else if advancelevel_palette_level = 5 then begin
+		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=GREY;
+		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BROWN;              // Lava		
+	end
+	else if advancelevel_palette_level = 6 then begin		
+		pal_col1:=BLUE;  pal_col2:=GREEN;  pal_col3:=GREY;
+		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_GREEN; pal_col6:=DARK_GREY; // Jungle Green		
+	end
+	else if advancelevel_palette_level = 7 then begin
 		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=WHITE;
 		pal_col4:=YELLOW; pal_col5:=YELLOW; pal_col6:=BROWN;              // Gold
 	end
-	else if advancelevel_palette_level = 6 then begin
-		pal_col1:=BLUE;   pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
-		pal_col4:=WHITE;  pal_col5:=CYAN;   pal_col6:=DARK_GREY;          // Ice Blue
-	end
-	else if advancelevel_palette_level = 7 then begin
-		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=GREY;
-		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BROWN;              // Lava
-	end
 	else if advancelevel_palette_level = 8 then begin
-		pal_col1:=DARK_GREY; pal_col2:=ORANGE; pal_col3:=GREY;
-		pal_col4:=WHITE; pal_col5:=LIGHT_GREY; pal_col6:=BROWN;           // Bronze
+		pal_col1:=DARK_GREY; pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
+		pal_col4:=WHITE; pal_col5:=LIGHT_GREY; pal_col6:=DARK_GREY;       // Christmas		
 	end
 	else if advancelevel_palette_level = 9 then begin
-		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=YELLOW;
-		pal_col4:=WHITE;  pal_col5:=LIGHT_BLUE; pal_col6:=BLUE;           // Various
-	end
-	else if advancelevel_palette_level = 10 then begin
-		pal_col1:=RED;    pal_col2:=GREEN;  pal_col3:=LIGHT_BLUE;
-		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BLUE;               // RGB
+		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=GREY;
+		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_RED;  pal_col6:=BROWN;      // Red
+		
 	end;
 	pending_palette := 1;
 
