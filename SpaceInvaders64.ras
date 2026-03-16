@@ -88,8 +88,8 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 8;   // 1-9; set to any value before startup to test that level
-	total_level_counter : byte = 8;  // Persistent counter; never wraps, keeps incrementing indefinitely
+	current_level : byte = 7;   // 1-9; set to any value before startup to test that level
+	total_level_counter : byte = 7;  // Persistent counter; never wraps, keeps incrementing indefinitely
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -2376,6 +2376,35 @@ csg_s3  lda shield_glyph_stage,x
 	shield_top_eroded[3] := 0;
 end;
 
+// ---------------------------------------------------------------------------
+// DisableShieldLogic
+//   Marks all shield columns as fully eroded so collision/erosion checks
+//   bypass shields entirely when they are not displayed.
+// ---------------------------------------------------------------------------
+procedure DisableShieldLogic();
+var
+	dsl_idx : byte;
+begin
+	dsl_idx := 0;
+	while dsl_idx < 12 do
+	begin
+		shield_surface_top[dsl_idx] := 255;
+		shield_surface_bot[dsl_idx] := 255;
+		inc(dsl_idx);
+	end;
+
+	shield_top_eroded[0] := 1;
+	shield_top_eroded[1] := 1;
+	shield_top_eroded[2] := 1;
+	shield_top_eroded[3] := 1;
+
+	pending_shield_erosion := 0;
+	pending_shield_idx     := 0;
+	pending_byte_col       := 0;
+	pending_erase_top      := 0;
+	pending_erosion_dir    := 0;
+end;
+
 Procedure DisplayText();
 var
 	test_ptr : pointer of byte;
@@ -2406,19 +2435,26 @@ begin
 
 	// Place all 4 shield blocks using independent charset glyph ranges for erosion.
 	// Keep IRQs masked during shield charset/screen writes.
-	PreventIRQ();
-	// Shield 1: row 19 col 4,  chars 109-114 (from sprite 18)
-	Helpers::PlaceShieldBlock($06FC, 112);
-	// Shield 2: row 19 col 10, chars 118-123 (from template)
-	Helpers::PlaceShieldBlock($0702, 118);
-	// Shield 3: row 19 col 16, chars 124-129 (from template)
-	Helpers::PlaceShieldBlock($0708, 124);
-	// Shield 4: row 19 col 22, chars 130-135 (from template)
-	Helpers::PlaceShieldBlock($070E, 130);
-
-	// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
-	//CopyShieldSprites();
-	EnableIRQ();
+	if (current_level < 5) then
+	begin
+		PreventIRQ();
+		// Shield 1: row 19 col 4,  chars 109-114 (from sprite 18)
+		Helpers::PlaceShieldBlock($06FC, 112);
+		// Shield 2: row 19 col 10, chars 118-123 (from template)
+		Helpers::PlaceShieldBlock($0702, 118);
+		// Shield 3: row 19 col 16, chars 124-129 (from template)
+		Helpers::PlaceShieldBlock($0708, 124);
+		// Shield 4: row 19 col 22, chars 130-135 (from template)
+		Helpers::PlaceShieldBlock($070E, 130);
+	
+		// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
+		//CopyShieldSprites();
+		EnableIRQ();
+		//CheckShieldCollision();	
+	end
+	else
+		DisableShieldLogic();
+	
 	
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
 end;
@@ -2966,7 +3002,7 @@ begin
 	RasterIRQ(MainRasterChain(), 0, 0);
 
 	// Run game logic unconditionally — intermission uses separate chain
-	CheckShieldCollision();	
+	//CheckShieldCollision();	
 	UpdateTick();
 	
 	// Check collisions AFTER all sprite rows have been displayed
@@ -3302,8 +3338,10 @@ begin
 
 	// Restore shields — IRQ-safe: glyph copies use inline ASM (no ZP);
 	// surface scan wrapped in PreventIRQ/EnableIRQ inside CopyShieldSprites.
-	if total_level_counter < 50 then
+	if total_level_counter < 5 then
 		CopyShieldSprites();
+	//else
+		//DisableShieldLogic();
 
 	// Signal the main-context polling loop to run ReadyMonsters + MakeMonsters.
 	// Those are wrapped in PreventIRQ/EnableIRQ there to protect ZP $24/$68 from
