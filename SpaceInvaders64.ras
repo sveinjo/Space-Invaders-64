@@ -62,6 +62,13 @@ var
 	const GET_READY_LINE1_COL : byte = 8;   // "GET READY FOR" (13 chars) centered on 29-char playfield
 	const GET_READY_LINE2_COL : byte = 11;  // "LEVEL X" (7 chars) centered on 29-char playfield
 	const GET_READY_COLOR : byte = light_blue;  // text color
+	const STARTUP_PLAY_ROW : byte = 11;
+	const STARTUP_PLAY_COL : byte = 12;         // "PLAY" (4 chars) centered on 29-char playfield
+	const STARTUP_TITLE_ROW : byte = 13;
+	const STARTUP_TITLE_COL : byte = 7;         // "SPACE INVADERS" (14 chars) centered on 29-char playfield
+	const STARTUP_LEVEL_ROW : byte = 17;
+	const STARTUP_LEVEL_COL : byte = 7;         // "LEVEL SELECT: X" (15 chars) centered on 29-char playfield
+	const STARTUP_TEXT_COLOR : byte = light_blue;
 	
 	// Game constants
 	// IMPORTANT: INITIAL_INVADER_COUNT = 71 is the storage array size (0-based index 0-70).
@@ -88,8 +95,8 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 8;   // 1-9; set to any value before startup to test that level
-	total_level_counter : byte = 8;  // Persistent counter; never wraps, keeps incrementing indefinitely
+	current_level : byte = 0;   // 0 during startup menu; wrapped display level is 1-9 in gameplay
+	total_level_counter : byte = 0;  // Persistent counter; never wraps, keeps incrementing indefinitely
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -97,6 +104,14 @@ var
 	// Get Ready intermission state
 	get_ready_mode : byte = 0;  // 0 = normal play, 1 = showing "Get ready" screen
 	get_ready_prev_fire : byte = 0;  // Track fire button state in get-ready mode
+	// Startup menu state (level 0)
+	startup_mode : byte = 1;  // 1 = showing startup menu, 0 = normal flow
+	startup_prev_fire : byte = 0;
+	startup_prev_left : byte = 0;
+	startup_prev_right : byte = 0;
+	// Buffer for chars/colors replaced by startup text (4 + 14 + 15 = 33)
+	startup_char_buffer : array[33] of byte;
+	startup_color_buffer : array[33] of byte;
 	// Deferred MakeMonsters() flag: set by LevelAdvance(), cleared by main context.
 	// Keeps heavy monster init out of the interrupt handler so music plays uninterrupted.
 	level_advance_pending : byte = 0;  // 1 = main loop must run MakeMonsters()
@@ -286,7 +301,9 @@ var
 	//procedure ClearMonster(blockIndex: byte; enemyIndex: byte);
 	procedure ReadyMonsters();
 	procedure MakeMonsters();
+	procedure UpdateShieldDisplayForCurrentLevel();
 	interrupt IntermissionStarfield();
+	interrupt StartupStarfield();
 
 
 // ---------------------------------------------------------------------------
@@ -971,6 +988,97 @@ hgrt_l2 lda get_ready_char_buffer+13,x
 end; // HideGetReadyText
 
 // ---------------------------------------------------------------------------
+// Startup text helpers
+//   Draw/restore startup screen text while preserving starfield chars+colors.
+// ---------------------------------------------------------------------------
+procedure UpdateStartupLevelSelectDigit();
+begin
+	poke(^$06BD, 0, current_level + $30);
+	poke(^$DABD, 0, STARTUP_TEXT_COLOR);
+end;
+
+procedure ShowStartupText();
+var
+	startup_line1 : string = ("PLAY");
+	startup_line2 : string = ("SPACE INVADERS");
+	startup_line3 : string = ("LEVEL SELECT: ");
+begin
+	asm("
+	ldx #3
+sst_buf1 lda $05C4,x
+	sta startup_char_buffer,x
+	lda $D9C4,x
+	sta startup_color_buffer,x
+	dex
+	bpl sst_buf1
+	ldx #13
+sst_buf2 lda $060F,x
+	sta startup_char_buffer+4,x
+	lda $DA0F,x
+	sta startup_color_buffer+4,x
+	dex
+	bpl sst_buf2
+	ldx #14
+sst_buf3 lda $06AF,x
+	sta startup_char_buffer+18,x
+	lda $DAAF,x
+	sta startup_color_buffer+18,x
+	dex
+	bpl sst_buf3
+	");
+
+	Screen::PrintString(#startup_line1, STARTUP_PLAY_COL, STARTUP_PLAY_ROW, #Screen::screen0);
+	Screen::PrintString(#startup_line2, STARTUP_TITLE_COL, STARTUP_TITLE_ROW, #Screen::screen0);
+	Screen::PrintString(#startup_line3, STARTUP_LEVEL_COL, STARTUP_LEVEL_ROW, #Screen::screen0);
+	UpdateStartupLevelSelectDigit();
+
+	asm("
+	ldx #3
+	lda #$0E
+sst_col1 sta $D9C4,x
+	dex
+	bpl sst_col1
+	ldx #13
+	lda #$0E
+sst_col2 sta $DA0F,x
+	dex
+	bpl sst_col2
+	ldx #13
+	lda #$0E
+sst_col3 sta $DAAF,x
+	dex
+	bpl sst_col3
+	");
+end;
+
+procedure HideStartupText();
+begin
+	asm("
+	ldx #3
+hst_l1 lda startup_char_buffer,x
+	sta $05C4,x
+	lda startup_color_buffer,x
+	sta $D9C4,x
+	dex
+	bpl hst_l1
+	ldx #13
+hst_l2 lda startup_char_buffer+4,x
+	sta $060F,x
+	lda startup_color_buffer+4,x
+	sta $DA0F,x
+	dex
+	bpl hst_l2
+	ldx #14
+hst_l3 lda startup_char_buffer+18,x
+	sta $06AF,x
+	lda startup_color_buffer+18,x
+	sta $DAAF,x
+	dex
+	bpl hst_l3
+	");
+end;
+
+// ---------------------------------------------------------------------------
 // LevelStart
 //   Called from IntermissionChain when the player presses fire.
 //   HideGetReadyText nested inside — sole caller.
@@ -981,6 +1089,7 @@ var
 
 begin
 	HideGetReadyText();
+	UpdateShieldDisplayForCurrentLevel();
 	
 	
 
@@ -2433,30 +2542,44 @@ begin
 	//Screen::PrintString("¤%&",22,19,#Screen::screen0);
 	//Screen::PrintString("/+*",22,20,#Screen::screen0);
 
-	// Place all 4 shield blocks using independent charset glyph ranges for erosion.
-	// Keep IRQs masked during shield charset/screen writes.
-	if (current_level < 5) then
-	begin
-		PreventIRQ();
-		// Shield 1: row 19 col 4,  chars 109-114 (from sprite 18)
-		Helpers::PlaceShieldBlock($06FC, 112);
-		// Shield 2: row 19 col 10, chars 118-123 (from template)
-		Helpers::PlaceShieldBlock($0702, 118);
-		// Shield 3: row 19 col 16, chars 124-129 (from template)
-		Helpers::PlaceShieldBlock($0708, 124);
-		// Shield 4: row 19 col 22, chars 130-135 (from template)
-		Helpers::PlaceShieldBlock($070E, 130);
-	
-		// Copy pristine shield sprite to working copies, then paint all glyphs once at startup.
-		//CopyShieldSprites();
-		EnableIRQ();
-		//CheckShieldCollision();	
-	end
-	else
-		DisableShieldLogic();
+	// Keep startup screen shield-free. LevelStart() places/clears shields for the selected level.
+	Screen::PrintString("   ",4,19,#Screen::screen0);
+	Screen::PrintString("   ",10,19,#Screen::screen0);
+	Screen::PrintString("   ",16,19,#Screen::screen0);
+	Screen::PrintString("   ",22,19,#Screen::screen0);
+	Screen::PrintString("   ",4,20,#Screen::screen0);
+	Screen::PrintString("   ",10,20,#Screen::screen0);
+	Screen::PrintString("   ",16,20,#Screen::screen0);
+	Screen::PrintString("   ",22,20,#Screen::screen0);
+	DisableShieldLogic();
 	
 	
 	Screen::PrintString("ooooooooooooooooooooooooooooo",0,24,#Screen::screen0);
+end;
+
+procedure UpdateShieldDisplayForCurrentLevel();
+begin
+	if (total_level_counter < 5 and total_level_counter > 0) then
+	begin
+		PreventIRQ();
+		Helpers::PlaceShieldBlock($06FC, 112);
+		Helpers::PlaceShieldBlock($0702, 118);
+		Helpers::PlaceShieldBlock($0708, 124);
+		Helpers::PlaceShieldBlock($070E, 130);
+		EnableIRQ();
+	end
+	else
+	begin
+		Screen::PrintString("   ",4,19,#Screen::screen0);
+		Screen::PrintString("   ",10,19,#Screen::screen0);
+		Screen::PrintString("   ",16,19,#Screen::screen0);
+		Screen::PrintString("   ",22,19,#Screen::screen0);
+		Screen::PrintString("   ",4,20,#Screen::screen0);
+		Screen::PrintString("   ",10,20,#Screen::screen0);
+		Screen::PrintString("   ",16,20,#Screen::screen0);
+		Screen::PrintString("   ",22,20,#Screen::screen0);
+		DisableShieldLogic();
+	end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -2976,6 +3099,86 @@ begin
 	CloseIRQ();
 end;
 
+interrupt StartupChain();
+begin
+	StartIRQ(0);
+
+	if DEBUG_ENABLE = 0 then
+		call(sidfile_1_play);
+
+	Joystick(joystickPort);
+
+	if joystickleft = 1 then
+	begin
+		if startup_prev_left = 0 then
+		begin
+			if current_level > 1 then
+				dec(current_level)
+			else
+				current_level := 9;
+			UpdateStartupLevelSelectDigit();
+			startup_prev_left := 1;
+		end;
+	end
+	else
+		startup_prev_left := 0;
+
+	if joystickright = 1 then
+	begin
+		if startup_prev_right = 0 then
+		begin
+			if current_level < 9 then
+				inc(current_level)
+			else
+				current_level := 1;
+			UpdateStartupLevelSelectDigit();
+			startup_prev_right := 1;
+		end;
+	end
+	else
+		startup_prev_right := 0;
+
+	if joystickbutton = 1 then
+	begin
+		if startup_prev_fire = 0 then
+		begin
+			HideStartupText();
+			startup_mode := 0;
+
+			total_level_counter := current_level;
+			dec(total_level_counter);
+			dec(current_level);
+
+			LevelAdvance();
+			get_ready_prev_fire := 1;
+			startup_prev_fire := 1;
+		end;
+	end
+	else
+		startup_prev_fire := 0;
+
+	if startup_mode = 1 then
+		RasterIRQ(StartupStarfield(), 250, 0)
+	else if get_ready_mode = 1 then
+		RasterIRQ(IntermissionChain(), 0, 0)
+	else
+		RasterIRQ(MainRasterChain(), 0, 0);
+
+	CloseIRQ();
+end;
+
+interrupt StartupStarfield();
+begin
+	StartIRQ(0);
+
+	inc(StarField_RasterCount);
+	StarField::DoStarfield();
+
+	RasterIRQ(StartupChain(), 0, 0);
+
+	CloseIRQ();
+end;
+
 // ---------------------------------------------------------------------------
 // MAIN GAME RASTER CHAIN
 // ---------------------------------------------------------------------------
@@ -3335,9 +3538,9 @@ begin
 	// Restore shields — IRQ-safe: glyph copies use inline ASM (no ZP);
 	// surface scan wrapped in PreventIRQ/EnableIRQ inside CopyShieldSprites.
 	if total_level_counter < 5 then
-		CopyShieldSprites();
-	//else
-		//DisableShieldLogic();
+		CopyShieldSprites()
+	else
+		DisableShieldLogic();
 
 	// Signal the main-context polling loop to run ReadyMonsters + MakeMonsters.
 	// Those are wrapped in PreventIRQ/EnableIRQ there to protect ZP $24/$68 from
@@ -3436,11 +3639,15 @@ begin
 
 	DisplayText();
 
-	// Show "Get Ready" screen for the first level before starting play.
-	// AdvanceLevel will increment current_level from 0 to 1 and display the intermission screen.
-	dec(current_level);
-	dec(total_level_counter);
-	LevelAdvance();   // ← installs IntermissionChain into $FFFE/$FFFF
+	// Startup menu starts at level 0 and lets player pick level 1-9.
+	startup_mode := 1;
+	current_level := 1;
+	total_level_counter := 0;
+	startup_prev_fire := 0;
+	startup_prev_left := 0;
+	startup_prev_right := 0;
+	ShowStartupText();
+	RasterIRQ(StartupChain(), 0, 0);
 
 	// ONLY NOW arm the VIC raster IRQ hardware, and ONLY NOW open the CPU interrupt gate.
 	// This order is mandatory: vector first, hardware enable second, CLI last.
