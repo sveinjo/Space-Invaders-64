@@ -106,9 +106,10 @@ var
 	get_ready_prev_fire : byte = 0;  // Track fire button state in get-ready mode
 	// Startup menu state (level 0)
 	startup_mode : byte = 1;  // 1 = showing startup menu, 0 = normal flow
-	startup_prev_fire : byte = 0;
-	startup_prev_left : byte = 0;
-	startup_prev_right : byte = 0;
+	const STARTUP_INPUT_FIRE  : byte = $01;
+	const STARTUP_INPUT_LEFT  : byte = $02;
+	const STARTUP_INPUT_RIGHT : byte = $04;
+	startup_prev_inputs : byte = 0;
 	// Buffer for chars/colors replaced by startup text (4 + 14 + 15 = 33)
 	startup_char_buffer : array[33] of byte;
 	startup_color_buffer : array[33] of byte;
@@ -2567,18 +2568,6 @@ begin
 		Helpers::PlaceShieldBlock($0708, 124);
 		Helpers::PlaceShieldBlock($070E, 130);
 		EnableIRQ();
-	end
-	else
-	begin
-		Screen::PrintString("   ",4,19,#Screen::screen0);
-		Screen::PrintString("   ",10,19,#Screen::screen0);
-		Screen::PrintString("   ",16,19,#Screen::screen0);
-		Screen::PrintString("   ",22,19,#Screen::screen0);
-		Screen::PrintString("   ",4,20,#Screen::screen0);
-		Screen::PrintString("   ",10,20,#Screen::screen0);
-		Screen::PrintString("   ",16,20,#Screen::screen0);
-		Screen::PrintString("   ",22,20,#Screen::screen0);
-		DisableShieldLogic();
 	end;
 end;
 
@@ -3100,6 +3089,10 @@ begin
 end;
 
 interrupt StartupChain();
+var
+	startup_left_now : byte;
+	startup_right_now : byte;
+	startup_fire_now : byte;
 begin
 	StartIRQ(0);
 
@@ -3107,40 +3100,43 @@ begin
 		call(sidfile_1_play);
 
 	Joystick(joystickPort);
+	startup_left_now := joystickleft;
+	startup_right_now := joystickright;
+	startup_fire_now := joystickbutton;
 
-	if joystickleft = 1 then
+	if startup_left_now = 1 then
 	begin
-		if startup_prev_left = 0 then
+		if (startup_prev_inputs & STARTUP_INPUT_LEFT) = 0 then
 		begin
 			if current_level > 1 then
 				dec(current_level)
 			else
 				current_level := 9;
 			UpdateStartupLevelSelectDigit();
-			startup_prev_left := 1;
+			startup_prev_inputs := startup_prev_inputs | STARTUP_INPUT_LEFT;
 		end;
 	end
 	else
-		startup_prev_left := 0;
+		startup_prev_inputs := startup_prev_inputs & (STARTUP_INPUT_LEFT xor $FF);
 
-	if joystickright = 1 then
+	if startup_right_now = 1 then
 	begin
-		if startup_prev_right = 0 then
+		if (startup_prev_inputs & STARTUP_INPUT_RIGHT) = 0 then
 		begin
 			if current_level < 9 then
 				inc(current_level)
 			else
 				current_level := 1;
 			UpdateStartupLevelSelectDigit();
-			startup_prev_right := 1;
+			startup_prev_inputs := startup_prev_inputs | STARTUP_INPUT_RIGHT;
 		end;
 	end
 	else
-		startup_prev_right := 0;
+		startup_prev_inputs := startup_prev_inputs & (STARTUP_INPUT_RIGHT xor $FF);
 
-	if joystickbutton = 1 then
+	if startup_fire_now = 1 then
 	begin
-		if startup_prev_fire = 0 then
+		if (startup_prev_inputs & STARTUP_INPUT_FIRE) = 0 then
 		begin
 			HideStartupText();
 			startup_mode := 0;
@@ -3151,11 +3147,11 @@ begin
 
 			LevelAdvance();
 			get_ready_prev_fire := 1;
-			startup_prev_fire := 1;
+			startup_prev_inputs := startup_prev_inputs | STARTUP_INPUT_FIRE;
 		end;
 	end
 	else
-		startup_prev_fire := 0;
+		startup_prev_inputs := startup_prev_inputs & (STARTUP_INPUT_FIRE xor $FF);
 
 	if startup_mode = 1 then
 		RasterIRQ(StartupStarfield(), 250, 0)
@@ -3506,7 +3502,7 @@ begin
 		pal_col4:=WHITE; pal_col5:=LIGHT_GREY; pal_col6:=DARK_GREY;       // Christmas
 	end
 	else if advancelevel_palette_level = 4 then begin
-		pal_col1:=BROWN;  pal_col2:=GREEN;  pal_col3:=GREY;
+		pal_col1:=BLUE;  pal_col2:=GREEN;  pal_col3:=GREY;
 		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_GREEN; pal_col6:=DARK_GREY; // Jungle Green
 	end
 	else if advancelevel_palette_level = 5 then begin
@@ -3538,9 +3534,7 @@ begin
 	// Restore shields — IRQ-safe: glyph copies use inline ASM (no ZP);
 	// surface scan wrapped in PreventIRQ/EnableIRQ inside CopyShieldSprites.
 	if total_level_counter < 5 then
-		CopyShieldSprites()
-	else
-		DisableShieldLogic();
+		CopyShieldSprites();
 
 	// Signal the main-context polling loop to run ReadyMonsters + MakeMonsters.
 	// Those are wrapped in PreventIRQ/EnableIRQ there to protect ZP $24/$68 from
@@ -3643,9 +3637,7 @@ begin
 	startup_mode := 1;
 	current_level := 1;
 	total_level_counter := 0;
-	startup_prev_fire := 0;
-	startup_prev_left := 0;
-	startup_prev_right := 0;
+	startup_prev_inputs := 0;
 	ShowStartupText();
 	RasterIRQ(StartupChain(), 0, 0);
 
