@@ -88,8 +88,8 @@ var
 	numberOfEnemies : byte = 0;
 
 	// Level progression
-	current_level : byte = 7;   // 1-9; set to any value before startup to test that level
-	total_level_counter : byte = 7;  // Persistent counter; never wraps, keeps incrementing indefinitely
+	current_level : byte = 8;   // 1-9; set to any value before startup to test that level
+	total_level_counter : byte = 8;  // Persistent counter; never wraps, keeps incrementing indefinitely
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
@@ -2990,7 +2990,10 @@ interrupt MainRasterPlayer();
 begin	
 		
 	UpdateSprite();
-	if DEBUG_ENABLE = 1 then
+		
+	if DEBUG_ENABLE = 0 then
+		call(sidfile_1_play)
+	else 
 		SCREEN_BG_COL := BLACK;
 		
 	StartIRQ(0);
@@ -3064,10 +3067,8 @@ begin
 		UpdateMonsters(52);  // Set screen positions for row 2
 		AnimateMonsters(2); // Set image pointers for row 2
 	end;
-
 	
 	RasterIRQ(MainRasterPlayer(), 222, 0);
-	
 	if DEBUG_ENABLE = 1 then
 		SCREEN_BG_COL := GREEN;
 		
@@ -3164,11 +3165,6 @@ begin
 		else
 			RasterIRQ(MainRasterPlayer(), 222, 0);
 	end;
-
-	if DEBUG_ENABLE = 0 then
-		call(sidfile_1_play)
-	else 
-		SCREEN_BG_COL := BLACK;
 
 	// Game logic runs unconditionally — intermission uses separate chain
 	ShowBullet();	
