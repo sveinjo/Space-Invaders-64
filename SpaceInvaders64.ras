@@ -57,6 +57,7 @@ var
 	
 	Score : integer = 0;    // Player score (integer — byte overflows at a 300pt saucer hit)
 	score_dirty : byte = 1; // 1 = score changed this frame; DisplayScore will refresh the screen
+	level_dirty : byte = 1;
 
 	const GET_READY_ROW : byte = 12;  // screen row for text
 	const GET_READY_LINE1_COL : byte = 8;   // "GET READY FOR" (13 chars) centered on 29-char playfield
@@ -1300,6 +1301,16 @@ Begin
 		moveto(33, 3, hi(screen_char_loc));
 		PrintDecimal(Score, 5);
 		score_dirty := 0;
+	end;
+end;
+
+Procedure DisplayLevel();
+Begin
+	if level_dirty <> 0 then
+	begin
+		moveto(37, 13, hi(screen_char_loc));
+		PrintDecimal(total_level_counter, 1);
+		level_dirty := 0;
 	end;
 end;
 
@@ -3535,6 +3546,8 @@ begin
 	// Enter intermission mode.
 	get_ready_mode := 1;
 	get_ready_prev_fire := 0;
+	
+	level_dirty := 1;
 
 	// Install intermission raster chain — music resumes on the very next frame.
 	RasterIRQ(IntermissionChain(), 0, 0);
@@ -3663,5 +3676,6 @@ begin
 		end;
 		if (score_dirty = 1) then
 			DisplayScore();
+		DisplayLevel();
 	end;
 end.
