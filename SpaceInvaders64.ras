@@ -654,6 +654,7 @@ var
 	sub_i : byte;
 	ub_sprite_index : byte;
 	ub_sprite : byte;
+	ub_anim_offset : byte;
 begin
 	sub_i := 0;
 	while sub_i <= 2 do
@@ -662,7 +663,20 @@ begin
 		if ufo_bullet_active[sub_i] <> 0 then
 		begin
 			if ufo_bullet_active[sub_i] = 1 then
-				ub_sprite_index := ufo_bullet_anim_start[sub_i] + ufo_bullet_anim_index[sub_i]
+			begin
+				// Squiggly (slot 2): bounce animation 0→1→2→1 (frames 5,6,7,6)
+				// Others: linear animation 0→1→2→3 (frames start+0,+1,+2,+3)
+				if sub_i = 2 then
+				begin
+					if ufo_bullet_anim_index[sub_i] = 3 then
+						ub_anim_offset := 1  // Map index 3 back to offset 1 for bounce
+					else
+						ub_anim_offset := ufo_bullet_anim_index[sub_i];
+				end
+				else
+					ub_anim_offset := ufo_bullet_anim_index[sub_i];
+				ub_sprite_index := ufo_bullet_anim_start[sub_i] + ub_anim_offset;
+			end
 			else
 				ub_sprite_index := 4;  // Explosion frame
 
