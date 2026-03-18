@@ -3537,7 +3537,16 @@ begin
 			if prev_direction <> enemy_direction then
 			begin
 				if ((ENABLE_DROP_FLOOR = 0) or (GetLowestEnemyBottomY() < player_sprite_y - MONSTER_DROP_AMOUNT)) then
-					monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT;
+					monster_base_y := monster_base_y + MONSTER_DROP_AMOUNT
+				else
+				begin
+					// Formation reached player floor: immediate game over.
+					// TODO: Perhaps add a little more ceremony here. Also maybe make this variable dependent for debugging.
+					sprite_bitmask := 0;
+					game_over_mode := 1;
+					get_ready_mode := 1;
+					pending_palette := 1;
+				end;
 			end
 			else begin
 				// No direction change: move horizontally.
