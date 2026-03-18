@@ -52,6 +52,7 @@ var
 	
 	advancelevel_palette_level : byte;
 	flagGotoNextLevel : byte = 0;
+	startUpDirty : byte = 1;
 	
 	//const useKernal:byte=0;
 	
@@ -1109,14 +1110,14 @@ begin
 	// Disable all sprites  during game over screen
 	sprite_bitmask := 0;
 
-	// ── Buffer screen chars+colors (9 chars centered at col 10 = $05E8 + offset 10) ────
-	// "GAME OVER" is 9 chars. Screen row 12: $05E8 + 9 = $05F1  (9 chars)
-	// Centered: (40 - 9) / 2 = 15.5, use col 10.5 → $05E8 + 10 = $05F2
+	// ── Buffer screen chars+colors (9 chars centered at col 10 on row 12) ────
+	// "GAME OVER" is 9 chars. Screen row 12 base = $05E0.
+	// For STARTUP playfield-centering we print at col 10, so address = $05EA.
 	asm("
         ldx #8
-sgot_buf lda $05F2,x
+sgot_buf lda $05EA,x
         sta game_over_char_buffer,x
-        lda $D9F2,x
+        lda $D9EA,x
         sta game_over_color_buffer,x
         dex
         bpl sgot_buf
@@ -1125,7 +1126,7 @@ sgot_buf lda $05F2,x
 	asm("
         ldx #8
         lda #$0E
-sgot_col sta $D9F2,x
+sgot_col sta $D9EA,x
         dex
         bpl sgot_col
 	");
@@ -1140,9 +1141,9 @@ begin
 	asm("
         ldx #8
 hgot_lp lda game_over_char_buffer,x
-        sta $05F2,x
+	sta $05EA,x
         lda game_over_color_buffer,x
-        sta $D9F2,x
+	sta $D9EA,x
         dex
         bpl hgot_lp
 	");
@@ -1237,6 +1238,68 @@ hst_l3 lda startup_char_buffer+18,x
 	dex
 	bpl hst_l3
 	");
+end;
+
+// ---------------------------------------------------------------------------
+// ResetGameState
+//   Initializes/resets all game state variables to a clean state.
+//   Called at both initial startup and when restarting after game over.
+//   Encapsulates all the state setup so changes are made in one place.
+// ---------------------------------------------------------------------------
+procedure ResetGameState();
+begin
+	// Reset level progression
+	current_level := 0;
+	total_level_counter := 0;
+	startup_mode := 1;
+	
+	// Reset player state
+	remaining_ships := 1;
+	lifeLostDirty := 0;
+	player_respawn_state := 0;
+	player_respawn_counter := 0;
+	player_explosion_anim_index := 0;
+	player_explosion_flash_counter := 0;
+	player_bullet_active := 0;
+	player_sprite_x := PLAYER_MIN_X;
+	player_sprite_y := PLAYER_POS_Y;
+	
+	// Reset enemy formation state
+	numberOfEnemies := 0;
+	enemy_direction := 1;
+	enemyMoveCounter := INITIAL_INVADER_COUNT;
+	current_speed_delay := 50;
+	pending_edge_rescan := 0;
+	enemy_march_tick := 0;
+	monster_animation_frame := 0;
+	
+	// Reset UFO state
+	ufo_active := 0;
+	ufo_spawn_timer := 1536;
+	
+	// Reset intermission flags
+	get_ready_mode := 0;
+	get_ready_prev_fire := 0;
+	game_over_mode := 0;
+	game_over_prev_fire := 0;
+	level_advance_pending := 0;
+	level_advance_ready := 0;
+	startup_prev_inputs := STARTUP_INPUT_FIRE;  // Mark fire as already processed to prevent immediate re-trigger
+	
+	// Clear sprite_bitmask first, then enable all sprites for gameplay
+	// This ensures consistent state regardless of previous sprite_bitmask value
+	/*sprite_bitmask := 0;
+	togglebit(sprite_bitmask, useSprite, 1);
+	togglebit(sprite_bitmask, monsterSprite1, 1);
+	togglebit(sprite_bitmask, monsterSprite2, 1);
+	togglebit(sprite_bitmask, monsterSprite3, 1);
+	togglebit(sprite_bitmask, monsterSprite4, 1);
+	togglebit(sprite_bitmask, ES_SHOT_SPRITE1, 1);
+	togglebit(sprite_bitmask, ES_SHOT_SPRITE2, 1);
+	togglebit(sprite_bitmask, ES_SHOT_SPRITE3, 1);*/
+	
+	lifeLostDirty := 1;
+	startUpDirty := 1;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1732,7 +1795,7 @@ var
 	bullet_sprite_index : byte;
 	bullet_color : byte;
 begin	
-	
+	togglebit(sprite_bitmask, useSprite, 1);
 	// Only display bullet/explosion if the sprite box fits entirely above the player raster line.
 	// The VIC-II triggers sprite DMA at the TOP of the sprite box (player_bullet_y), not at the
 	// pixel content. DMA runs for SPRITE_HEIGHT (21) lines. If player_bullet_y + SPRITE_HEIGHT >= 224,
@@ -1781,9 +1844,9 @@ procedure UpdatePlayerBullet();
 var
 	const BULLET_SPEED       : byte = 4;  // Pixels per frame upward
 	const EXPLOSION_DURATION : byte = 16; // Frames to show explosion
-begin
-	if player_bullet_active = 1 then
-	begin
+begin	
+	if player_bullet_active = 1 then	
+	begin		
 		// Move bullet up
 		if player_bullet_y > BULLET_SPEED then
 		begin
@@ -1872,9 +1935,15 @@ begin
 			if remaining_ships = 0 then
 			begin
 				// No lives left: trigger game over
+				// Disable all sprites IMMEDIATELY to prevent visual corruption during transition
+				sprite_bitmask := 0;
 				game_over_mode := 1;
 				get_ready_mode := 1;  // Use intermission screen framework
-				// Defer to interrupt for IRQ-safe state transitions
+				// Signal IntermissionChain to display game over text and set palette
+				pending_palette := 1;
+				// Set a neutral palette for game over screen
+				//pal_col1:=BLUE;   pal_col2:=PURPLE; pal_col3:=GREY;
+				//pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_BLUE; pal_col6:=DARK_GREY;
 			end
 			else
 			begin
@@ -2805,10 +2874,10 @@ begin
 	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
 	
 	Screen::PrintString("     LEVEL",29,11,#Screen::screen0);
-	Screen::PrintString("         1",29,13,#Screen::screen0);
+	//Screen::PrintString("         1",29,13,#Screen::screen0);
 	
 	Screen::PrintString("     LIVES",29,21,#Screen::screen0);
-	Screen::PrintString("         3",29,23,#Screen::screen0);
+	//Screen::PrintString("         3",29,23,#Screen::screen0);
 	
 	//Screen::PrintString("¤¤¤",4,18,#Screen::screen0);
 	//Screen::PrintString("lmn",4,19,#Screen::screen0);
@@ -3345,10 +3414,12 @@ begin
 			if (game_over_prev_fire = 0) then
 			begin
 				HideGameOverText();
-				game_over_mode := 0;
-				get_ready_mode := 0;
-				startup_mode := 1;
 				game_over_prev_fire := 1;
+				
+				// Reset all game state for clean return to startup
+				ResetGameState();
+				// After reset, set startup_mode to trigger startup screen
+				startup_mode := 1;
 			end;
 		end
 		else if (get_ready_prev_fire = 0 and level_advance_ready = 1) then
@@ -3499,7 +3570,10 @@ begin
 	// pattern in MainRasterChain.  CheckBulletCollision (kill frame), UpdateTick
 	// (edge-rescan frame), and DoStarfield can all overrun.  If the latch is written
 	// after line 0 has passed the beam we lose a full frame on the chain.
-	RasterIRQ(MainRasterChain(), 0, 0);
+	if ((get_ready_mode = 1) or (game_over_mode = 1)) then
+		RasterIRQ(IntermissionChain(), 0, 0)
+	else
+		RasterIRQ(MainRasterChain(), 0, 0);
 
 	// Run game logic unconditionally — intermission uses separate chain
 	CheckShieldCollision();	
@@ -3738,16 +3812,6 @@ begin
 	// Update player respawn/explosion animation
 	UpdatePlayerRespawn();
 
-	// Display player explosion animation or normal player sprite
-	if player_respawn_state = 1 then
-		ShowPlayerExplosion()
-	else if player_respawn_state = 0 then
-	begin
-		// Normal gameplay: show player sprite
-		SetSpriteLoc(useSprite, @spriteLoc/64 + 0, useBank);
-		SpritePos(player_sprite_x, player_sprite_y, useSprite);
-	end;
-
 	
 	
 
@@ -3951,13 +4015,10 @@ begin
 	//PreventIRQ();
 
 	DisplayText();
+	ResetGameState();
 
-	// Startup menu starts at level 0 and lets player pick level 1-9.
-	startup_mode := 1;
-	current_level := 1;
-	total_level_counter := 0;
-	startup_prev_inputs := 0;
-	ShowStartupText();
+	
+	
 	RasterIRQ(StartupChain(), 0, 0);
 
 	// ONLY NOW arm the VIC raster IRQ hardware, and ONLY NOW open the CPU interrupt gate.
@@ -3975,6 +4036,17 @@ begin
 	// every frame while MakeMonsters() is executing.
 	while 1 do
 	begin
+		if (total_level_counter = 0 and startUpDirty = 1) then 
+		begin
+			// Startup menu starts at level 0 and lets player pick level 1-9.
+			startup_mode := 1;
+			current_level := 1;
+			total_level_counter := 0;
+			startup_prev_inputs := STARTUP_INPUT_FIRE;
+	
+			startUpDirty := 0;			
+			ShowStartupText();
+		end;
 		if level_advance_pending = 1 then
 		begin
 			level_advance_pending := 0;
