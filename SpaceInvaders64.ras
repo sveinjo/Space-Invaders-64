@@ -1164,16 +1164,16 @@ end;
 procedure ShowStartupText();
 var
 	
-	// ASCII art lines - using character 108 (solid block) for visual fill
-	art_line1 : string = ("]]]]]]]]      ]]]]]]");
-	art_line2 : string = ("]]          ]]]]]]]]]]");
-	art_line3 : string = ("           ]]]]]]]]]]]]");
-	art_line4 : string = ("]]]]]]]]  ]] ]] ]] ]] ]]");
-	art_line5 : string = ("]]    ]] ]]]]]]]]]]]]]]]]");
-	art_line6 : string = ("]]]]]]]]   ]]]  ]]  ]]]");
-	art_line7 : string = ("      ]]    ]        ]");
-	art_line8 : string = ("]]    ]]");
-	art_line9 : string = ("]]]]]]]] INVADERS MMXXVI");
+	// ASCII art lines - using character "n" (solid block) for visual fill
+	art_line1 : string = ("nnnnnnnn      nnnnnn");
+	art_line2 : string = ("nn          nnnnnnnnnn");
+	art_line3 : string = ("           nnnnnnnnnnnn");
+	art_line4 : string = ("nnnnnnnn  nn nn nn nn nn");
+	art_line5 : string = ("nn    nn nnnnnnnnnnnnnnnn");
+	art_line6 : string = ("nnnnnnnn   nnn  nn  nnn");
+	art_line7 : string = ("      nn    n        n");
+	art_line8 : string = ("nn    nn");
+	art_line9 : string = ("nnnnnnnn INVADERS MMXXVI");
 	
 	
 	startup_line2 : string = ("FIRE BUTTON TO START");
@@ -4159,6 +4159,23 @@ begin
 	RasterIRQ(IntermissionChain(), 0, 0);
 end;
 
+// ---------------------------------------------------------------------------
+// CreateSolidBlock
+//   Fills character code 108 completely with lit pixels ($FF) to create
+//   a solid block character. Character 108 is at charset_base + 108*8.
+//   Using standard C64 charset at $3000: character 108 = $3360.
+// ---------------------------------------------------------------------------
+procedure CreateSolidBlock();
+begin
+	asm("
+        lda #$FF
+        ldx #7
+csb_loop sta $3370,x
+        dex
+        bpl csb_loop
+	");
+end;
+
 
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -4240,6 +4257,7 @@ begin
 	// vector (Kernal is banked out, that address is uninitialized RAM) and crashes.
 	//PreventIRQ();
 
+	
 	DisplayText();
 	ResetGameState();
 
@@ -4257,6 +4275,8 @@ begin
 	//call(sidfile_1_play); // main-context playback (disabled)
 	//call(sidfile_1_play); // alternative: keep commented if you prefer raster IRQ playback
 
+	CreateSolidBlock();
+	
 	//loop();
 	// Main context spin-loop: raster IRQs preempt freely here, so music advances
 	// every frame while MakeMonsters() is executing.
