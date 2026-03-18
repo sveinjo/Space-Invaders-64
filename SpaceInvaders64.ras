@@ -1171,7 +1171,7 @@ begin
 	// Display level digit at column 20 of row 17 (between parentheses in "LEVEL SELECT ( )")
 	// Row 17 starts at $06A8, text starts at column 6 ($06AE), digit position is +14 = $06BC
 	poke(^$06BC, 0, current_level + $30);
-	poke(^$D6BC, 0, STARTUP_TEXT_COLOR);
+	poke(^$DABC, 0, STARTUP_TEXT_COLOR);
 end;
 
 procedure ShowStartupText();
@@ -1505,6 +1505,7 @@ buf17_loop lda $06AE,x
 	bpl *-6
 	lda #$0E
 	sta $DABB
+	sta $DABC
 	sta $DABD
 	");
 	
@@ -4290,16 +4291,16 @@ begin
 		pal_col4:=WHITE;  pal_col5:=LIGHT_BLUE; pal_col6:=BLUE;           // Various			
 	end
 	else if advancelevel_palette_level = 4 then begin
-		pal_col1:=BLUE;   pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
-		pal_col4:=WHITE;  pal_col5:=CYAN;   pal_col6:=DARK_GREY;          // Ice Blue			
+		pal_col1:=BLUE;  pal_col2:=GREEN;  pal_col3:=GREY;
+		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_GREEN; pal_col6:=DARK_GREY; // Jungle Green				
 	end
 	else if advancelevel_palette_level = 5 then begin
 		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=GREY;
 		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BROWN;              // Lava		
 	end
 	else if advancelevel_palette_level = 6 then begin		
-		pal_col1:=BLUE;  pal_col2:=GREEN;  pal_col3:=GREY;
-		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_GREEN; pal_col6:=DARK_GREY; // Jungle Green		
+		pal_col1:=BLUE;   pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
+		pal_col4:=WHITE;  pal_col5:=CYAN;   pal_col6:=DARK_GREY;          // Ice Blue					
 	end
 	else if advancelevel_palette_level = 7 then begin
 		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=WHITE;
