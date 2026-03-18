@@ -56,7 +56,7 @@ var
 	
 	//const useKernal:byte=0;
 	
-	Score : integer = 0;    // Player score (integer — byte overflows at a 300pt saucer hit)
+	score : integer = 0;    // Player score (integer — byte overflows at a 300pt saucer hit)
 	score_dirty : byte = 1; // 1 = score changed this frame; DisplayScore will refresh the screen
 	level_dirty : byte = 1;
 
@@ -508,7 +508,7 @@ begin
 		player_bullet_active := 0;
 
 		uc_score_raw := Helpers::GetArcadeSaucerScore(player_shot_count);
-		Score := Score + (uc_score_raw * 10);
+		score := score + (uc_score_raw * 10);
 		score_dirty := 1;
 		if uc_score_raw >= 30 then
 			ufo_score_sprite := UFO_SCORE_SPRITE_300
@@ -534,7 +534,9 @@ end;
 //     Column pitch = 18 px (MONSTER_SPACING / 3 = 54/3 = 18).
 //     spawn_col 0-11  →  block_col = spawn_col/3,  enemy_col = spawn_col mod 3
 //     Screen X = monster_base_x + block_col*MONSTER_SPACING + enemy_col*18 - 6
-//     Screen Y = monster_base_y + form_row*MONSTER_ROW_OFFSET + sub_row*14 + 4
+//     Screen Y uses per-sub-row offsets so shots appear just below visible alien pixels:
+//       sub_row 0 (top enemy):    monster_base_y + form_row*MONSTER_ROW_OFFSET - 2
+//       sub_row 1 (bottom enemy): monster_base_y + form_row*MONSTER_ROW_OFFSET + 11
 //
 //   Scan order: form_row 2→0 (bottom→top), sub_row 1→0 within each block row.
 //   Stops at the first (lowest) alive alien found and activates the shot slot.
@@ -587,10 +589,14 @@ var
 					              + spawn_enemy_col * 18
 					              - 6;
 					spawn_x_calc := monster_base_x + spawn_x_calc;
-					spawn_y_calc := spawn_form_row * MONSTER_ROW_OFFSET
-					              + spawn_sub_row * 14
-					              + 4;
-					spawn_y_calc := monster_base_y + spawn_y_calc;
+					spawn_y_calc := monster_base_y + spawn_form_row * MONSTER_ROW_OFFSET;
+					if spawn_sub_row = 0 then
+					begin
+						//dec(spawn_y_calc);
+						//dec(spawn_y_calc);
+					end
+					else
+						spawn_y_calc := spawn_y_calc + 14;
 					ufo_bullet_x[spawn_slot]          := spawn_x_calc;
 					ufo_bullet_y[spawn_slot]          := spawn_y_calc;
 					ufo_bullet_active[spawn_slot]     := 1;
@@ -1480,6 +1486,10 @@ end;
 // ---------------------------------------------------------------------------
 procedure ResetGameState();
 begin
+	// Reset score
+	score := 0;
+	score_dirty := 1;
+	
 	// Reset level progression
 	current_level := 0;
 	total_level_counter := 0;
@@ -1753,7 +1763,7 @@ Begin
 	if score_dirty <> 0 then
 	begin
 		moveto(33, 3, hi(screen_char_loc));
-		PrintDecimal(Score, 5);
+		PrintDecimal(score, 5);
 		score_dirty := 0;
 	end;
 end;
@@ -2271,7 +2281,7 @@ var
 								cbc_found_hit := 1;
 								
 								// Award points for the kill and flag the display for refresh.
-								Score := Score + 12;
+								score := score + 12;
 								score_dirty := 1;
 							end;
 						end;
