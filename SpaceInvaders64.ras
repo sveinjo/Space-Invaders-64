@@ -925,9 +925,15 @@ begin
 				// Bullet hitbox Y:  [bullet_y+15, bullet_y+21]
 				// Overlap when: bullet_y + 15 <= player_y + 8 AND player_y <= bullet_y + 21
 				// Simplifies to: bullet_y <= player_y-7 AND bullet_y >= player_y-21
-				cesp_y_overlap := 0;
+				
+				/*cesp_y_overlap := 0;
 				if ((ufo_bullet_y[cesp_i] >= player_sprite_y - 21) and
 				   (ufo_bullet_y[cesp_i] <= player_sprite_y - 7)) then
+					cesp_y_overlap := 1;*/
+				
+				cesp_y_overlap := 0;
+				if ((ufo_bullet_y[cesp_i] >= player_sprite_y - 21) and
+				   (ufo_bullet_y[cesp_i] <= player_sprite_y - 13)) then	
 					cesp_y_overlap := 1;
 				
 				if cesp_y_overlap = 1 then
@@ -1480,7 +1486,7 @@ begin
 	startup_mode := 1;
 	
 	// Reset player state
-	remaining_ships := 1;
+	remaining_ships := 4;
 	lifeLostDirty := 0;
 	player_respawn_state := 0;
 	player_respawn_counter := 0;
