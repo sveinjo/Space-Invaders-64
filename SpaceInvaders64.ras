@@ -102,7 +102,7 @@ var
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
-	const LEVELS_WITH_SHIELDS : byte = 8;  // Shields regenerate in levels 1-4 (total_level_counter < 5)
+	const LEVELS_WITH_SHIELDS : byte = 7;  // Shields regenerate in levels 1-4 (total_level_counter < 5)
 
 	// Get Ready intermission state
 	get_ready_mode : byte = 0;  // 0 = normal play, 1 = showing "Get ready" screen
