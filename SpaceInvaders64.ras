@@ -69,7 +69,7 @@ var
 	const STARTUP_TITLE_ROW : byte = 13;
 	const STARTUP_TITLE_COL : byte = 7;         // "SPACE INVADERS" (14 chars) centered on 29-char playfield
 	const STARTUP_LEVEL_ROW : byte = 17;
-	const STARTUP_LEVEL_COL : byte = 7;         // "LEVEL SELECT: X" (15 chars) centered on 29-char playfield
+	const STARTUP_LEVEL_COL : byte = 6;         // "LEVEL SELECT: X" (16 chars) moved one char left
 	const STARTUP_TEXT_COLOR : byte = light_blue;
 	
 	// Game constants
@@ -1155,15 +1155,15 @@ end;
 // ---------------------------------------------------------------------------
 procedure UpdateStartupLevelSelectDigit();
 begin
-	poke(^$06BD, 0, current_level + $30);
-	poke(^$DABD, 0, STARTUP_TEXT_COLOR);
+	poke(^$06BC, 0, current_level + $30);
+	poke(^$DABC, 0, STARTUP_TEXT_COLOR);
 end;
 
 procedure ShowStartupText();
 var
 	startup_line1 : string = ("PLAY");
 	startup_line2 : string = ("SPACE INVADERS");
-	startup_line3 : string = ("LEVEL SELECT: ");
+	startup_line3 : string = ("LEVEL SELECT ( )");
 begin
 	asm("
 	ldx #3
@@ -1180,10 +1180,10 @@ sst_buf2 lda $060F,x
 	sta startup_color_buffer+4,x
 	dex
 	bpl sst_buf2
-	ldx #14
-sst_buf3 lda $06AF,x
+	ldx #15
+sst_buf3 lda $06AE,x
 	sta startup_char_buffer+18,x
-	lda $DAAF,x
+	lda $DAAE,x
 	sta startup_color_buffer+18,x
 	dex
 	bpl sst_buf3
@@ -1205,9 +1205,9 @@ sst_col1 sta $D9C4,x
 sst_col2 sta $DA0F,x
 	dex
 	bpl sst_col2
-	ldx #13
+	ldx #15
 	lda #$0E
-sst_col3 sta $DAAF,x
+sst_col3 sta $DAAE,x
 	dex
 	bpl sst_col3
 	");
@@ -1230,11 +1230,11 @@ hst_l2 lda startup_char_buffer+4,x
 	sta $DA0F,x
 	dex
 	bpl hst_l2
-	ldx #14
+	ldx #15
 hst_l3 lda startup_char_buffer+18,x
-	sta $06AF,x
+	sta $06AE,x
 	lda startup_color_buffer+18,x
-	sta $DAAF,x
+	sta $DAAE,x
 	dex
 	bpl hst_l3
 	");
