@@ -1164,16 +1164,16 @@ end;
 procedure ShowStartupText();
 var
 	
-	// ASCII art lines (no padding - centered via column offset)
-	art_line1 : string = ("XXXXXXXX      XXXXXX");
-	art_line2 : string = ("XX          XXXXXXXXXX");
-	art_line3 : string = ("           XXXXXXXXXXXX");
-	art_line4 : string = ("XXXXXXXX  XX XX XX XX XX");
-	art_line5 : string = ("XX    XX XXXXXXXXXXXXXXXX");
-	art_line6 : string = ("XXXXXXXX   XXX  XX  XXX");
-	art_line7 : string = ("      XX    X        X");
-	art_line8 : string = ("XX    XX");
-	art_line9 : string = ("XXXXXXXX INVADERS MMXXVI");
+	// ASCII art lines - using character 108 (solid block) for visual fill
+	art_line1 : string = ("]]]]]]]]      ]]]]]]");
+	art_line2 : string = ("]]          ]]]]]]]]]]");
+	art_line3 : string = ("           ]]]]]]]]]]]]");
+	art_line4 : string = ("]]]]]]]]  ]] ]] ]] ]] ]]");
+	art_line5 : string = ("]]    ]] ]]]]]]]]]]]]]]]]");
+	art_line6 : string = ("]]]]]]]]   ]]]  ]]  ]]]");
+	art_line7 : string = ("      ]]    ]        ]");
+	art_line8 : string = ("]]    ]]");
+	art_line9 : string = ("]]]]]]]] INVADERS MMXXVI");
 	
 	
 	startup_line2 : string = ("FIRE BUTTON TO START");
