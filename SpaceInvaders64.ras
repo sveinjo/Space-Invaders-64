@@ -1175,22 +1175,6 @@ begin
 end;
 
 procedure ShowStartupText();
-var
-	
-	// ASCII art lines - using character "n" (solid block) for visual fill
-	art_line1 : string = ("nnnnnnnn      nnnnnn");
-	art_line2 : string = ("nn          nnnnnnnnnn");
-	art_line3 : string = ("           nnnnnnnnnnnn");
-	art_line4 : string = ("nnnnnnnn  nn nn nn nn nn");
-	art_line5 : string = ("nn    nn nnnnnnnnnnnnnnnn");
-	art_line6 : string = ("nnnnnnnn   nnn  nn  nnn");
-	art_line7 : string = ("      nn    n        n");
-	art_line8 : string = ("nn    nn");
-	art_line9 : string = ("nnnnnnnn INVADERS MMXXVI");
-	
-	
-	startup_line2 : string = ("FIRE BUTTON TO START");
-	startup_line3 : string = ("LEVEL SELECT ( )");
 begin
 	asm("
 	// Save art block (rows 1-9) at column 2 - all lines centered at same column
@@ -1294,90 +1278,234 @@ buf17_loop lda $06AE,x
 	bpl buf17_loop
 	");
 
-	// Display art lines - all centered at column 2 (for 25-char widest line)
-	Screen::PrintString(#art_line1, 2, 1, #Screen::screen0);
-	Screen::PrintString(#art_line2, 2, 2, #Screen::screen0);
-	Screen::PrintString(#art_line3, 2, 3, #Screen::screen0);
-	Screen::PrintString(#art_line4, 2, 4, #Screen::screen0);
-	Screen::PrintString(#art_line5, 2, 5, #Screen::screen0);
-	Screen::PrintString(#art_line6, 2, 6, #Screen::screen0);
-	Screen::PrintString(#art_line7, 2, 7, #Screen::screen0);
-	Screen::PrintString(#art_line8, 2, 8, #Screen::screen0);
-	Screen::PrintString(#art_line9, 2, 9, #Screen::screen0);
+	// Draw ASCII-art sparsely: write only non-space runs so starfield chars remain in gaps.
+	// Row 1: "nnnnnnnn      nnnnnn"
+	Screen::PrintString(("nnnnnnnn"), 2, 1, #Screen::screen0);
+	Screen::PrintString(("nnnnnn"), 16, 1, #Screen::screen0);
+	// Row 2: "nn          nnnnnnnnnn"
+	Screen::PrintString(("nn"), 2, 2, #Screen::screen0);
+	Screen::PrintString(("nnnnnnnnnn"), 14, 2, #Screen::screen0);
+	// Row 3: "           nnnnnnnnnnnn"
+	Screen::PrintString(("nnnnnnnnnnnn"), 13, 3, #Screen::screen0);
+	// Row 4: "nnnnnnnn  nn nn nn nn nn"
+	Screen::PrintString(("nnnnnnnn"), 2, 4, #Screen::screen0);
+	Screen::PrintString(("nn"), 12, 4, #Screen::screen0);
+	Screen::PrintString(("nn"), 15, 4, #Screen::screen0);
+	Screen::PrintString(("nn"), 18, 4, #Screen::screen0);
+	Screen::PrintString(("nn"), 21, 4, #Screen::screen0);
+	Screen::PrintString(("nn"), 24, 4, #Screen::screen0);
+	// Row 5: "nn    nn nnnnnnnnnnnnnnnn"
+	Screen::PrintString(("nn"), 2, 5, #Screen::screen0);
+	Screen::PrintString(("nn"), 8, 5, #Screen::screen0);
+	Screen::PrintString(("nnnnnnnnnnnnnnnn"), 11, 5, #Screen::screen0);
+	// Row 6: "nnnnnnnn   nnn  nn  nnn"
+	Screen::PrintString(("nnnnnnnn"), 2, 6, #Screen::screen0);
+	Screen::PrintString(("nnn"), 13, 6, #Screen::screen0);
+	Screen::PrintString(("nn"), 18, 6, #Screen::screen0);
+	Screen::PrintString(("nnn"), 22, 6, #Screen::screen0);
+	// Row 7: "      nn    n        n"
+	Screen::PrintString(("nn"), 8, 7, #Screen::screen0);
+	Screen::PrintString(("n"), 14, 7, #Screen::screen0);
+	Screen::PrintString(("n"), 23, 7, #Screen::screen0);
+	// Row 8: "nn    nn"
+	Screen::PrintString(("nn"), 2, 8, #Screen::screen0);
+	Screen::PrintString(("nn"), 8, 8, #Screen::screen0);
+	// Row 9: "nnnnnnnn INVADERS MMXXVI"
+	Screen::PrintString(("nnnnnnnn"), 2, 9, #Screen::screen0);
+	Screen::PrintString(("INVADERS"), 11, 9, #Screen::screen0);
+	Screen::PrintString(("MMXXVI"), 20, 9, #Screen::screen0);
 
-	// Display startup lines with color
-	Screen::PrintString(#startup_line2, 4, 13, #Screen::screen0);
-	Screen::PrintString(#startup_line3, 6, 17, #Screen::screen0);
+	// Startup helper lines, sparse segments (preserve starfield chars in spaces).
+	// Row 13: "FIRE BUTTON TO START"
+	Screen::PrintString(("FIRE"), 4, 13, #Screen::screen0);
+	Screen::PrintString(("BUTTON"), 9, 13, #Screen::screen0);
+	Screen::PrintString(("TO"), 16, 13, #Screen::screen0);
+	Screen::PrintString(("START"), 19, 13, #Screen::screen0);
+	// Row 17: "LEVEL SELECT ( )"
+	Screen::PrintString(("LEVEL"), 6, 17, #Screen::screen0);
+	Screen::PrintString(("SELECT"), 12, 17, #Screen::screen0);
+	Screen::PrintString(("("), 19, 17, #Screen::screen0);
+	Screen::PrintString((")"), 21, 17, #Screen::screen0);
 	
-	// Set colors for all displayed rows
+	// Set colors for all startup segments (ASCII art + helper lines), light_blue.
 	asm("
-	// Art block (rows 1-9) at column 2, light_blue
-	ldx #24
+	// Row 1 segments
+	ldx #7
 	lda #$0E
-art_col1 sta $D82A,x
+	sta $D82A,x
 	dex
-	bpl art_col1
-	
-	ldx #24
+	bpl *-6
+	ldx #5
 	lda #$0E
-art_col2 sta $D852,x
+	sta $D838,x
 	dex
-	bpl art_col2
-	
-	ldx #24
+	bpl *-6
+
+	// Row 2 segments
+	ldx #1
 	lda #$0E
-art_col3 sta $D87A,x
+	sta $D852,x
 	dex
-	bpl art_col3
-	
-	ldx #24
+	bpl *-6
+	ldx #9
 	lda #$0E
-art_col4 sta $D8A2,x
+	sta $D85E,x
 	dex
-	bpl art_col4
-	
-	ldx #24
+	bpl *-6
+
+	// Row 3 segment
+	ldx #11
 	lda #$0E
-art_col5 sta $D8CA,x
+	sta $D885,x
 	dex
-	bpl art_col5
-	
-	ldx #24
+	bpl *-6
+
+	// Row 4 segments
+	ldx #7
 	lda #$0E
-art_col6 sta $D8F2,x
+	sta $D8A2,x
 	dex
-	bpl art_col6
-	
-	ldx #24
+	bpl *-6
+	ldx #1
 	lda #$0E
-art_col7 sta $D91A,x
+	sta $D8AC,x
 	dex
-	bpl art_col7
-	
-	ldx #24
+	bpl *-6
+	ldx #1
 	lda #$0E
-art_col8 sta $D942,x
+	sta $D8AF,x
 	dex
-	bpl art_col8
-	
-	ldx #24
+	bpl *-6
+	ldx #1
 	lda #$0E
-art_col9 sta $D96A,x
+	sta $D8B2,x
 	dex
-	bpl art_col9
-	
-	// Startup text lines, light_blue
-	ldx #19
+	bpl *-6
+	ldx #1
 	lda #$0E
-col_startup2 sta $DA0C,x
+	sta $D8B5,x
 	dex
-	bpl col_startup2
-	
+	bpl *-6
+	ldx #1
+	lda #$0E
+	sta $D8B8,x
+	dex
+	bpl *-6
+
+	// Row 5 segments
+	ldx #1
+	lda #$0E
+	sta $D8CA,x
+	dex
+	bpl *-6
+	ldx #1
+	lda #$0E
+	sta $D8D0,x
+	dex
+	bpl *-6
 	ldx #15
 	lda #$0E
-col_startup3 sta $DAAE,x
+	sta $D8D3,x
 	dex
-	bpl col_startup3
+	bpl *-6
+
+	// Row 6 segments
+	ldx #7
+	lda #$0E
+	sta $D8F2,x
+	dex
+	bpl *-6
+	ldx #2
+	lda #$0E
+	sta $D8FD,x
+	dex
+	bpl *-6
+	ldx #1
+	lda #$0E
+	sta $D902,x
+	dex
+	bpl *-6
+	ldx #2
+	lda #$0E
+	sta $D906,x
+	dex
+	bpl *-6
+
+	// Row 7 segments
+	ldx #1
+	lda #$0E
+	sta $D920,x
+	dex
+	bpl *-6
+	lda #$0E
+	sta $D926
+	sta $D92F
+
+	// Row 8 segments
+	ldx #1
+	lda #$0E
+	sta $D942,x
+	dex
+	bpl *-6
+	ldx #1
+	lda #$0E
+	sta $D948,x
+	dex
+	bpl *-6
+
+	// Row 9 segments
+	ldx #7
+	lda #$0E
+	sta $D96A,x
+	dex
+	bpl *-6
+	ldx #7
+	lda #$0E
+	sta $D973,x
+	dex
+	bpl *-6
+	ldx #5
+	lda #$0E
+	sta $D97C,x
+	dex
+	bpl *-6
+
+	// Row 13: FIRE BUTTON TO START (sparse)
+	ldx #3
+	lda #$0E
+	sta $DA0C,x
+	dex
+	bpl *-6
+	ldx #5
+	lda #$0E
+	sta $DA11,x
+	dex
+	bpl *-6
+	ldx #1
+	lda #$0E
+	sta $DA18,x
+	dex
+	bpl *-6
+	ldx #4
+	lda #$0E
+	sta $DA1B,x
+	dex
+	bpl *-6
+	
+	// Row 17: LEVEL SELECT ( ) (sparse)
+	ldx #4
+	lda #$0E
+	sta $DAAE,x
+	dex
+	bpl *-6
+	ldx #5
+	lda #$0E
+	sta $DAB4,x
+	dex
+	bpl *-6
+	lda #$0E
+	sta $DABB
+	sta $DABD
 	");
 	
 	UpdateStartupLevelSelectDigit();
