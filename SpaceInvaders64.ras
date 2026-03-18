@@ -1758,9 +1758,33 @@ end;
 //   frame: moveto + PrintDecimal, which is fine since kills are infrequent.
 //   Position: row 3, col 35 — 5-char field at the far right of the screen.
 // ---------------------------------------------------------------------------
+/*Procedure DisplayScore();
+var
+	ds_score_snapshot : integer;
+ 	ds_should_draw    : byte;
+Begin
+	ds_should_draw := 0;
+	PreventIRQ();
+	if score_dirty <> 0 then
+	begin
+		ds_score_snapshot := score;
+		score_dirty := 0;
+		ds_should_draw := 1;
+	end;
+	EnableIRQ();
+
+	if ds_should_draw <> 0 then
+	begin
+		moveto(33, 3, hi(screen_char_loc));
+		PrintDecimal(ds_score_snapshot, 5);
+	end;
+end;
+
+if (score_dirty = 1) then*/
+
 Procedure DisplayScore();
 Begin
-	if score_dirty <> 0 then
+	if (score_dirty = 1) then
 	begin
 		moveto(33, 3, hi(screen_char_loc));
 		PrintDecimal(score, 5);
@@ -4324,9 +4348,13 @@ begin
 			MakeMonsters();
 			level_advance_ready := 1;  // ungate fire-to-start in IntermissionChain
 		end;
-		if (score_dirty = 1) then
-			DisplayScore();
+		//if (score_dirty = 1) then
+		
+		DisableCIAInterrupts();
+		DisplayScore();
+		EnableIRQ();		
 		DisplayLevel();
 		DisplayLives();
+		
 	end;
 end.
