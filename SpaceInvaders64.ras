@@ -89,7 +89,7 @@ var
 	const SPRITE_HEIGHT : byte = 21;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 0;
+	const DEBUG_ENABLE : byte = 1;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	current_speed_delay : byte = 50; // frames per march step (table or linear)
@@ -102,6 +102,7 @@ var
 	const LEVEL_LAST    : byte = 9;    // wrap back to level 1 after this
 	const LEVEL_START_Y : byte = 102;  // monster_base_y on level 1
 	const LEVEL_Y_STEP  : byte = 6;    // extra pixels lower per level
+	const LEVELS_WITH_SHIELDS : byte = 8;  // Shields regenerate in levels 1-4 (total_level_counter < 5)
 
 	// Get Ready intermission state
 	get_ready_mode : byte = 0;  // 0 = normal play, 1 = showing "Get ready" screen
@@ -3177,7 +3178,7 @@ end;
 
 procedure UpdateShieldDisplayForCurrentLevel();
 begin
-	if (total_level_counter < 5 and total_level_counter > 0) then
+	if (total_level_counter < LEVELS_WITH_SHIELDS and total_level_counter > 0) then
 	begin
 		PreventIRQ();
 		Helpers::PlaceShieldBlock($06FC, 112);
@@ -4180,7 +4181,7 @@ begin
 
 	// Restore shields — IRQ-safe: glyph copies use inline ASM (no ZP);
 	// surface scan wrapped in PreventIRQ/EnableIRQ inside CopyShieldSprites.
-	if total_level_counter < 5 then
+	if total_level_counter < LEVELS_WITH_SHIELDS then
 		CopyShieldSprites();
 
 	// Signal the main-context polling loop to run ReadyMonsters + MakeMonsters.
