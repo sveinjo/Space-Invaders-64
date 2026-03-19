@@ -1916,11 +1916,77 @@ end;
 if (score_dirty = 1) then*/
 
 Procedure DisplayScore();
+var
+	ds_val : integer;
+	ds_div : byte;
 Begin
 	if (score_dirty = 1) then
 	begin
-		moveto(33, 3, hi(screen_char_loc));
-		PrintDecimal(score, 5);
+		ds_val := score;
+		
+		// Ten-thousands place
+		ds_div := 0;
+		while ds_val >= 10000 do
+		begin
+			ds_val := ds_val - 10000;
+			inc(ds_div);
+		end;
+		
+		asm("
+			lda ds_div
+			ora #$30
+			sta $049A
+		");
+		
+		// Thousands place
+		ds_div := 0;
+		while ds_val >= 1000 do
+		begin
+			ds_val := ds_val - 1000;
+			inc(ds_div);
+		end;
+		
+		asm("
+			lda ds_div
+			ora #$30
+			sta $049B
+		");
+		
+		// Hundreds place
+		ds_div := 0;
+		while ds_val >= 100 do
+		begin
+			ds_val := ds_val - 100;
+			inc(ds_div);
+		end;
+		
+		asm("
+			lda ds_div
+			ora #$30
+			sta $049C
+		");
+		
+		// Tens place
+		ds_div := 0;
+		while ds_val >= 10 do
+		begin
+			ds_val := ds_val - 10;
+			inc(ds_div);
+		end;
+		
+		asm("
+			lda ds_div
+			ora #$30
+			sta $049D
+		");
+		
+		// Ones place (remainder)
+		asm("
+			lda ds_val
+			ora #$30
+			sta $049E
+		");
+		
 		score_dirty := 0;
 	end;
 end;
@@ -4492,11 +4558,11 @@ begin
 		end;
 		//if (score_dirty = 1) then
 		
-		DisableCIAInterrupts();
+		
 		DisplayScore();
-		EnableIRQ();		
+		DisableCIAInterrupts();
 		DisplayLevel();
 		DisplayLives();
-		
+		EnableIRQ();
 	end;
 end.
