@@ -1657,7 +1657,7 @@ begin
 	level_advance_pending := 0;
 	level_advance_ready := 0;
 	startup_prev_inputs := STARTUP_INPUT_FIRE;  // Mark fire as already processed to prevent immediate re-trigger
-	
+		
 	// Clear sprite_bitmask first, then enable all sprites for gameplay
 	// This ensures consistent state regardless of previous sprite_bitmask value
 	/*sprite_bitmask := 0;
@@ -1708,6 +1708,9 @@ begin
 
 	// Exit intermission mode — IntermissionChain will see this and switch to the game chain
 	get_ready_mode := 0;
+	
+	// Reset fire button debounce to prevent immediate fire if button is still held
+	previous_fire_state := 1;
 	
 	// Re-enable all sprites for gameplay
 	togglebit(sprite_bitmask, useSprite, 1);
