@@ -286,6 +286,7 @@ var
 	@export "sprites/spritesheet.flf" "sprites/spritesheet.bin" 1664 	  	
 	sprites:incbin("sprites/spritesheet.bin", @spriteLoc); 
 	
+	
 	// Shot sprite hardware indices (use remaining hardware sprites).
 	// Stored as a lookup array so ShowEnemyShot can index by slot without if/else.
 	const ES_SHOT_SPRITE1:byte = 6;
@@ -4550,7 +4551,9 @@ begin
 			// ReadyMonsters uses inline ASM with absolute indexed addressing — no ZP
 			// pointers touched, fully IRQ-safe. PreventIRQ/EnableIRQ no longer needed.
 			ReadyMonsters();
+			//PreventIRQ();
 			PreclearLeftmostAndBottomEnemies();
+			//EnableIRQ();
 			
 			// MakeMonsters uses no ZP pointer variables — runs safely with IRQs enabled.
 			MakeMonsters();
