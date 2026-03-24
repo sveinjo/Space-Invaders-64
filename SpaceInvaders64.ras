@@ -3348,8 +3348,7 @@ var
 	test_ptr : pointer of byte;
 begin
 		
-	//moveto(29,1,hi(screen_char_loc));
-	Txt::text_colour(BLUE);
+	//moveto(29,1,hi(screen_char_loc));	
 	Screen::PrintString(" ",29,0,#Screen::screen0);
 	
 	Screen::PrintString("  HI-SCORE",29,0,#Screen::screen0);
@@ -4454,6 +4453,7 @@ end;
 // for its character set, initialise the pointers and start the raster chain off.
 // ---------------------------------------------------------------------------------------------------------------------------------
 begin
+	ClearScreen(LIGHT_BLUE, ^$D800);
 	/*MakeSprites();
 	
 	InitSid(sidfile_1_init);
