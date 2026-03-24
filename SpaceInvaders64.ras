@@ -53,6 +53,8 @@ var
 	advancelevel_palette_level : byte;
 	flagGotoNextLevel : byte = 0;
 	startUpDirty : byte = 1;
+	highScore : integer = 0;
+	highScoreDirty : byte = 0;
 	
 	//const useKernal:byte=0;
 	
@@ -89,7 +91,7 @@ var
 	const SPRITE_HEIGHT : byte = 21;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 0;
+	const DEBUG_ENABLE : byte = 1;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	current_speed_delay : byte = 50; // frames per march step (table or linear)
@@ -1996,7 +1998,7 @@ Procedure DisplayLevel();
 Begin
 	if level_dirty <> 0 then
 	begin
-		moveto(37, 13, hi(screen_char_loc));
+		moveto(37, 16, hi(screen_char_loc));
 		PrintDecimal(total_level_counter, 1);
 		level_dirty := 0;
 	end;
@@ -2010,6 +2012,17 @@ begin
 		moveto(38, 23, hi(screen_char_loc));
 		PrintDecimal(remaining_ships, 0);
 		lifeLostDirty := 0;
+	end;
+end;
+
+procedure DisplayHighScore();
+begin
+	if highScoreDirty = 1 then
+	begin
+		// Display remaining_ships as a single character at row 23, col 29
+		moveto(38, 23, hi(screen_char_loc));
+		PrintDecimal(highScore, 0);
+		highScoreDirty := 0;
 	end;
 end;
 
@@ -3333,14 +3346,23 @@ end;
 Procedure DisplayText();
 var
 	test_ptr : pointer of byte;
-begin	
+begin
+		
 	//moveto(29,1,hi(screen_char_loc));
+	Txt::text_colour(BLUE);
 	Screen::PrintString(" ",29,0,#Screen::screen0);
 	
-	Screen::PrintString("  SCORE(1)",29,1,#Screen::screen0);		
+	Screen::PrintString("  HI-SCORE",29,0,#Screen::screen0);
+	Screen::PrintString("     00000",29,2,#Screen::screen0);		
 	
-	Screen::PrintString("     LEVEL",29,11,#Screen::screen0);
-	//Screen::PrintString("         1",29,13,#Screen::screen0);
+	Screen::PrintString("     SCORE",29,7,#Screen::screen0);
+	Screen::PrintString("     00000",29,9,#Screen::screen0);
+	
+	Screen::PrintString("     LEVEL",29,14,#Screen::screen0);
+	//Screen::PrintString("         1",29,17,#Screen::screen0);
+	
+	//Screen::PrintString("CODE MUSIC",29,16,#Screen::screen0);
+	//Screen::PrintString(" SG UCTUMI",29,18,#Screen::screen0);
 	
 	Screen::PrintString("     LIVES",29,21,#Screen::screen0);
 	//Screen::PrintString("         3",29,23,#Screen::screen0);
@@ -4562,7 +4584,7 @@ begin
 		//if (score_dirty = 1) then
 		
 		
-		DisplayScore();
+		//DisplayScore();
 		DisableCIAInterrupts();
 		DisplayLevel();
 		DisplayLives();
