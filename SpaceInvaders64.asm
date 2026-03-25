@@ -29,8 +29,8 @@ StartBlock4800:
 SpaceInvaders64
 	jmp block1
 Screen_p1	= $02
-Screen_sp	=  $04
-Screen_p2	=  $08
+Screen_sp	= $04
+Screen_p2	= $08
 Screen_i	dc.b	0
 Screen_j	dc.b	0
 Screen_x	dc.b	0
@@ -40,15 +40,15 @@ Screen_tab40	dc.w $00, $28, $50, $78, $a0, $c8, $f0, $118
 	dc.w $140, $168, $190, $1b8, $1e0, $208, $230, $258
 	dc.w $280, $2a8, $2d0, $2f8, $320, $348, $370, $398
 	dc.w $3c0
-Memory_p	=  $16
+Memory_p	= $16
 Memory_v	dc.b	0
 Memory_v2	dc.b	0
 StarField_RasterCount	dc.b	0
-StarField_StarfieldPtr	=  $0B
-StarField_StarfieldPtr2	=  $0D
-StarField_StarfieldPtr3	=  $10
-StarField_StarfieldPtr4	=  $12
-StarField_StaticStarPtr	=  $24
+StarField_StarfieldPtr	= $0B
+StarField_StarfieldPtr2	= $0D
+StarField_StarfieldPtr3	= $10
+StarField_StarfieldPtr4	= $12
+StarField_StaticStarPtr	= $24
 StarField_StarfieldRow	dc.b $3a, $5c, $49, $40, $5b, $3e, $5d, $51
 	dc.b $42, $5e, $56, $3b, $4f, $57, $50, $47
 	dc.b $4c, $43, $52, $5f, $64, $4e, $63, $3c
@@ -70,6 +70,8 @@ Helpers_arcade_speed_delay	dc.b $32, $28, $1e, $14, $a, $5, $3, $2
 advancelevel_palette_level	dc.b	0
 flagGotoNextLevel	dc.b	$00
 startUpDirty	dc.b	$01
+highScore	dc.w	$00
+highScoreDirty	dc.b	$01
 score	dc.w	$00
 score_dirty	dc.b	$01
 level_dirty	dc.b	$01
@@ -805,8 +807,8 @@ StarField_saddr	dc.w
 	org StarField_saddr+36
 StarField_caddr	dc.w	 
 	org StarField_caddr+36
-StarField_screenmemory	=  $22
-StarField_colormemory	=  $68
+StarField_screenmemory	= $22
+StarField_colormemory	= $4b
 StarField_CreateStarScreen_block36
 StarField_CreateStarScreen
 	; Clear screen with offset
@@ -2174,7 +2176,7 @@ end_procedure_Helpers_GetSquigglyFireColumn
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : Helpers_WriteShieldRow
 	;    Procedure type : User-defined procedure
-Helpers_wsr_ptr	=  $22
+Helpers_wsr_ptr	= $22
 Helpers_wsr_addr	dc.w	0
 Helpers_wsr_c0	dc.b	0
 Helpers_wsr_c1	dc.b	0
@@ -3528,7 +3530,7 @@ ShowUFOBullet_rightvarInteger_var4392 = $54
 	; Generic 16 bit op
 	ldy #0
 	lda ub_sprite_index
-ShowUFOBullet_rightvarInteger_var4395 =  $56
+ShowUFOBullet_rightvarInteger_var4395 = $56
 	sta ShowUFOBullet_rightvarInteger_var4395
 	sty ShowUFOBullet_rightvarInteger_var4395+1
 	lda #128
@@ -4018,7 +4020,7 @@ CheckShotVsShotCollision_binary_clause_temp_var8133 = $54
 	; CAST type NADA
 	ldx sc_i
 	lda ufo_bullet_y,x 
-CheckShotVsShotCollision_binary_clause_temp_2_var8134 =  $56
+CheckShotVsShotCollision_binary_clause_temp_2_var8134 = $56
 	sta CheckShotVsShotCollision_binary_clause_temp_2_var8134
 	lda CheckShotVsShotCollision_binary_clause_temp_var8133
 	cmp CheckShotVsShotCollision_binary_clause_temp_2_var8134;keep
@@ -4261,7 +4263,7 @@ CheckEnemyShotPlayerCollision_binary_clause_temp_var8770 = $54
 	sec
 	sbc #$15
 	 ; end add / sub var with constant
-CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8771 =  $56
+CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8771 = $56
 	sta CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8771
 	lda CheckEnemyShotPlayerCollision_binary_clause_temp_var8770
 	cmp CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8771;keep
@@ -4281,7 +4283,7 @@ CheckEnemyShotPlayerCollision_binary_clause_temp_var8772 = $54
 	sec
 	sbc #$d
 	 ; end add / sub var with constant
-CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8773 =  $56
+CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8773 = $56
 	sta CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8773
 	lda CheckEnemyShotPlayerCollision_binary_clause_temp_var8772
 	cmp CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8773;keep
@@ -4604,6 +4606,24 @@ sgot_col sta $D9EA,x
         dex
         bpl sgot_col
 	
+	; Binary clause INTEGER: GREATEREQUAL
+	lda score+1   ; compare high bytes
+	cmp highScore+1 ;keep
+	bcc ShowGameOverText_edblock8829
+	bne ShowGameOverText_ctb8827
+	lda score
+	cmp highScore ;keep
+	bcc ShowGameOverText_edblock8829
+ShowGameOverText_ctb8827: ;Main true block ;keep 
+	ldy score+1 ;keep
+	lda score
+	; Calling storevariable on generic assign expression
+	sta highScore
+	sty highScore+1
+	lda #$1
+	; Calling storevariable on generic assign expression
+	sta highScoreDirty
+ShowGameOverText_edblock8829
 	rts
 end_procedure_ShowGameOverText
 	
@@ -4761,8 +4781,8 @@ buf17_loop lda $06AE,x
 ; // Row 1: "nnnnnnnn      nnnnnn"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8830
-	ldy #>ShowStartupText_stringassignstr8830
+	lda #<ShowStartupText_stringassignstr8836
+	ldy #>ShowStartupText_stringassignstr8836
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$2
@@ -4778,8 +4798,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8832
-	ldy #>ShowStartupText_stringassignstr8832
+	lda #<ShowStartupText_stringassignstr8838
+	ldy #>ShowStartupText_stringassignstr8838
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -4797,8 +4817,8 @@ buf17_loop lda $06AE,x
 ; // Row 2: "nn          nnnnnnnnnn"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8834
-	ldy #>ShowStartupText_stringassignstr8834
+	lda #<ShowStartupText_stringassignstr8840
+	ldy #>ShowStartupText_stringassignstr8840
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$2
@@ -4813,8 +4833,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8836
-	ldy #>ShowStartupText_stringassignstr8836
+	lda #<ShowStartupText_stringassignstr8842
+	ldy #>ShowStartupText_stringassignstr8842
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$e
@@ -4832,8 +4852,8 @@ buf17_loop lda $06AE,x
 ; // Row 3: "           nnnnnnnnnnnn"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8838
-	ldy #>ShowStartupText_stringassignstr8838
+	lda #<ShowStartupText_stringassignstr8844
+	ldy #>ShowStartupText_stringassignstr8844
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$d
@@ -4851,62 +4871,11 @@ buf17_loop lda $06AE,x
 ; // Row 4: "nnnnnnnn  nn nn nn nn nn"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8840
-	ldy #>ShowStartupText_stringassignstr8840
-	sta Screen_p1
-	sty Screen_p1+1
-	lda #$2
-	; Calling storevariable on generic assign expression
-	sta Screen_x
-	lda #$4
-	; Calling storevariable on generic assign expression
-	sta Screen_y
-	lda #$00
-	ldx #$04
-	sta Screen_p2
-	stx Screen_p2+1
-	jsr Screen_PrintString
-	; Assigning a string : Screen_p1
-	;has array index
-	lda #<ShowStartupText_stringassignstr8842
-	ldy #>ShowStartupText_stringassignstr8842
-	sta Screen_p1
-	sty Screen_p1+1
-	lda #$c
-	; Calling storevariable on generic assign expression
-	sta Screen_x
-	lda #$4
-	; Calling storevariable on generic assign expression
-	sta Screen_y
-	lda #$00
-	ldx #$04
-	sta Screen_p2
-	stx Screen_p2+1
-	jsr Screen_PrintString
-	; Assigning a string : Screen_p1
-	;has array index
-	lda #<ShowStartupText_stringassignstr8844
-	ldy #>ShowStartupText_stringassignstr8844
-	sta Screen_p1
-	sty Screen_p1+1
-	lda #$f
-	; Calling storevariable on generic assign expression
-	sta Screen_x
-	lda #$4
-	; Calling storevariable on generic assign expression
-	sta Screen_y
-	lda #$00
-	ldx #$04
-	sta Screen_p2
-	stx Screen_p2+1
-	jsr Screen_PrintString
-	; Assigning a string : Screen_p1
-	;has array index
 	lda #<ShowStartupText_stringassignstr8846
 	ldy #>ShowStartupText_stringassignstr8846
 	sta Screen_p1
 	sty Screen_p1+1
-	lda #$12
+	lda #$2
 	; Calling storevariable on generic assign expression
 	sta Screen_x
 	lda #$4
@@ -4923,7 +4892,7 @@ buf17_loop lda $06AE,x
 	ldy #>ShowStartupText_stringassignstr8848
 	sta Screen_p1
 	sty Screen_p1+1
-	lda #$15
+	lda #$c
 	; Calling storevariable on generic assign expression
 	sta Screen_x
 	lda #$4
@@ -4938,6 +4907,57 @@ buf17_loop lda $06AE,x
 	;has array index
 	lda #<ShowStartupText_stringassignstr8850
 	ldy #>ShowStartupText_stringassignstr8850
+	sta Screen_p1
+	sty Screen_p1+1
+	lda #$f
+	; Calling storevariable on generic assign expression
+	sta Screen_x
+	lda #$4
+	; Calling storevariable on generic assign expression
+	sta Screen_y
+	lda #$00
+	ldx #$04
+	sta Screen_p2
+	stx Screen_p2+1
+	jsr Screen_PrintString
+	; Assigning a string : Screen_p1
+	;has array index
+	lda #<ShowStartupText_stringassignstr8852
+	ldy #>ShowStartupText_stringassignstr8852
+	sta Screen_p1
+	sty Screen_p1+1
+	lda #$12
+	; Calling storevariable on generic assign expression
+	sta Screen_x
+	lda #$4
+	; Calling storevariable on generic assign expression
+	sta Screen_y
+	lda #$00
+	ldx #$04
+	sta Screen_p2
+	stx Screen_p2+1
+	jsr Screen_PrintString
+	; Assigning a string : Screen_p1
+	;has array index
+	lda #<ShowStartupText_stringassignstr8854
+	ldy #>ShowStartupText_stringassignstr8854
+	sta Screen_p1
+	sty Screen_p1+1
+	lda #$15
+	; Calling storevariable on generic assign expression
+	sta Screen_x
+	lda #$4
+	; Calling storevariable on generic assign expression
+	sta Screen_y
+	lda #$00
+	ldx #$04
+	sta Screen_p2
+	stx Screen_p2+1
+	jsr Screen_PrintString
+	; Assigning a string : Screen_p1
+	;has array index
+	lda #<ShowStartupText_stringassignstr8856
+	ldy #>ShowStartupText_stringassignstr8856
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$18
@@ -4955,8 +4975,8 @@ buf17_loop lda $06AE,x
 ; // Row 5: "nn    nn nnnnnnnnnnnnnnnn"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8852
-	ldy #>ShowStartupText_stringassignstr8852
+	lda #<ShowStartupText_stringassignstr8858
+	ldy #>ShowStartupText_stringassignstr8858
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$2
@@ -4972,8 +4992,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8854
-	ldy #>ShowStartupText_stringassignstr8854
+	lda #<ShowStartupText_stringassignstr8860
+	ldy #>ShowStartupText_stringassignstr8860
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$8
@@ -4989,8 +5009,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8856
-	ldy #>ShowStartupText_stringassignstr8856
+	lda #<ShowStartupText_stringassignstr8862
+	ldy #>ShowStartupText_stringassignstr8862
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$b
@@ -5008,8 +5028,8 @@ buf17_loop lda $06AE,x
 ; // Row 6: "nnnnnnnn   nnn  nn  nnn"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8858
-	ldy #>ShowStartupText_stringassignstr8858
+	lda #<ShowStartupText_stringassignstr8864
+	ldy #>ShowStartupText_stringassignstr8864
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$2
@@ -5025,8 +5045,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8860
-	ldy #>ShowStartupText_stringassignstr8860
+	lda #<ShowStartupText_stringassignstr8866
+	ldy #>ShowStartupText_stringassignstr8866
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$d
@@ -5042,8 +5062,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8862
-	ldy #>ShowStartupText_stringassignstr8862
+	lda #<ShowStartupText_stringassignstr8868
+	ldy #>ShowStartupText_stringassignstr8868
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$12
@@ -5059,8 +5079,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8864
-	ldy #>ShowStartupText_stringassignstr8864
+	lda #<ShowStartupText_stringassignstr8870
+	ldy #>ShowStartupText_stringassignstr8870
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -5078,8 +5098,8 @@ buf17_loop lda $06AE,x
 ; // Row 7: "      nn    n        n"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8866
-	ldy #>ShowStartupText_stringassignstr8866
+	lda #<ShowStartupText_stringassignstr8872
+	ldy #>ShowStartupText_stringassignstr8872
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$8
@@ -5095,8 +5115,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8868
-	ldy #>ShowStartupText_stringassignstr8868
+	lda #<ShowStartupText_stringassignstr8874
+	ldy #>ShowStartupText_stringassignstr8874
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$e
@@ -5112,8 +5132,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8870
-	ldy #>ShowStartupText_stringassignstr8870
+	lda #<ShowStartupText_stringassignstr8876
+	ldy #>ShowStartupText_stringassignstr8876
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$17
@@ -5131,8 +5151,8 @@ buf17_loop lda $06AE,x
 ; // Row 8: "nn    nn"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8872
-	ldy #>ShowStartupText_stringassignstr8872
+	lda #<ShowStartupText_stringassignstr8878
+	ldy #>ShowStartupText_stringassignstr8878
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$2
@@ -5148,8 +5168,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8874
-	ldy #>ShowStartupText_stringassignstr8874
+	lda #<ShowStartupText_stringassignstr8880
+	ldy #>ShowStartupText_stringassignstr8880
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$8
@@ -5166,8 +5186,8 @@ buf17_loop lda $06AE,x
 ; // Row 9: "nnnnnnnn INVADERS MMXXVI"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8876
-	ldy #>ShowStartupText_stringassignstr8876
+	lda #<ShowStartupText_stringassignstr8882
+	ldy #>ShowStartupText_stringassignstr8882
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$2
@@ -5183,8 +5203,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8878
-	ldy #>ShowStartupText_stringassignstr8878
+	lda #<ShowStartupText_stringassignstr8884
+	ldy #>ShowStartupText_stringassignstr8884
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$b
@@ -5200,8 +5220,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8880
-	ldy #>ShowStartupText_stringassignstr8880
+	lda #<ShowStartupText_stringassignstr8886
+	ldy #>ShowStartupText_stringassignstr8886
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$14
@@ -5220,8 +5240,8 @@ buf17_loop lda $06AE,x
 ; // Row 13: "FIRE BUTTON TO START"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8882
-	ldy #>ShowStartupText_stringassignstr8882
+	lda #<ShowStartupText_stringassignstr8888
+	ldy #>ShowStartupText_stringassignstr8888
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -5237,8 +5257,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8884
-	ldy #>ShowStartupText_stringassignstr8884
+	lda #<ShowStartupText_stringassignstr8890
+	ldy #>ShowStartupText_stringassignstr8890
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$9
@@ -5254,8 +5274,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8886
-	ldy #>ShowStartupText_stringassignstr8886
+	lda #<ShowStartupText_stringassignstr8892
+	ldy #>ShowStartupText_stringassignstr8892
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -5271,8 +5291,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8888
-	ldy #>ShowStartupText_stringassignstr8888
+	lda #<ShowStartupText_stringassignstr8894
+	ldy #>ShowStartupText_stringassignstr8894
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$13
@@ -5290,8 +5310,8 @@ buf17_loop lda $06AE,x
 ; // Row 17: "LEVEL SELECT ( )"
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8890
-	ldy #>ShowStartupText_stringassignstr8890
+	lda #<ShowStartupText_stringassignstr8896
+	ldy #>ShowStartupText_stringassignstr8896
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$6
@@ -5307,8 +5327,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8892
-	ldy #>ShowStartupText_stringassignstr8892
+	lda #<ShowStartupText_stringassignstr8898
+	ldy #>ShowStartupText_stringassignstr8898
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$c
@@ -5324,8 +5344,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8894
-	ldy #>ShowStartupText_stringassignstr8894
+	lda #<ShowStartupText_stringassignstr8900
+	ldy #>ShowStartupText_stringassignstr8900
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$13
@@ -5341,8 +5361,8 @@ buf17_loop lda $06AE,x
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<ShowStartupText_stringassignstr8896
-	ldy #>ShowStartupText_stringassignstr8896
+	lda #<ShowStartupText_stringassignstr8902
+	ldy #>ShowStartupText_stringassignstr8902
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$15
@@ -5795,40 +5815,6 @@ LevelStart
 	sta $d015
 	ldx #$0 ; optimized, look out for bugs
 	lda #1
-LevelStart_shiftbit8900
-	cpx #0
-	beq LevelStart_shiftbitdone8901
-	asl
-	dex
-	jmp LevelStart_shiftbit8900
-LevelStart_shiftbitdone8901
-LevelStart_bitmask_var8902 = $54
-	sta LevelStart_bitmask_var8902
-	lda $d015
-	ora LevelStart_bitmask_var8902
-	sta $d015
-	; Toggle bit with constant
-	ora #%10
-	sta $d015
-	ldx #$1 ; optimized, look out for bugs
-	lda #1
-LevelStart_shiftbit8903
-	cpx #0
-	beq LevelStart_shiftbitdone8904
-	asl
-	dex
-	jmp LevelStart_shiftbit8903
-LevelStart_shiftbitdone8904
-LevelStart_bitmask_var8905 = $54
-	sta LevelStart_bitmask_var8905
-	lda $d015
-	ora LevelStart_bitmask_var8905
-	sta $d015
-	; Toggle bit with constant
-	ora #%100
-	sta $d015
-	ldx #$2 ; optimized, look out for bugs
-	lda #1
 LevelStart_shiftbit8906
 	cpx #0
 	beq LevelStart_shiftbitdone8907
@@ -5842,9 +5828,9 @@ LevelStart_bitmask_var8908 = $54
 	ora LevelStart_bitmask_var8908
 	sta $d015
 	; Toggle bit with constant
-	ora #%1000
+	ora #%10
 	sta $d015
-	ldx #$3 ; optimized, look out for bugs
+	ldx #$1 ; optimized, look out for bugs
 	lda #1
 LevelStart_shiftbit8909
 	cpx #0
@@ -5859,9 +5845,9 @@ LevelStart_bitmask_var8911 = $54
 	ora LevelStart_bitmask_var8911
 	sta $d015
 	; Toggle bit with constant
-	ora #%10000
+	ora #%100
 	sta $d015
-	ldx #$4 ; optimized, look out for bugs
+	ldx #$2 ; optimized, look out for bugs
 	lda #1
 LevelStart_shiftbit8912
 	cpx #0
@@ -5876,9 +5862,9 @@ LevelStart_bitmask_var8914 = $54
 	ora LevelStart_bitmask_var8914
 	sta $d015
 	; Toggle bit with constant
-	ora #%1000000
+	ora #%1000
 	sta $d015
-	ldx #$6 ; optimized, look out for bugs
+	ldx #$3 ; optimized, look out for bugs
 	lda #1
 LevelStart_shiftbit8915
 	cpx #0
@@ -5893,9 +5879,9 @@ LevelStart_bitmask_var8917 = $54
 	ora LevelStart_bitmask_var8917
 	sta $d015
 	; Toggle bit with constant
-	ora #%100000
+	ora #%10000
 	sta $d015
-	ldx #$5 ; optimized, look out for bugs
+	ldx #$4 ; optimized, look out for bugs
 	lda #1
 LevelStart_shiftbit8918
 	cpx #0
@@ -5910,9 +5896,9 @@ LevelStart_bitmask_var8920 = $54
 	ora LevelStart_bitmask_var8920
 	sta $d015
 	; Toggle bit with constant
-	ora #%10000000
+	ora #%1000000
 	sta $d015
-	ldx #$7 ; optimized, look out for bugs
+	ldx #$6 ; optimized, look out for bugs
 	lda #1
 LevelStart_shiftbit8921
 	cpx #0
@@ -5926,12 +5912,46 @@ LevelStart_bitmask_var8923 = $54
 	lda $d015
 	ora LevelStart_bitmask_var8923
 	sta $d015
+	; Toggle bit with constant
+	ora #%100000
+	sta $d015
+	ldx #$5 ; optimized, look out for bugs
+	lda #1
+LevelStart_shiftbit8924
+	cpx #0
+	beq LevelStart_shiftbitdone8925
+	asl
+	dex
+	jmp LevelStart_shiftbit8924
+LevelStart_shiftbitdone8925
+LevelStart_bitmask_var8926 = $54
+	sta LevelStart_bitmask_var8926
+	lda $d015
+	ora LevelStart_bitmask_var8926
+	sta $d015
+	; Toggle bit with constant
+	ora #%10000000
+	sta $d015
+	ldx #$7 ; optimized, look out for bugs
+	lda #1
+LevelStart_shiftbit8927
+	cpx #0
+	beq LevelStart_shiftbitdone8928
+	asl
+	dex
+	jmp LevelStart_shiftbit8927
+LevelStart_shiftbitdone8928
+LevelStart_bitmask_var8929 = $54
+	sta LevelStart_bitmask_var8929
+	lda $d015
+	ora LevelStart_bitmask_var8929
+	sta $d015
 	rts
 end_procedure_LevelStart
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : ClearMonster
 	;    Procedure type : User-defined procedure
-sprite_data_ptr	=  $22
+sprite_data_ptr	= $22
 frame1_sprite_index	dc.b	0
 frame2_sprite_index	dc.b	0
 sprite_offset_start	dc.b	0
@@ -5945,7 +5965,7 @@ cm_base	dc.b	0
 cm_any	dc.b	0
 blockIndex	dc.b	0
 enemyIndex	dc.b	0
-ClearMonster_block8924
+ClearMonster_block8930
 ClearMonster
 	
 ; // row index (0-2) of the cleared block
@@ -5993,8 +6013,8 @@ ClearMonster
 	and #$1
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq ClearMonster_eblock8927
-ClearMonster_ctb8926: ;Main true block ;keep 
+	beq ClearMonster_eblock8933
+ClearMonster_ctb8932: ;Main true block ;keep 
 	
 ; // Divide by 2 to get column
 ; // Calculate vertical offset
@@ -6004,12 +6024,12 @@ ClearMonster_ctb8926: ;Main true block ;keep
 	lda #$27
 	; Calling storevariable on generic assign expression
 	sta enemy_vertical_offset
-	jmp ClearMonster_edblock8928
-ClearMonster_eblock8927
+	jmp ClearMonster_edblock8934
+ClearMonster_eblock8933
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta enemy_vertical_offset
-ClearMonster_edblock8928
+ClearMonster_edblock8934
 	
 ; // Total offset within the 64-byte sprite
 	; 8 bit binop
@@ -6029,30 +6049,30 @@ ClearMonster_edblock8928
 	sta sprite_base_address
 	sty sprite_base_address+1
 	ldy sprite_base_address+1 ;keep
-ClearMonster_tempVarShift_var8933 = $54
-	sta ClearMonster_tempVarShift_var8933
-	sty ClearMonster_tempVarShift_var8933+1
+ClearMonster_tempVarShift_var8939 = $54
+	sta ClearMonster_tempVarShift_var8939
+	sty ClearMonster_tempVarShift_var8939+1
 	; COUNT : 6
-		asl ClearMonster_tempVarShift_var8933+0 ;keep
-	rol ClearMonster_tempVarShift_var8933+1 ;keep
+		asl ClearMonster_tempVarShift_var8939+0 ;keep
+	rol ClearMonster_tempVarShift_var8939+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8933+0 ;keep
-	rol ClearMonster_tempVarShift_var8933+1 ;keep
+		asl ClearMonster_tempVarShift_var8939+0 ;keep
+	rol ClearMonster_tempVarShift_var8939+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8933+0 ;keep
-	rol ClearMonster_tempVarShift_var8933+1 ;keep
+		asl ClearMonster_tempVarShift_var8939+0 ;keep
+	rol ClearMonster_tempVarShift_var8939+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8933+0 ;keep
-	rol ClearMonster_tempVarShift_var8933+1 ;keep
+		asl ClearMonster_tempVarShift_var8939+0 ;keep
+	rol ClearMonster_tempVarShift_var8939+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8933+0 ;keep
-	rol ClearMonster_tempVarShift_var8933+1 ;keep
+		asl ClearMonster_tempVarShift_var8939+0 ;keep
+	rol ClearMonster_tempVarShift_var8939+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8933+0 ;keep
-	rol ClearMonster_tempVarShift_var8933+1 ;keep
+		asl ClearMonster_tempVarShift_var8939+0 ;keep
+	rol ClearMonster_tempVarShift_var8939+1 ;keep
 
-	lda ClearMonster_tempVarShift_var8933
-	ldy ClearMonster_tempVarShift_var8933+1
+	lda ClearMonster_tempVarShift_var8939
+	ldy ClearMonster_tempVarShift_var8939+1
 	; Calling storevariable on generic assign expression
 	sta sprite_base_address
 	sty sprite_base_address+1
@@ -6062,39 +6082,39 @@ ClearMonster_tempVarShift_var8933 = $54
 	ldy #0
 	ldx #0 ; Fake 24 bit
 	lda sprite_offset_start
-ClearMonster_rightvarInteger_var8936 = $54
-	sta ClearMonster_rightvarInteger_var8936
-	sty ClearMonster_rightvarInteger_var8936+1
+ClearMonster_rightvarInteger_var8942 = $54
+	sta ClearMonster_rightvarInteger_var8942
+	sty ClearMonster_rightvarInteger_var8942+1
 	; Generic 16 bit op
 	ldy sprite_base_address+1 ;keep
 	lda sprite_base_address
-ClearMonster_rightvarInteger_var8939 =  $56
-	sta ClearMonster_rightvarInteger_var8939
-	sty ClearMonster_rightvarInteger_var8939+1
+ClearMonster_rightvarInteger_var8945 = $56
+	sta ClearMonster_rightvarInteger_var8945
+	sty ClearMonster_rightvarInteger_var8945+1
 	; Integer constant assigning
 	; Load16bitvariable : #$2000
 	ldy #$20
 	lda #$00
 	; Low bit binop:
 	clc
-	adc ClearMonster_rightvarInteger_var8939
-ClearMonster_wordAdd8937
-	sta ClearMonster_rightvarInteger_var8939
+	adc ClearMonster_rightvarInteger_var8945
+ClearMonster_wordAdd8943
+	sta ClearMonster_rightvarInteger_var8945
 	; High-bit binop
 	tya
-	adc ClearMonster_rightvarInteger_var8939+1
+	adc ClearMonster_rightvarInteger_var8945+1
 	tay
-	lda ClearMonster_rightvarInteger_var8939
+	lda ClearMonster_rightvarInteger_var8945
 	; Low bit binop:
 	clc
-	adc ClearMonster_rightvarInteger_var8936
-ClearMonster_wordAdd8934
-	sta ClearMonster_rightvarInteger_var8936
+	adc ClearMonster_rightvarInteger_var8942
+ClearMonster_wordAdd8940
+	sta ClearMonster_rightvarInteger_var8942
 	; High-bit binop
 	tya
-	adc ClearMonster_rightvarInteger_var8936+1
+	adc ClearMonster_rightvarInteger_var8942+1
 	tay
-	lda ClearMonster_rightvarInteger_var8936
+	lda ClearMonster_rightvarInteger_var8942
 	sta sprite_data_ptr
 	sty sprite_data_ptr+1
         lda #0
@@ -6125,30 +6145,30 @@ ClearMonster_wordAdd8934
 	sta sprite_base_address
 	sty sprite_base_address+1
 	ldy sprite_base_address+1 ;keep
-ClearMonster_tempVarShift_var8940 = $54
-	sta ClearMonster_tempVarShift_var8940
-	sty ClearMonster_tempVarShift_var8940+1
+ClearMonster_tempVarShift_var8946 = $54
+	sta ClearMonster_tempVarShift_var8946
+	sty ClearMonster_tempVarShift_var8946+1
 	; COUNT : 6
-		asl ClearMonster_tempVarShift_var8940+0 ;keep
-	rol ClearMonster_tempVarShift_var8940+1 ;keep
+		asl ClearMonster_tempVarShift_var8946+0 ;keep
+	rol ClearMonster_tempVarShift_var8946+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8940+0 ;keep
-	rol ClearMonster_tempVarShift_var8940+1 ;keep
+		asl ClearMonster_tempVarShift_var8946+0 ;keep
+	rol ClearMonster_tempVarShift_var8946+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8940+0 ;keep
-	rol ClearMonster_tempVarShift_var8940+1 ;keep
+		asl ClearMonster_tempVarShift_var8946+0 ;keep
+	rol ClearMonster_tempVarShift_var8946+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8940+0 ;keep
-	rol ClearMonster_tempVarShift_var8940+1 ;keep
+		asl ClearMonster_tempVarShift_var8946+0 ;keep
+	rol ClearMonster_tempVarShift_var8946+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8940+0 ;keep
-	rol ClearMonster_tempVarShift_var8940+1 ;keep
+		asl ClearMonster_tempVarShift_var8946+0 ;keep
+	rol ClearMonster_tempVarShift_var8946+1 ;keep
 
-		asl ClearMonster_tempVarShift_var8940+0 ;keep
-	rol ClearMonster_tempVarShift_var8940+1 ;keep
+		asl ClearMonster_tempVarShift_var8946+0 ;keep
+	rol ClearMonster_tempVarShift_var8946+1 ;keep
 
-	lda ClearMonster_tempVarShift_var8940
-	ldy ClearMonster_tempVarShift_var8940+1
+	lda ClearMonster_tempVarShift_var8946
+	ldy ClearMonster_tempVarShift_var8946+1
 	; Calling storevariable on generic assign expression
 	sta sprite_base_address
 	sty sprite_base_address+1
@@ -6158,39 +6178,39 @@ ClearMonster_tempVarShift_var8940 = $54
 	ldy #0
 	ldx #0 ; Fake 24 bit
 	lda sprite_offset_start
-ClearMonster_rightvarInteger_var8943 = $54
-	sta ClearMonster_rightvarInteger_var8943
-	sty ClearMonster_rightvarInteger_var8943+1
+ClearMonster_rightvarInteger_var8949 = $54
+	sta ClearMonster_rightvarInteger_var8949
+	sty ClearMonster_rightvarInteger_var8949+1
 	; Generic 16 bit op
 	ldy sprite_base_address+1 ;keep
 	lda sprite_base_address
-ClearMonster_rightvarInteger_var8946 =  $56
-	sta ClearMonster_rightvarInteger_var8946
-	sty ClearMonster_rightvarInteger_var8946+1
+ClearMonster_rightvarInteger_var8952 = $56
+	sta ClearMonster_rightvarInteger_var8952
+	sty ClearMonster_rightvarInteger_var8952+1
 	; Integer constant assigning
 	; Load16bitvariable : #$2000
 	ldy #$20
 	lda #$00
 	; Low bit binop:
 	clc
-	adc ClearMonster_rightvarInteger_var8946
-ClearMonster_wordAdd8944
-	sta ClearMonster_rightvarInteger_var8946
+	adc ClearMonster_rightvarInteger_var8952
+ClearMonster_wordAdd8950
+	sta ClearMonster_rightvarInteger_var8952
 	; High-bit binop
 	tya
-	adc ClearMonster_rightvarInteger_var8946+1
+	adc ClearMonster_rightvarInteger_var8952+1
 	tay
-	lda ClearMonster_rightvarInteger_var8946
+	lda ClearMonster_rightvarInteger_var8952
 	; Low bit binop:
 	clc
-	adc ClearMonster_rightvarInteger_var8943
-ClearMonster_wordAdd8941
-	sta ClearMonster_rightvarInteger_var8943
+	adc ClearMonster_rightvarInteger_var8949
+ClearMonster_wordAdd8947
+	sta ClearMonster_rightvarInteger_var8949
 	; High-bit binop
 	tya
-	adc ClearMonster_rightvarInteger_var8943+1
+	adc ClearMonster_rightvarInteger_var8949+1
 	tay
-	lda ClearMonster_rightvarInteger_var8943
+	lda ClearMonster_rightvarInteger_var8949
 	sta sprite_data_ptr
 	sty sprite_data_ptr+1
         lda #0
@@ -6217,13 +6237,13 @@ ClearMonster_wordAdd8941
 	ldx enemyIndex ; optimized, look out for bugs
 	lda #$1
 	cpx #0
-	beq ClearMonster_lblShiftDone8948
-ClearMonster_lblShift8947
+	beq ClearMonster_lblShiftDone8954
+ClearMonster_lblShift8953
 	asl
 	dex
 	cpx #0
-	bne ClearMonster_lblShift8947
-ClearMonster_lblShiftDone8948
+	bne ClearMonster_lblShift8953
+ClearMonster_lblShiftDone8954
 	; Calling storevariable on generic assign expression
 	sta enemy_mask
 	; Binary clause Simplified: NOTEQUALS
@@ -6237,22 +6257,22 @@ ClearMonster_lblShiftDone8948
 	and enemy_mask
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq ClearMonster_ctb8949
+	beq ClearMonster_ctb8955
 	lda #$01
-	jmp ClearMonster_cfb8950
-ClearMonster_ctb8949: ;Main true block ;keep 
+	jmp ClearMonster_cfb8956
+ClearMonster_ctb8955: ;Main true block ;keep 
 	lda #$00
-ClearMonster_cfb8950
+ClearMonster_cfb8956
 	; Calling storevariable on generic assign expression
 	sta was_alive
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; cmp #$00 ignored
-	beq ClearMonster_localfailed9149
-	jmp ClearMonster_ctb8952
-ClearMonster_localfailed9149
-	jmp ClearMonster_edblock8954
-ClearMonster_ctb8952: ;Main true block ;keep 
+	beq ClearMonster_localfailed9155
+	jmp ClearMonster_ctb8958
+ClearMonster_localfailed9155
+	jmp ClearMonster_edblock8960
+ClearMonster_ctb8958: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub right value is variable/expression
 	; 8 bit binop
@@ -6260,24 +6280,24 @@ ClearMonster_ctb8952: ;Main true block ;keep
 	lda enemy_mask
 	eor #$ff
 	 ; end add / sub var with constant
-ClearMonster_rightvarAddSub_var9151 = $54
-	sta ClearMonster_rightvarAddSub_var9151
+ClearMonster_rightvarAddSub_var9157 = $54
+	sta ClearMonster_rightvarAddSub_var9157
 	; Load Byte array
 	; CAST type NADA
 	ldx blockIndex
 	lda block_enemies,x 
-	and ClearMonster_rightvarAddSub_var9151
+	and ClearMonster_rightvarAddSub_var9157
 	; Calling storevariable on generic assign expression
 	sta block_enemies,x
 	; Binary clause Simplified: LESS
 	lda numberOfEnemies
 	; Compare with pure num / var optimization
 	cmp #$47;keep
-	bcs ClearMonster_edblock9155
-ClearMonster_ctb9153: ;Main true block ;keep 
+	bcs ClearMonster_edblock9161
+ClearMonster_ctb9159: ;Main true block ;keep 
 	; Test Inc dec D
 	inc numberOfEnemies
-ClearMonster_edblock9155
+ClearMonster_edblock9161
 	
 ; // Defer edge-cache refresh to the next UpdateTick so the scan loops
 ; // don't land on the same frame as the sprite clear.
@@ -6291,8 +6311,8 @@ ClearMonster_edblock9155
 	ldx blockIndex
 	lda block_enemies,x 
 	; cmp #$00 ignored
-	bne ClearMonster_edblock9161
-ClearMonster_ctb9159: ;Main true block ;keep 
+	bne ClearMonster_edblock9167
+ClearMonster_ctb9165: ;Main true block ;keep 
 	
 ; // Update row-present cache when this block just became empty.
 	lda blockIndex
@@ -6346,8 +6366,8 @@ ClearMonster_ctb9159: ;Main true block ;keep
 	; Binary clause Simplified: EQUALS
 	clc
 	; cmp #$00 ignored
-	bne ClearMonster_edblock9257
-ClearMonster_ctb9255: ;Main true block ;keep 
+	bne ClearMonster_edblock9263
+ClearMonster_ctb9261: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	ldx cm_row ; optimized, look out for bugs
@@ -6358,35 +6378,35 @@ ClearMonster_ctb9255: ;Main true block ;keep
 	; CAST type NADA
 	lda row_has_monsters +$0 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne ClearMonster_edblock9305
-ClearMonster_ctb9303: ;Main true block ;keep 
+	bne ClearMonster_edblock9311
+ClearMonster_ctb9309: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda row_has_monsters +$1 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne ClearMonster_edblock9329
-ClearMonster_ctb9327: ;Main true block ;keep 
+	bne ClearMonster_edblock9335
+ClearMonster_ctb9333: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda row_has_monsters +$2 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne ClearMonster_edblock9341
-ClearMonster_ctb9339: ;Main true block ;keep 
+	bne ClearMonster_edblock9347
+ClearMonster_ctb9345: ;Main true block ;keep 
 	
 ; // If all three rows just cleared, advance to next level.
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta flagGotoNextLevel
-ClearMonster_edblock9341
-ClearMonster_edblock9329
-ClearMonster_edblock9305
-ClearMonster_edblock9257
-ClearMonster_edblock9161
-ClearMonster_edblock8954
+ClearMonster_edblock9347
+ClearMonster_edblock9335
+ClearMonster_edblock9311
+ClearMonster_edblock9263
+ClearMonster_edblock9167
+ClearMonster_edblock8960
 	rts
 end_procedure_ClearMonster
 	
@@ -6567,17 +6587,17 @@ end_procedure_PreclearLeftmostAndBottomEnemies
 	;    Procedure type : User-defined procedure
 ds_val	dc.w	0
 ds_div	dc.b	0
-DisplayScore_block9345
+DisplayScore_block9351
 DisplayScore
 	; Binary clause Simplified: EQUALS
 	lda score_dirty
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne DisplayScore_localfailed9391
-	jmp DisplayScore_ctb9347
-DisplayScore_localfailed9391
-	jmp DisplayScore_edblock9349
-DisplayScore_ctb9347: ;Main true block ;keep 
+	bne DisplayScore_localfailed9397
+	jmp DisplayScore_ctb9353
+DisplayScore_localfailed9397
+	jmp DisplayScore_edblock9355
+DisplayScore_ctb9353: ;Main true block ;keep 
 	ldy score+1 ;keep
 	lda score
 	; Calling storevariable on generic assign expression
@@ -6588,17 +6608,17 @@ DisplayScore_ctb9347: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ds_div
-DisplayScore_while9393
-DisplayScore_loopstart9397
+DisplayScore_while9399
+DisplayScore_loopstart9403
 	; Binary clause INTEGER: GREATEREQUAL
 	lda ds_val+1   ; compare high bytes
 	cmp #$27 ;keep
-	bcc DisplayScore_edblock9396
-	bne DisplayScore_ctb9394
+	bcc DisplayScore_edblock9402
+	bne DisplayScore_ctb9400
 	lda ds_val
 	cmp #$10 ;keep
-	bcc DisplayScore_edblock9396
-DisplayScore_ctb9394: ;Main true block ;keep 
+	bcc DisplayScore_edblock9402
+DisplayScore_ctb9400: ;Main true block ;keep 
 	lda ds_val
 	sec
 	sbc #$10
@@ -6608,29 +6628,29 @@ DisplayScore_ctb9394: ;Main true block ;keep
 	sta ds_val+1
 	; Test Inc dec D
 	inc ds_div
-	jmp DisplayScore_while9393
-DisplayScore_edblock9396
-DisplayScore_loopend9398
+	jmp DisplayScore_while9399
+DisplayScore_edblock9402
+DisplayScore_loopend9404
 			lda ds_div
 			ora #$30
-			sta $049A
+			sta $058A
 		
 	
 ; // Thousands place
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ds_div
-DisplayScore_while9403
-DisplayScore_loopstart9407
+DisplayScore_while9409
+DisplayScore_loopstart9413
 	; Binary clause INTEGER: GREATEREQUAL
 	lda ds_val+1   ; compare high bytes
 	cmp #$03 ;keep
-	bcc DisplayScore_edblock9406
-	bne DisplayScore_ctb9404
+	bcc DisplayScore_edblock9412
+	bne DisplayScore_ctb9410
 	lda ds_val
 	cmp #$e8 ;keep
-	bcc DisplayScore_edblock9406
-DisplayScore_ctb9404: ;Main true block ;keep 
+	bcc DisplayScore_edblock9412
+DisplayScore_ctb9410: ;Main true block ;keep 
 	lda ds_val
 	sec
 	sbc #$e8
@@ -6640,89 +6660,89 @@ DisplayScore_ctb9404: ;Main true block ;keep
 	sta ds_val+1
 	; Test Inc dec D
 	inc ds_div
-	jmp DisplayScore_while9403
-DisplayScore_edblock9406
-DisplayScore_loopend9408
+	jmp DisplayScore_while9409
+DisplayScore_edblock9412
+DisplayScore_loopend9414
 			lda ds_div
 			ora #$30
-			sta $049B
+			sta $058B
 		
 	
 ; // Hundreds place
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ds_div
-DisplayScore_while9413
-DisplayScore_loopstart9417
+DisplayScore_while9419
+DisplayScore_loopstart9423
 	; Binary clause INTEGER: GREATEREQUAL
 	lda ds_val+1   ; compare high bytes
 	cmp #$00 ;keep
-	bcc DisplayScore_edblock9416
-	bne DisplayScore_ctb9414
+	bcc DisplayScore_edblock9422
+	bne DisplayScore_ctb9420
 	lda ds_val
 	cmp #$64 ;keep
-	bcc DisplayScore_edblock9416
-DisplayScore_ctb9414: ;Main true block ;keep 
+	bcc DisplayScore_edblock9422
+DisplayScore_ctb9420: ;Main true block ;keep 
 	lda ds_val
 	sec
 	sbc #$64
 	sta ds_val+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcs DisplayScore_WordAdd9422
+	bcs DisplayScore_WordAdd9428
 	dec ds_val+1
-DisplayScore_WordAdd9422
+DisplayScore_WordAdd9428
 	; Test Inc dec D
 	inc ds_div
-	jmp DisplayScore_while9413
-DisplayScore_edblock9416
-DisplayScore_loopend9418
+	jmp DisplayScore_while9419
+DisplayScore_edblock9422
+DisplayScore_loopend9424
 			lda ds_div
 			ora #$30
-			sta $049C
+			sta $058C
 		
 	
 ; // Tens place
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ds_div
-DisplayScore_while9423
-DisplayScore_loopstart9427
+DisplayScore_while9429
+DisplayScore_loopstart9433
 	; Binary clause INTEGER: GREATEREQUAL
 	lda ds_val+1   ; compare high bytes
 	cmp #$00 ;keep
-	bcc DisplayScore_edblock9426
-	bne DisplayScore_ctb9424
+	bcc DisplayScore_edblock9432
+	bne DisplayScore_ctb9430
 	lda ds_val
 	cmp #$0a ;keep
-	bcc DisplayScore_edblock9426
-DisplayScore_ctb9424: ;Main true block ;keep 
+	bcc DisplayScore_edblock9432
+DisplayScore_ctb9430: ;Main true block ;keep 
 	lda ds_val
 	sec
 	sbc #$0a
 	sta ds_val+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcs DisplayScore_WordAdd9432
+	bcs DisplayScore_WordAdd9438
 	dec ds_val+1
-DisplayScore_WordAdd9432
+DisplayScore_WordAdd9438
 	; Test Inc dec D
 	inc ds_div
-	jmp DisplayScore_while9423
-DisplayScore_edblock9426
-DisplayScore_loopend9428
+	jmp DisplayScore_while9429
+DisplayScore_edblock9432
+DisplayScore_loopend9434
 			lda ds_div
 			ora #$30
-			sta $049D
+			sta $058D
 		
 			lda ds_val
 			ora #$30
-			sta $049E
+			sta $058E
 		
 	
 ; // Ones place (remainder)
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta score_dirty
-DisplayScore_edblock9349
+DisplayScore_edblock9355
 	rts
 end_procedure_DisplayScore
 	; NodeProcedureDecl -1
@@ -6733,10 +6753,10 @@ DisplayLevel
 	clc
 	lda level_dirty
 	; cmp #$00 ignored
-	beq DisplayLevel_edblock9437
-DisplayLevel_ctb9435: ;Main true block ;keep 
+	beq DisplayLevel_edblock9443
+DisplayLevel_ctb9441: ;Main true block ;keep 
 	; MoveTo optimization
-	lda #$2d
+	lda #$a5
 	sta screenmemory
 	lda #>$400
 	clc
@@ -6747,16 +6767,16 @@ DisplayLevel_ctb9435: ;Main true block ;keep
 	sta ipd_div_lo
 	sty ipd_div_hi
 	ldy #$1 ; optimized, look out for bugs
-DisplayLevel_printdecimal9441
+DisplayLevel_printdecimal9447
 	jsr init_printdecimal_div10 
 	ora #$30
 	sta (screenmemory),y
 	dey
-	bpl DisplayLevel_printdecimal9441
+	bpl DisplayLevel_printdecimal9447
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta level_dirty
-DisplayLevel_edblock9437
+DisplayLevel_edblock9443
 	rts
 end_procedure_DisplayLevel
 	; NodeProcedureDecl -1
@@ -6767,8 +6787,8 @@ DisplayLives
 	lda lifeLostDirty
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne DisplayLives_edblock9446
-DisplayLives_ctb9444: ;Main true block ;keep 
+	bne DisplayLives_edblock9452
+DisplayLives_ctb9450: ;Main true block ;keep 
 	
 ; // Display remaining_ships as a single character at row 23, col 29
 	; MoveTo optimization
@@ -6783,18 +6803,52 @@ DisplayLives_ctb9444: ;Main true block ;keep
 	sta ipd_div_lo
 	sty ipd_div_hi
 	ldy #$0 ; optimized, look out for bugs
-DisplayLives_printdecimal9450
+DisplayLives_printdecimal9456
 	jsr init_printdecimal_div10 
 	ora #$30
 	sta (screenmemory),y
 	dey
-	bpl DisplayLives_printdecimal9450
+	bpl DisplayLives_printdecimal9456
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta lifeLostDirty
-DisplayLives_edblock9446
+DisplayLives_edblock9452
 	rts
 end_procedure_DisplayLives
+	; NodeProcedureDecl -1
+	; ***********  Defining procedure : DisplayHighScore
+	;    Procedure type : User-defined procedure
+DisplayHighScore
+	; Binary clause Simplified: EQUALS
+	lda highScoreDirty
+	; Compare with pure num / var optimization
+	cmp #$1;keep
+	bne DisplayHighScore_edblock9461
+DisplayHighScore_ctb9459: ;Main true block ;keep 
+	; MoveTo optimization
+	lda #$72
+	sta screenmemory
+	lda #>$400
+	clc
+	adc #$00
+	sta screenmemory+1
+	ldy highScore+1 ;keep
+	lda highScore
+	sta ipd_div_lo
+	sty ipd_div_hi
+	ldy #$4 ; optimized, look out for bugs
+DisplayHighScore_printdecimal9465
+	jsr init_printdecimal_div10 
+	ora #$30
+	sta (screenmemory),y
+	dey
+	bpl DisplayHighScore_printdecimal9465
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta highScoreDirty
+DisplayHighScore_edblock9461
+	rts
+end_procedure_DisplayHighScore
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : ReadyMonsters
 	;    Procedure type : User-defined procedure
@@ -7035,8 +7089,8 @@ UpdateSprite
 	clc
 	lda player_respawn_state
 	; cmp #$00 ignored
-	bne UpdateSprite_edblock9456
-UpdateSprite_ctb9454: ;Main true block ;keep 
+	bne UpdateSprite_edblock9471
+UpdateSprite_ctb9469: ;Main true block ;keep 
 	
 ; // Update player position based on joystick input (disabled during respawn)
 	; 8 bit binop
@@ -7061,7 +7115,7 @@ UpdateSprite_ctb9454: ;Main true block ;keep
 	jsr Helpers_Clamp
 	; Calling storevariable on generic assign expression
 	sta player_sprite_x
-UpdateSprite_edblock9456
+UpdateSprite_edblock9471
 	
 ; // Update the sprite position on screen for sprite number @useSprite	
 	; Setting sprite position
@@ -7069,11 +7123,11 @@ UpdateSprite_edblock9456
 	lda player_sprite_x
 	ldx #0
 	sta $D000,x
-UpdateSprite_spritepos9459
+UpdateSprite_spritepos9474
 	lda $D010
 	and #%11111110
 	sta $D010
-UpdateSprite_spriteposcontinue9460
+UpdateSprite_spriteposcontinue9475
 	inx
 	txa
 	tay
@@ -7086,11 +7140,11 @@ UpdateSprite_spriteposcontinue9460
 	lda player_respawn_state
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne UpdateSprite_localfailed9495
-	jmp UpdateSprite_ctb9462
-UpdateSprite_localfailed9495
-	jmp UpdateSprite_eblock9463
-UpdateSprite_ctb9462: ;Main true block ;keep 
+	bne UpdateSprite_localfailed9510
+	jmp UpdateSprite_ctb9477
+UpdateSprite_localfailed9510
+	jmp UpdateSprite_eblock9478
+UpdateSprite_ctb9477: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; 8 bit binop
@@ -7099,8 +7153,8 @@ UpdateSprite_ctb9462: ;Main true block ;keep
 	and #$1
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	bne UpdateSprite_eblock9499
-UpdateSprite_ctb9498: ;Main true block ;keep 
+	bne UpdateSprite_eblock9514
+UpdateSprite_ctb9513: ;Main true block ;keep 
 	
 ; // Display explosion animation or normal player sprite
 ; // During explosion (state 1), show alternating sprites 18 and 7
@@ -7108,21 +7162,21 @@ UpdateSprite_ctb9498: ;Main true block ;keep
 	ldx #$0 ; optimized, look out for bugs
 	lda #$92
 	sta $07f8 + $0,x
-	jmp UpdateSprite_edblock9500
-UpdateSprite_eblock9499
+	jmp UpdateSprite_edblock9515
+UpdateSprite_eblock9514
 	; Set sprite location
 	ldx #$0 ; optimized, look out for bugs
 	lda #$87
 	sta $07f8 + $0,x
-UpdateSprite_edblock9500
-	jmp UpdateSprite_edblock9464
-UpdateSprite_eblock9463
+UpdateSprite_edblock9515
+	jmp UpdateSprite_edblock9479
+UpdateSprite_eblock9478
 	; Binary clause Simplified: EQUALS
 	lda player_respawn_state
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne UpdateSprite_eblock9508
-UpdateSprite_ctb9507: ;Main true block ;keep 
+	bne UpdateSprite_eblock9523
+UpdateSprite_ctb9522: ;Main true block ;keep 
 	
 ; // Waiting to respawn (state 2): hide sprite while counter expires
 	; Toggle bit with constant
@@ -7131,23 +7185,23 @@ UpdateSprite_ctb9507: ;Main true block ;keep
 	sta $d015
 	ldx #$0 ; optimized, look out for bugs
 	lda #1
-UpdateSprite_shiftbit9519
+UpdateSprite_shiftbit9534
 	cpx #0
-	beq UpdateSprite_shiftbitdone9520
+	beq UpdateSprite_shiftbitdone9535
 	asl
 	dex
-	jmp UpdateSprite_shiftbit9519
-UpdateSprite_shiftbitdone9520
-UpdateSprite_bitmask_var9521 = $54
-	sta UpdateSprite_bitmask_var9521
+	jmp UpdateSprite_shiftbit9534
+UpdateSprite_shiftbitdone9535
+UpdateSprite_bitmask_var9536 = $54
+	sta UpdateSprite_bitmask_var9536
 	lda #$FF
-	eor UpdateSprite_bitmask_var9521
-	sta UpdateSprite_bitmask_var9521
+	eor UpdateSprite_bitmask_var9536
+	sta UpdateSprite_bitmask_var9536
 	lda $d015
-	and UpdateSprite_bitmask_var9521
+	and UpdateSprite_bitmask_var9536
 	sta $d015
-	jmp UpdateSprite_edblock9509
-UpdateSprite_eblock9508
+	jmp UpdateSprite_edblock9524
+UpdateSprite_eblock9523
 	
 ; // Disable sprite 0
 ; // Normal play: show player ship
@@ -7157,17 +7211,17 @@ UpdateSprite_eblock9508
 	sta $d015
 	ldx #$0 ; optimized, look out for bugs
 	lda #1
-UpdateSprite_shiftbit9523
+UpdateSprite_shiftbit9538
 	cpx #0
-	beq UpdateSprite_shiftbitdone9524
+	beq UpdateSprite_shiftbitdone9539
 	asl
 	dex
-	jmp UpdateSprite_shiftbit9523
-UpdateSprite_shiftbitdone9524
-UpdateSprite_bitmask_var9525 = $54
-	sta UpdateSprite_bitmask_var9525
+	jmp UpdateSprite_shiftbit9538
+UpdateSprite_shiftbitdone9539
+UpdateSprite_bitmask_var9540 = $54
+	sta UpdateSprite_bitmask_var9540
 	lda $d015
-	ora UpdateSprite_bitmask_var9525
+	ora UpdateSprite_bitmask_var9540
 	sta $d015
 	
 ; // Ensure sprite 0 is enabled
@@ -7175,8 +7229,8 @@ UpdateSprite_bitmask_var9525 = $54
 	ldx #$0 ; optimized, look out for bugs
 	lda #$80
 	sta $07f8 + $0,x
-UpdateSprite_edblock9509
-UpdateSprite_edblock9464
+UpdateSprite_edblock9524
+UpdateSprite_edblock9479
 	rts
 end_procedure_UpdateSprite
 	
@@ -7224,7 +7278,7 @@ end_procedure_FirePlayerBullet
 	;    Procedure type : User-defined procedure
 bullet_sprite_index	dc.b	0
 bullet_color	dc.b	0
-ShowBullet_block9527
+ShowBullet_block9542
 ShowBullet
 	; Toggle bit with constant
 	lda $d015
@@ -7232,17 +7286,17 @@ ShowBullet
 	sta $d015
 	ldx #$0 ; optimized, look out for bugs
 	lda #1
-ShowBullet_shiftbit9528
+ShowBullet_shiftbit9543
 	cpx #0
-	beq ShowBullet_shiftbitdone9529
+	beq ShowBullet_shiftbitdone9544
 	asl
 	dex
-	jmp ShowBullet_shiftbit9528
-ShowBullet_shiftbitdone9529
-ShowBullet_bitmask_var9530 = $54
-	sta ShowBullet_bitmask_var9530
+	jmp ShowBullet_shiftbit9543
+ShowBullet_shiftbitdone9544
+ShowBullet_bitmask_var9545 = $54
+	sta ShowBullet_bitmask_var9545
 	lda $d015
-	ora ShowBullet_bitmask_var9530
+	ora ShowBullet_bitmask_var9545
 	sta $d015
 	
 ; // Update score display after all score-changing events this frame.
@@ -7251,14 +7305,14 @@ ShowBullet_bitmask_var9530 = $54
 	clc
 	lda player_bullet_active
 	; cmp #$00 ignored
-	beq ShowBullet_edblock9534
-ShowBullet_ctb9532: ;Main true block ;keep 
+	beq ShowBullet_edblock9549
+ShowBullet_ctb9547: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne ShowBullet_eblock9568
-ShowBullet_ctb9567: ;Main true block ;keep 
+	bne ShowBullet_eblock9583
+ShowBullet_ctb9582: ;Main true block ;keep 
 	
 ; // Only display bullet/explosion if the sprite box fits entirely above the player raster line.
 ; // The VIC-II triggers sprite DMA at the TOP of the sprite box (player_bullet_y), not at the
@@ -7287,26 +7341,26 @@ ShowBullet_ctb9567: ;Main true block ;keep
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta bullet_sprite_index
-	jmp ShowBullet_edblock9569
-ShowBullet_eblock9568
+	jmp ShowBullet_edblock9584
+ShowBullet_eblock9583
 	; Binary clause Simplified: EQUALS
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bne ShowBullet_eblock9584
-ShowBullet_ctb9583: ;Main true block ;keep 
+	bne ShowBullet_eblock9599
+ShowBullet_ctb9598: ;Main true block ;keep 
 	
 ; // Enemy-shot explosion sprite
 	lda #$17
 	; Calling storevariable on generic assign expression
 	sta bullet_sprite_index
-	jmp ShowBullet_edblock9585
-ShowBullet_eblock9584
+	jmp ShowBullet_edblock9600
+ShowBullet_eblock9599
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta bullet_sprite_index
-ShowBullet_edblock9585
-ShowBullet_edblock9569
+ShowBullet_edblock9600
+ShowBullet_edblock9584
 	
 ; // Normal bullet sprite
 	; Set sprite location
@@ -7315,21 +7369,21 @@ ShowBullet_edblock9569
 	; Generic 16 bit op
 	ldy #0
 	lda bullet_sprite_index
-ShowBullet_rightvarInteger_var9592 = $54
-	sta ShowBullet_rightvarInteger_var9592
-	sty ShowBullet_rightvarInteger_var9592+1
+ShowBullet_rightvarInteger_var9607 = $54
+	sta ShowBullet_rightvarInteger_var9607
+	sty ShowBullet_rightvarInteger_var9607+1
 	lda #128
 	ldy #0
 	; Low bit binop:
 	clc
-	adc ShowBullet_rightvarInteger_var9592
-ShowBullet_wordAdd9590
-	sta ShowBullet_rightvarInteger_var9592
+	adc ShowBullet_rightvarInteger_var9607
+ShowBullet_wordAdd9605
+	sta ShowBullet_rightvarInteger_var9607
 	; High-bit binop
 	tya
-	adc ShowBullet_rightvarInteger_var9592+1
+	adc ShowBullet_rightvarInteger_var9607+1
 	tay
-	lda ShowBullet_rightvarInteger_var9592
+	lda ShowBullet_rightvarInteger_var9607
 	ldx $50
 	sta $07f8 + $0,x
 	; Setting sprite position
@@ -7337,17 +7391,17 @@ ShowBullet_wordAdd9590
 	lda player_bullet_x
 	ldx #0
 	sta $D000,x
-ShowBullet_spritepos9593
+ShowBullet_spritepos9608
 	lda $D010
 	and #%11111110
 	sta $D010
-ShowBullet_spriteposcontinue9594
+ShowBullet_spriteposcontinue9609
 	inx
 	txa
 	tay
 	lda player_bullet_y
 	sta $D000,y
-ShowBullet_edblock9534
+ShowBullet_edblock9549
 	rts
 end_procedure_ShowBullet
 	; NodeProcedureDecl -1
@@ -7358,14 +7412,14 @@ UpdatePlayerBullet
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne UpdatePlayerBullet_eblock9598
-UpdatePlayerBullet_ctb9597: ;Main true block ;keep 
+	bne UpdatePlayerBullet_eblock9613
+UpdatePlayerBullet_ctb9612: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_bullet_y
 	; Compare with pure num / var optimization
 	cmp #$5;keep
-	bcc UpdatePlayerBullet_eblock9631
-UpdatePlayerBullet_ctb9630: ;Main true block ;keep 
+	bcc UpdatePlayerBullet_eblock9646
+UpdatePlayerBullet_ctb9645: ;Main true block ;keep 
 	
 ; // Pixels per frame upward
 ; // Frames to show explosion
@@ -7376,22 +7430,22 @@ UpdatePlayerBullet_ctb9630: ;Main true block ;keep
 	sec
 	sbc #$4
 	sta player_bullet_y
-	jmp UpdatePlayerBullet_edblock9632
-UpdatePlayerBullet_eblock9631
+	jmp UpdatePlayerBullet_edblock9647
+UpdatePlayerBullet_eblock9646
 	
 ; // Bullet reached top of screen, deactivate
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta player_bullet_active
-UpdatePlayerBullet_edblock9632
-	jmp UpdatePlayerBullet_edblock9599
-UpdatePlayerBullet_eblock9598
+UpdatePlayerBullet_edblock9647
+	jmp UpdatePlayerBullet_edblock9614
+UpdatePlayerBullet_eblock9613
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bcc UpdatePlayerBullet_edblock9641
-UpdatePlayerBullet_ctb9639: ;Main true block ;keep 
+	bcc UpdatePlayerBullet_edblock9656
+UpdatePlayerBullet_ctb9654: ;Main true block ;keep 
 	
 ; // Explosion animation (state 2 = alien hit, state 3 = enemy shot hit)
 	; Test Inc dec D
@@ -7400,16 +7454,16 @@ UpdatePlayerBullet_ctb9639: ;Main true block ;keep
 	lda explosion_frame_counter
 	; Compare with pure num / var optimization
 	cmp #$10;keep
-	bcc UpdatePlayerBullet_edblock9653
-UpdatePlayerBullet_ctb9651: ;Main true block ;keep 
+	bcc UpdatePlayerBullet_edblock9668
+UpdatePlayerBullet_ctb9666: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta player_bullet_active
 	; Calling storevariable on generic assign expression
 	sta explosion_frame_counter
-UpdatePlayerBullet_edblock9653
-UpdatePlayerBullet_edblock9641
-UpdatePlayerBullet_edblock9599
+UpdatePlayerBullet_edblock9668
+UpdatePlayerBullet_edblock9656
+UpdatePlayerBullet_edblock9614
 	rts
 end_procedure_UpdatePlayerBullet
 	
@@ -7428,22 +7482,22 @@ UpdatePlayerRespawn
 	clc
 	lda player_respawn_state
 	; cmp #$00 ignored
-	beq UpdatePlayerRespawn_edblock9660
-UpdatePlayerRespawn_ctb9658: ;Main true block ;keep 
+	beq UpdatePlayerRespawn_edblock9675
+UpdatePlayerRespawn_ctb9673: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_respawn_counter
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bcc UpdatePlayerRespawn_eblock9773
-UpdatePlayerRespawn_ctb9772: ;Main true block ;keep 
+	bcc UpdatePlayerRespawn_eblock9788
+UpdatePlayerRespawn_ctb9787: ;Main true block ;keep 
 	; Test Inc dec D
 	dec player_respawn_counter
 	; Binary clause Simplified: EQUALS
 	lda player_respawn_state
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne UpdatePlayerRespawn_edblock9831
-UpdatePlayerRespawn_ctb9829: ;Main true block ;keep 
+	bne UpdatePlayerRespawn_edblock9846
+UpdatePlayerRespawn_ctb9844: ;Main true block ;keep 
 	
 ; // Explosion animation state (first 55 frames)
 	; Test Inc dec D
@@ -7452,8 +7506,8 @@ UpdatePlayerRespawn_ctb9829: ;Main true block ;keep
 	lda player_explosion_flash_counter
 	; Compare with pure num / var optimization
 	cmp #$5;keep
-	bcc UpdatePlayerRespawn_edblock9855
-UpdatePlayerRespawn_ctb9853: ;Main true block ;keep 
+	bcc UpdatePlayerRespawn_edblock9870
+UpdatePlayerRespawn_ctb9868: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta player_explosion_flash_counter
@@ -7463,8 +7517,8 @@ UpdatePlayerRespawn_ctb9853: ;Main true block ;keep
 	lda player_explosion_anim_index
 	; Compare with pure num / var optimization
 	cmp #$b;keep
-	bcc UpdatePlayerRespawn_edblock9867
-UpdatePlayerRespawn_ctb9865: ;Main true block ;keep 
+	bcc UpdatePlayerRespawn_edblock9882
+UpdatePlayerRespawn_ctb9880: ;Main true block ;keep 
 	
 ; // 11 frames: 0-10
 ; // Transition to respawn state
@@ -7474,17 +7528,17 @@ UpdatePlayerRespawn_ctb9865: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta player_explosion_anim_index
-UpdatePlayerRespawn_edblock9867
-UpdatePlayerRespawn_edblock9855
-UpdatePlayerRespawn_edblock9831
-	jmp UpdatePlayerRespawn_edblock9774
-UpdatePlayerRespawn_eblock9773
+UpdatePlayerRespawn_edblock9882
+UpdatePlayerRespawn_edblock9870
+UpdatePlayerRespawn_edblock9846
+	jmp UpdatePlayerRespawn_edblock9789
+UpdatePlayerRespawn_eblock9788
 	; Binary clause Simplified: EQUALS
 	clc
 	lda remaining_ships
 	; cmp #$00 ignored
-	bne UpdatePlayerRespawn_eblock9873
-UpdatePlayerRespawn_ctb9872: ;Main true block ;keep 
+	bne UpdatePlayerRespawn_eblock9888
+UpdatePlayerRespawn_ctb9887: ;Main true block ;keep 
 	
 ; // Respawn complete: reset player and return to normal state
 ; // No lives left: trigger game over
@@ -7502,8 +7556,8 @@ UpdatePlayerRespawn_ctb9872: ;Main true block ;keep
 ; // Signal IntermissionChain to display game over text and set palette
 	; Calling storevariable on generic assign expression
 	sta pending_palette
-	jmp UpdatePlayerRespawn_edblock9874
-UpdatePlayerRespawn_eblock9873
+	jmp UpdatePlayerRespawn_edblock9889
+UpdatePlayerRespawn_eblock9888
 	
 ; // Set a neutral palette for game over screen
 ; //pal_col1:=BLUE;   pal_col2:=PURPLE; pal_col3:=GREY;
@@ -7524,9 +7578,9 @@ UpdatePlayerRespawn_eblock9873
 	sta player_explosion_anim_index
 	; Calling storevariable on generic assign expression
 	sta player_explosion_flash_counter
-UpdatePlayerRespawn_edblock9874
-UpdatePlayerRespawn_edblock9774
-UpdatePlayerRespawn_edblock9660
+UpdatePlayerRespawn_edblock9889
+UpdatePlayerRespawn_edblock9789
+UpdatePlayerRespawn_edblock9675
 	rts
 end_procedure_UpdatePlayerRespawn
 	
@@ -7546,17 +7600,17 @@ cbcc_block_row_base	dc.b	0
 cbcc_block_x	dc.b	0
 cbcc_block_y	dc.b	0
 cbcc_rel_y	dc.b	0
-CBC_CheckBlockColumn_block9879
+CBC_CheckBlockColumn_block9894
 CBC_CheckBlockColumn
 	; Binary clause Simplified: EQUALS
 	clc
 	lda cbc_found_hit
 	; cmp #$00 ignored
-	bne CBC_CheckBlockColumn_localfailed11422
-	jmp CBC_CheckBlockColumn_ctb9881
-CBC_CheckBlockColumn_localfailed11422
-	jmp CBC_CheckBlockColumn_edblock9883
-CBC_CheckBlockColumn_ctb9881: ;Main true block ;keep 
+	bne CBC_CheckBlockColumn_localfailed11437
+	jmp CBC_CheckBlockColumn_ctb9896
+CBC_CheckBlockColumn_localfailed11437
+	jmp CBC_CheckBlockColumn_edblock9898
+CBC_CheckBlockColumn_ctb9896: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda cbcc_block_row_base
@@ -7574,11 +7628,11 @@ CBC_CheckBlockColumn_ctb9881: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; cmp #$00 ignored
-	beq CBC_CheckBlockColumn_localfailed12194
-	jmp CBC_CheckBlockColumn_ctb11425
-CBC_CheckBlockColumn_localfailed12194
-	jmp CBC_CheckBlockColumn_edblock11427
-CBC_CheckBlockColumn_ctb11425: ;Main true block ;keep 
+	beq CBC_CheckBlockColumn_localfailed12209
+	jmp CBC_CheckBlockColumn_ctb11440
+CBC_CheckBlockColumn_localfailed12209
+	jmp CBC_CheckBlockColumn_edblock11442
+CBC_CheckBlockColumn_ctb11440: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -7588,11 +7642,11 @@ CBC_CheckBlockColumn_ctb11425: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp cbcc_block_x;keep
-	bcc CBC_CheckBlockColumn_localfailed12580
-	jmp CBC_CheckBlockColumn_ctb12197
-CBC_CheckBlockColumn_localfailed12580
-	jmp CBC_CheckBlockColumn_edblock12199
-CBC_CheckBlockColumn_ctb12197: ;Main true block ;keep 
+	bcc CBC_CheckBlockColumn_localfailed12595
+	jmp CBC_CheckBlockColumn_ctb12212
+CBC_CheckBlockColumn_localfailed12595
+	jmp CBC_CheckBlockColumn_edblock12214
+CBC_CheckBlockColumn_ctb12212: ;Main true block ;keep 
 	; Binary clause Simplified: GREATER
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -7607,12 +7661,12 @@ CBC_CheckBlockColumn_ctb12197: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp player_bullet_x;keep
-	bcc CBC_CheckBlockColumn_localfailed12773
-	beq CBC_CheckBlockColumn_localfailed12773
-	jmp CBC_CheckBlockColumn_ctb12583
-CBC_CheckBlockColumn_localfailed12773
-	jmp CBC_CheckBlockColumn_edblock12585
-CBC_CheckBlockColumn_ctb12583: ;Main true block ;keep 
+	bcc CBC_CheckBlockColumn_localfailed12788
+	beq CBC_CheckBlockColumn_localfailed12788
+	jmp CBC_CheckBlockColumn_ctb12598
+CBC_CheckBlockColumn_localfailed12788
+	jmp CBC_CheckBlockColumn_edblock12600
+CBC_CheckBlockColumn_ctb12598: ;Main true block ;keep 
 	
 ; // Horizontal range check: contact point within [block_x, block_x+48).
 ; // Addition form avoids byte underflow when cbcc_block_x < BULLET_X_CONTACT_REACH.
@@ -7632,59 +7686,59 @@ CBC_CheckBlockColumn_ctb12583: ;Main true block ;keep
 	; Binary clause Simplified: LESS
 	; Compare with pure num / var optimization
 	cmp #$c;keep
-	bcs CBC_CheckBlockColumn_eblock12777
-CBC_CheckBlockColumn_ctb12776: ;Main true block ;keep 
+	bcs CBC_CheckBlockColumn_eblock12792
+CBC_CheckBlockColumn_ctb12791: ;Main true block ;keep 
 	
 ; // Enemy column within block (0-2): 12px wide, 6px gaps.
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta cbcc_enemy_col
-	jmp CBC_CheckBlockColumn_edblock12778
-CBC_CheckBlockColumn_eblock12777
+	jmp CBC_CheckBlockColumn_edblock12793
+CBC_CheckBlockColumn_eblock12792
 	; Binary clause Simplified: LESS
 	lda cbcc_rel_x
 	; Compare with pure num / var optimization
 	cmp #$12;keep
-	bcs CBC_CheckBlockColumn_eblock12841
-CBC_CheckBlockColumn_ctb12840: ;Main true block ;keep 
+	bcs CBC_CheckBlockColumn_eblock12856
+CBC_CheckBlockColumn_ctb12855: ;Main true block ;keep 
 	
 ; // gap
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta cbcc_enemy_col
-	jmp CBC_CheckBlockColumn_edblock12842
-CBC_CheckBlockColumn_eblock12841
+	jmp CBC_CheckBlockColumn_edblock12857
+CBC_CheckBlockColumn_eblock12856
 	; Binary clause Simplified: LESS
 	lda cbcc_rel_x
 	; Compare with pure num / var optimization
 	cmp #$1e;keep
-	bcs CBC_CheckBlockColumn_eblock12873
-CBC_CheckBlockColumn_ctb12872: ;Main true block ;keep 
+	bcs CBC_CheckBlockColumn_eblock12888
+CBC_CheckBlockColumn_ctb12887: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta cbcc_enemy_col
-	jmp CBC_CheckBlockColumn_edblock12874
-CBC_CheckBlockColumn_eblock12873
+	jmp CBC_CheckBlockColumn_edblock12889
+CBC_CheckBlockColumn_eblock12888
 	; Binary clause Simplified: LESS
 	lda cbcc_rel_x
 	; Compare with pure num / var optimization
 	cmp #$24;keep
-	bcs CBC_CheckBlockColumn_eblock12889
-CBC_CheckBlockColumn_ctb12888: ;Main true block ;keep 
+	bcs CBC_CheckBlockColumn_eblock12904
+CBC_CheckBlockColumn_ctb12903: ;Main true block ;keep 
 	
 ; // gap
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta cbcc_enemy_col
-	jmp CBC_CheckBlockColumn_edblock12890
-CBC_CheckBlockColumn_eblock12889
+	jmp CBC_CheckBlockColumn_edblock12905
+CBC_CheckBlockColumn_eblock12904
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta cbcc_enemy_col
-CBC_CheckBlockColumn_edblock12890
-CBC_CheckBlockColumn_edblock12874
-CBC_CheckBlockColumn_edblock12842
-CBC_CheckBlockColumn_edblock12778
+CBC_CheckBlockColumn_edblock12905
+CBC_CheckBlockColumn_edblock12889
+CBC_CheckBlockColumn_edblock12857
+CBC_CheckBlockColumn_edblock12793
 	
 ; // Enemy row within block (0=top, 1=bottom).
 	lda #$ff
@@ -7694,47 +7748,47 @@ CBC_CheckBlockColumn_edblock12778
 	lda cbcc_rel_y
 	; Compare with pure num / var optimization
 	cmp #$8;keep
-	bcs CBC_CheckBlockColumn_eblock12897
-CBC_CheckBlockColumn_ctb12896: ;Main true block ;keep 
+	bcs CBC_CheckBlockColumn_eblock12912
+CBC_CheckBlockColumn_ctb12911: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta cbcc_enemy_row
-	jmp CBC_CheckBlockColumn_edblock12898
-CBC_CheckBlockColumn_eblock12897
+	jmp CBC_CheckBlockColumn_edblock12913
+CBC_CheckBlockColumn_eblock12912
 	; Binary clause Simplified: GREATEREQUAL
 	lda cbcc_rel_y
 	; Compare with pure num / var optimization
 	cmp #$8;keep
-	bcc CBC_CheckBlockColumn_edblock12913
-CBC_CheckBlockColumn_localsuccess12915: ;keep
+	bcc CBC_CheckBlockColumn_edblock12928
+CBC_CheckBlockColumn_localsuccess12930: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	lda cbcc_rel_y
 	; Compare with pure num / var optimization
 	cmp #$16;keep
-	bcs CBC_CheckBlockColumn_edblock12913
-CBC_CheckBlockColumn_ctb12911: ;Main true block ;keep 
+	bcs CBC_CheckBlockColumn_edblock12928
+CBC_CheckBlockColumn_ctb12926: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta cbcc_enemy_row
+CBC_CheckBlockColumn_edblock12928
 CBC_CheckBlockColumn_edblock12913
-CBC_CheckBlockColumn_edblock12898
 	; Binary clause Simplified: NOTEQUALS
 	lda cbcc_enemy_row
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CBC_CheckBlockColumn_localfailed12940
-CBC_CheckBlockColumn_localsuccess12941: ;keep
+	beq CBC_CheckBlockColumn_localfailed12955
+CBC_CheckBlockColumn_localsuccess12956: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: NOTEQUALS
 	lda cbcc_enemy_col
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CBC_CheckBlockColumn_localfailed12940
-	jmp CBC_CheckBlockColumn_ctb12918
-CBC_CheckBlockColumn_localfailed12940
-	jmp CBC_CheckBlockColumn_edblock12920
-CBC_CheckBlockColumn_ctb12918: ;Main true block ;keep 
+	beq CBC_CheckBlockColumn_localfailed12955
+	jmp CBC_CheckBlockColumn_ctb12933
+CBC_CheckBlockColumn_localfailed12955
+	jmp CBC_CheckBlockColumn_edblock12935
+CBC_CheckBlockColumn_ctb12933: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -7750,13 +7804,13 @@ CBC_CheckBlockColumn_ctb12918: ;Main true block ;keep
 	tax ; optimized x, look out for bugs L22 ORG 	ldx cbcc_hit_enemy_index ; optimized, look out for bugs
 	lda #$1
 	cpx #0
-	beq CBC_CheckBlockColumn_lblShiftDone12944
-CBC_CheckBlockColumn_lblShift12943
+	beq CBC_CheckBlockColumn_lblShiftDone12959
+CBC_CheckBlockColumn_lblShift12958
 	asl
 	dex
 	cpx #0
-	bne CBC_CheckBlockColumn_lblShift12943
-CBC_CheckBlockColumn_lblShiftDone12944
+	bne CBC_CheckBlockColumn_lblShift12958
+CBC_CheckBlockColumn_lblShiftDone12959
 	; Calling storevariable on generic assign expression
 	sta cbcc_enemy_mask
 	; Binary clause Simplified: NOTEQUALS
@@ -7767,8 +7821,8 @@ CBC_CheckBlockColumn_lblShiftDone12944
 	and cbcc_enemy_mask
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq CBC_CheckBlockColumn_edblock12948
-CBC_CheckBlockColumn_ctb12946: ;Main true block ;keep 
+	beq CBC_CheckBlockColumn_edblock12963
+CBC_CheckBlockColumn_ctb12961: ;Main true block ;keep 
 	lda cbcc_block_index
 	; Calling storevariable on generic assign expression
 	sta blockIndex
@@ -7837,18 +7891,18 @@ CBC_CheckBlockColumn_ctb12946: ;Main true block ;keep
 	adc #$0c
 	sta score+0
 	; Optimization : A := A op 8 bit - var and bvar are the same - perform inc
-	bcc CBC_CheckBlockColumn_WordAdd12960
+	bcc CBC_CheckBlockColumn_WordAdd12975
 	inc score+1
-CBC_CheckBlockColumn_WordAdd12960
+CBC_CheckBlockColumn_WordAdd12975
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta score_dirty
-CBC_CheckBlockColumn_edblock12948
-CBC_CheckBlockColumn_edblock12920
-CBC_CheckBlockColumn_edblock12585
-CBC_CheckBlockColumn_edblock12199
-CBC_CheckBlockColumn_edblock11427
-CBC_CheckBlockColumn_edblock9883
+CBC_CheckBlockColumn_edblock12963
+CBC_CheckBlockColumn_edblock12935
+CBC_CheckBlockColumn_edblock12600
+CBC_CheckBlockColumn_edblock12214
+CBC_CheckBlockColumn_edblock11442
+CBC_CheckBlockColumn_edblock9898
 	rts
 end_procedure_CBC_CheckBlockColumn
 	
@@ -7866,7 +7920,7 @@ cbc_block_row_base	dc.b	0
 cbc_block_y	dc.b	0
 cbc_rel_y	dc.b	0
 cbc_block_x	dc.b	0
-CheckBulletCollision_block12961
+CheckBulletCollision_block12976
 CheckBulletCollision
 	
 ; // CBC_CheckBlockColumn
@@ -7885,21 +7939,21 @@ CheckBulletCollision
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp monster_base_y;keep
-	bcs CheckBulletCollision_edblock12965
-CheckBulletCollision_ctb12963: ;Main true block ;keep 
+	bcs CheckBulletCollision_edblock12980
+CheckBulletCollision_ctb12978: ;Main true block ;keep 
 	
 ; // Early exit if bullet outside enemy formation area.
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta cbc_should_check
-CheckBulletCollision_edblock12965
+CheckBulletCollision_edblock12980
 	; Optimization: replacing a <= N with a <= N-1
 	; Binary clause Simplified: LESS
 	lda monster_base_y
 	; Compare with pure num / var optimization
 	cmp #$b0;keep
-	bcs CheckBulletCollision_edblock12971
-CheckBulletCollision_ctb12969: ;Main true block ;keep 
+	bcs CheckBulletCollision_edblock12986
+CheckBulletCollision_ctb12984: ;Main true block ;keep 
 	; Binary clause Simplified: LESS
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -7909,24 +7963,24 @@ CheckBulletCollision_ctb12969: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp player_bullet_y;keep
-	bcs CheckBulletCollision_edblock12983
-CheckBulletCollision_ctb12981: ;Main true block ;keep 
+	bcs CheckBulletCollision_edblock12998
+CheckBulletCollision_ctb12996: ;Main true block ;keep 
 	
 ; // BYTE OVERFLOW GUARD: monster_base_y + 80 wraps when monster_base_y > 175.
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta cbc_should_check
-CheckBulletCollision_edblock12983
-CheckBulletCollision_edblock12971
+CheckBulletCollision_edblock12998
+CheckBulletCollision_edblock12986
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda cbc_should_check
 	; cmp #$00 ignored
-	beq CheckBulletCollision_localfailed13017
-	jmp CheckBulletCollision_ctb12987
-CheckBulletCollision_localfailed13017
-	jmp CheckBulletCollision_edblock12989
-CheckBulletCollision_ctb12987: ;Main true block ;keep 
+	beq CheckBulletCollision_localfailed13032
+	jmp CheckBulletCollision_ctb13002
+CheckBulletCollision_localfailed13032
+	jmp CheckBulletCollision_edblock13004
+CheckBulletCollision_ctb13002: ;Main true block ;keep 
 	
 ; // Determine block row (0-2) from bullet Y.
 	; 8 bit binop
@@ -7945,29 +7999,29 @@ CheckBulletCollision_ctb12987: ;Main true block ;keep
 	; Binary clause Simplified: LESS
 	; Compare with pure num / var optimization
 	cmp #$1a;keep
-	bcs CheckBulletCollision_eblock13021
-CheckBulletCollision_ctb13020: ;Main true block ;keep 
+	bcs CheckBulletCollision_eblock13036
+CheckBulletCollision_ctb13035: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta cbc_block_row
-	jmp CheckBulletCollision_edblock13022
-CheckBulletCollision_eblock13021
+	jmp CheckBulletCollision_edblock13037
+CheckBulletCollision_eblock13036
 	; Binary clause Simplified: LESS
 	lda cbc_rel_y
 	; Compare with pure num / var optimization
 	cmp #$34;keep
-	bcs CheckBulletCollision_eblock13037
-CheckBulletCollision_ctb13036: ;Main true block ;keep 
+	bcs CheckBulletCollision_eblock13052
+CheckBulletCollision_ctb13051: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta cbc_block_row
-	jmp CheckBulletCollision_edblock13038
-CheckBulletCollision_eblock13037
+	jmp CheckBulletCollision_edblock13053
+CheckBulletCollision_eblock13052
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta cbc_block_row
-CheckBulletCollision_edblock13038
-CheckBulletCollision_edblock13022
+CheckBulletCollision_edblock13053
+CheckBulletCollision_edblock13037
 	
 ; // Precompute row-constant values ONCE before the column scan.
 	lda cbc_block_row
@@ -8090,7 +8144,7 @@ CheckBulletCollision_edblock13022
 	; Calling storevariable on generic assign expression
 	sta cbcc_rel_y
 	jsr CBC_CheckBlockColumn
-CheckBulletCollision_edblock12989
+CheckBulletCollision_edblock13004
 	rts
 end_procedure_CheckBulletCollision
 	
@@ -8101,14 +8155,14 @@ end_procedure_CheckBulletCollision
 tas_byte_col	dc.b	0
 tas_col_idx	dc.b	0
 tas_enemy_x	dc.b	0
-CESC_TryAllShields_Unrolled_block13045
+CESC_TryAllShields_Unrolled_block13060
 CESC_TryAllShields_Unrolled
 	; Binary clause Simplified: EQUALS
 	clc
 	lda cesc_contact_done
 	; cmp #$00 ignored
-	bne CESC_TryAllShields_Unrolled_localfailed13088
-CESC_TryAllShields_Unrolled_localsuccess13089: ;keep
+	bne CESC_TryAllShields_Unrolled_localfailed13103
+CESC_TryAllShields_Unrolled_localsuccess13104: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
@@ -8116,11 +8170,11 @@ CESC_TryAllShields_Unrolled_localsuccess13089: ;keep
 	; CAST type NADA
 	lda shield_top_eroded +$0 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne CESC_TryAllShields_Unrolled_localfailed13088
-	jmp CESC_TryAllShields_Unrolled_ctb13047
-CESC_TryAllShields_Unrolled_localfailed13088
-	jmp CESC_TryAllShields_Unrolled_edblock13049
-CESC_TryAllShields_Unrolled_ctb13047: ;Main true block ;keep 
+	bne CESC_TryAllShields_Unrolled_localfailed13103
+	jmp CESC_TryAllShields_Unrolled_ctb13062
+CESC_TryAllShields_Unrolled_localfailed13103
+	jmp CESC_TryAllShields_Unrolled_edblock13064
+CESC_TryAllShields_Unrolled_ctb13062: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -8128,17 +8182,17 @@ CESC_TryAllShields_Unrolled_ctb13047: ;Main true block ;keep
 	clc
 	adc #$b
 	 ; end add / sub var with constant
-CESC_TryAllShields_Unrolled_binary_clause_temp_var13111 = $54
-	sta CESC_TryAllShields_Unrolled_binary_clause_temp_var13111
+CESC_TryAllShields_Unrolled_binary_clause_temp_var13126 = $54
+	sta CESC_TryAllShields_Unrolled_binary_clause_temp_var13126
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$0 ; array with const index optimization 
-CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13112 =  $56
-	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13112
-	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13111
-	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13112;keep
-	bcc CESC_TryAllShields_Unrolled_edblock13094
-CESC_TryAllShields_Unrolled_localsuccess13110: ;keep
+CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13127 = $56
+	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13127
+	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13126
+	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13127;keep
+	bcc CESC_TryAllShields_Unrolled_edblock13109
+CESC_TryAllShields_Unrolled_localsuccess13125: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: GREATER
 	; Load Byte array
@@ -8146,18 +8200,18 @@ CESC_TryAllShields_Unrolled_localsuccess13110: ;keep
 	lda SHIELD_X_MAX +$0 ; array with const index optimization 
 	; Compare with pure num / var optimization
 	cmp tas_enemy_x;keep
-	bcc CESC_TryAllShields_Unrolled_edblock13094
-	beq CESC_TryAllShields_Unrolled_edblock13094
-CESC_TryAllShields_Unrolled_ctb13092: ;Main true block ;keep 
+	bcc CESC_TryAllShields_Unrolled_edblock13109
+	beq CESC_TryAllShields_Unrolled_edblock13109
+CESC_TryAllShields_Unrolled_ctb13107: ;Main true block ;keep 
 	; Binary clause Simplified: LESSEQUAL
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$0 ; array with const index optimization 
 	; Compare with pure num / var optimization
 	cmp tas_enemy_x;keep
-	beq CESC_TryAllShields_Unrolled_ctb13115
-	bcs CESC_TryAllShields_Unrolled_eblock13116
-CESC_TryAllShields_Unrolled_ctb13115: ;Main true block ;keep 
+	beq CESC_TryAllShields_Unrolled_ctb13130
+	bcs CESC_TryAllShields_Unrolled_eblock13131
+CESC_TryAllShields_Unrolled_ctb13130: ;Main true block ;keep 
 	
 ; // Try Shield 0
 	; 8 bit binop
@@ -8173,12 +8227,12 @@ CESC_TryAllShields_Unrolled_ctb13115: ;Main true block ;keep
 	lsr
 	; Calling storevariable on generic assign expression
 	sta tas_byte_col
-	jmp CESC_TryAllShields_Unrolled_edblock13117
-CESC_TryAllShields_Unrolled_eblock13116
+	jmp CESC_TryAllShields_Unrolled_edblock13132
+CESC_TryAllShields_Unrolled_eblock13131
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta tas_byte_col
-CESC_TryAllShields_Unrolled_edblock13117
+CESC_TryAllShields_Unrolled_edblock13132
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #0
@@ -8194,8 +8248,8 @@ CESC_TryAllShields_Unrolled_edblock13117
 	lda shield_surface_bot,x 
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CESC_TryAllShields_Unrolled_edblock13125
-CESC_TryAllShields_Unrolled_ctb13123: ;Main true block ;keep 
+	beq CESC_TryAllShields_Unrolled_edblock13140
+CESC_TryAllShields_Unrolled_ctb13138: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -8216,15 +8270,15 @@ CESC_TryAllShields_Unrolled_ctb13123: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta cesc_contact_done
-CESC_TryAllShields_Unrolled_edblock13125
-CESC_TryAllShields_Unrolled_edblock13094
-CESC_TryAllShields_Unrolled_edblock13049
+CESC_TryAllShields_Unrolled_edblock13140
+CESC_TryAllShields_Unrolled_edblock13109
+CESC_TryAllShields_Unrolled_edblock13064
 	; Binary clause Simplified: EQUALS
 	clc
 	lda cesc_contact_done
 	; cmp #$00 ignored
-	bne CESC_TryAllShields_Unrolled_localfailed13170
-CESC_TryAllShields_Unrolled_localsuccess13171: ;keep
+	bne CESC_TryAllShields_Unrolled_localfailed13185
+CESC_TryAllShields_Unrolled_localsuccess13186: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
@@ -8232,11 +8286,11 @@ CESC_TryAllShields_Unrolled_localsuccess13171: ;keep
 	; CAST type NADA
 	lda shield_top_eroded +$1 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne CESC_TryAllShields_Unrolled_localfailed13170
-	jmp CESC_TryAllShields_Unrolled_ctb13129
-CESC_TryAllShields_Unrolled_localfailed13170
-	jmp CESC_TryAllShields_Unrolled_edblock13131
-CESC_TryAllShields_Unrolled_ctb13129: ;Main true block ;keep 
+	bne CESC_TryAllShields_Unrolled_localfailed13185
+	jmp CESC_TryAllShields_Unrolled_ctb13144
+CESC_TryAllShields_Unrolled_localfailed13185
+	jmp CESC_TryAllShields_Unrolled_edblock13146
+CESC_TryAllShields_Unrolled_ctb13144: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -8244,17 +8298,17 @@ CESC_TryAllShields_Unrolled_ctb13129: ;Main true block ;keep
 	clc
 	adc #$b
 	 ; end add / sub var with constant
-CESC_TryAllShields_Unrolled_binary_clause_temp_var13193 = $54
-	sta CESC_TryAllShields_Unrolled_binary_clause_temp_var13193
+CESC_TryAllShields_Unrolled_binary_clause_temp_var13208 = $54
+	sta CESC_TryAllShields_Unrolled_binary_clause_temp_var13208
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$1 ; array with const index optimization 
-CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13194 =  $56
-	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13194
-	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13193
-	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13194;keep
-	bcc CESC_TryAllShields_Unrolled_edblock13176
-CESC_TryAllShields_Unrolled_localsuccess13192: ;keep
+CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13209 = $56
+	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13209
+	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13208
+	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13209;keep
+	bcc CESC_TryAllShields_Unrolled_edblock13191
+CESC_TryAllShields_Unrolled_localsuccess13207: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: GREATER
 	; Load Byte array
@@ -8262,18 +8316,18 @@ CESC_TryAllShields_Unrolled_localsuccess13192: ;keep
 	lda SHIELD_X_MAX +$1 ; array with const index optimization 
 	; Compare with pure num / var optimization
 	cmp tas_enemy_x;keep
-	bcc CESC_TryAllShields_Unrolled_edblock13176
-	beq CESC_TryAllShields_Unrolled_edblock13176
-CESC_TryAllShields_Unrolled_ctb13174: ;Main true block ;keep 
+	bcc CESC_TryAllShields_Unrolled_edblock13191
+	beq CESC_TryAllShields_Unrolled_edblock13191
+CESC_TryAllShields_Unrolled_ctb13189: ;Main true block ;keep 
 	; Binary clause Simplified: LESSEQUAL
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$1 ; array with const index optimization 
 	; Compare with pure num / var optimization
 	cmp tas_enemy_x;keep
-	beq CESC_TryAllShields_Unrolled_ctb13197
-	bcs CESC_TryAllShields_Unrolled_eblock13198
-CESC_TryAllShields_Unrolled_ctb13197: ;Main true block ;keep 
+	beq CESC_TryAllShields_Unrolled_ctb13212
+	bcs CESC_TryAllShields_Unrolled_eblock13213
+CESC_TryAllShields_Unrolled_ctb13212: ;Main true block ;keep 
 	
 ; // Try Shield 1
 	; 8 bit binop
@@ -8289,12 +8343,12 @@ CESC_TryAllShields_Unrolled_ctb13197: ;Main true block ;keep
 	lsr
 	; Calling storevariable on generic assign expression
 	sta tas_byte_col
-	jmp CESC_TryAllShields_Unrolled_edblock13199
-CESC_TryAllShields_Unrolled_eblock13198
+	jmp CESC_TryAllShields_Unrolled_edblock13214
+CESC_TryAllShields_Unrolled_eblock13213
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta tas_byte_col
-CESC_TryAllShields_Unrolled_edblock13199
+CESC_TryAllShields_Unrolled_edblock13214
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #3
@@ -8310,8 +8364,8 @@ CESC_TryAllShields_Unrolled_edblock13199
 	lda shield_surface_bot,x 
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CESC_TryAllShields_Unrolled_edblock13207
-CESC_TryAllShields_Unrolled_ctb13205: ;Main true block ;keep 
+	beq CESC_TryAllShields_Unrolled_edblock13222
+CESC_TryAllShields_Unrolled_ctb13220: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -8331,15 +8385,15 @@ CESC_TryAllShields_Unrolled_ctb13205: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta cesc_contact_done
-CESC_TryAllShields_Unrolled_edblock13207
-CESC_TryAllShields_Unrolled_edblock13176
-CESC_TryAllShields_Unrolled_edblock13131
+CESC_TryAllShields_Unrolled_edblock13222
+CESC_TryAllShields_Unrolled_edblock13191
+CESC_TryAllShields_Unrolled_edblock13146
 	; Binary clause Simplified: EQUALS
 	clc
 	lda cesc_contact_done
 	; cmp #$00 ignored
-	bne CESC_TryAllShields_Unrolled_localfailed13252
-CESC_TryAllShields_Unrolled_localsuccess13253: ;keep
+	bne CESC_TryAllShields_Unrolled_localfailed13267
+CESC_TryAllShields_Unrolled_localsuccess13268: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
@@ -8347,11 +8401,11 @@ CESC_TryAllShields_Unrolled_localsuccess13253: ;keep
 	; CAST type NADA
 	lda shield_top_eroded +$2 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne CESC_TryAllShields_Unrolled_localfailed13252
-	jmp CESC_TryAllShields_Unrolled_ctb13211
-CESC_TryAllShields_Unrolled_localfailed13252
-	jmp CESC_TryAllShields_Unrolled_edblock13213
-CESC_TryAllShields_Unrolled_ctb13211: ;Main true block ;keep 
+	bne CESC_TryAllShields_Unrolled_localfailed13267
+	jmp CESC_TryAllShields_Unrolled_ctb13226
+CESC_TryAllShields_Unrolled_localfailed13267
+	jmp CESC_TryAllShields_Unrolled_edblock13228
+CESC_TryAllShields_Unrolled_ctb13226: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -8359,17 +8413,17 @@ CESC_TryAllShields_Unrolled_ctb13211: ;Main true block ;keep
 	clc
 	adc #$b
 	 ; end add / sub var with constant
-CESC_TryAllShields_Unrolled_binary_clause_temp_var13275 = $54
-	sta CESC_TryAllShields_Unrolled_binary_clause_temp_var13275
+CESC_TryAllShields_Unrolled_binary_clause_temp_var13290 = $54
+	sta CESC_TryAllShields_Unrolled_binary_clause_temp_var13290
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$2 ; array with const index optimization 
-CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13276 =  $56
-	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13276
-	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13275
-	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13276;keep
-	bcc CESC_TryAllShields_Unrolled_edblock13258
-CESC_TryAllShields_Unrolled_localsuccess13274: ;keep
+CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13291 = $56
+	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13291
+	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13290
+	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13291;keep
+	bcc CESC_TryAllShields_Unrolled_edblock13273
+CESC_TryAllShields_Unrolled_localsuccess13289: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: GREATER
 	; Load Byte array
@@ -8377,18 +8431,18 @@ CESC_TryAllShields_Unrolled_localsuccess13274: ;keep
 	lda SHIELD_X_MAX +$2 ; array with const index optimization 
 	; Compare with pure num / var optimization
 	cmp tas_enemy_x;keep
-	bcc CESC_TryAllShields_Unrolled_edblock13258
-	beq CESC_TryAllShields_Unrolled_edblock13258
-CESC_TryAllShields_Unrolled_ctb13256: ;Main true block ;keep 
+	bcc CESC_TryAllShields_Unrolled_edblock13273
+	beq CESC_TryAllShields_Unrolled_edblock13273
+CESC_TryAllShields_Unrolled_ctb13271: ;Main true block ;keep 
 	; Binary clause Simplified: LESSEQUAL
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$2 ; array with const index optimization 
 	; Compare with pure num / var optimization
 	cmp tas_enemy_x;keep
-	beq CESC_TryAllShields_Unrolled_ctb13279
-	bcs CESC_TryAllShields_Unrolled_eblock13280
-CESC_TryAllShields_Unrolled_ctb13279: ;Main true block ;keep 
+	beq CESC_TryAllShields_Unrolled_ctb13294
+	bcs CESC_TryAllShields_Unrolled_eblock13295
+CESC_TryAllShields_Unrolled_ctb13294: ;Main true block ;keep 
 	
 ; // Try Shield 2
 	; 8 bit binop
@@ -8404,12 +8458,12 @@ CESC_TryAllShields_Unrolled_ctb13279: ;Main true block ;keep
 	lsr
 	; Calling storevariable on generic assign expression
 	sta tas_byte_col
-	jmp CESC_TryAllShields_Unrolled_edblock13281
-CESC_TryAllShields_Unrolled_eblock13280
+	jmp CESC_TryAllShields_Unrolled_edblock13296
+CESC_TryAllShields_Unrolled_eblock13295
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta tas_byte_col
-CESC_TryAllShields_Unrolled_edblock13281
+CESC_TryAllShields_Unrolled_edblock13296
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #6
@@ -8425,8 +8479,8 @@ CESC_TryAllShields_Unrolled_edblock13281
 	lda shield_surface_bot,x 
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CESC_TryAllShields_Unrolled_edblock13289
-CESC_TryAllShields_Unrolled_ctb13287: ;Main true block ;keep 
+	beq CESC_TryAllShields_Unrolled_edblock13304
+CESC_TryAllShields_Unrolled_ctb13302: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -8447,15 +8501,15 @@ CESC_TryAllShields_Unrolled_ctb13287: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta cesc_contact_done
-CESC_TryAllShields_Unrolled_edblock13289
-CESC_TryAllShields_Unrolled_edblock13258
-CESC_TryAllShields_Unrolled_edblock13213
+CESC_TryAllShields_Unrolled_edblock13304
+CESC_TryAllShields_Unrolled_edblock13273
+CESC_TryAllShields_Unrolled_edblock13228
 	; Binary clause Simplified: EQUALS
 	clc
 	lda cesc_contact_done
 	; cmp #$00 ignored
-	bne CESC_TryAllShields_Unrolled_localfailed13334
-CESC_TryAllShields_Unrolled_localsuccess13335: ;keep
+	bne CESC_TryAllShields_Unrolled_localfailed13349
+CESC_TryAllShields_Unrolled_localsuccess13350: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
@@ -8463,11 +8517,11 @@ CESC_TryAllShields_Unrolled_localsuccess13335: ;keep
 	; CAST type NADA
 	lda shield_top_eroded +$3 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne CESC_TryAllShields_Unrolled_localfailed13334
-	jmp CESC_TryAllShields_Unrolled_ctb13293
-CESC_TryAllShields_Unrolled_localfailed13334
-	jmp CESC_TryAllShields_Unrolled_edblock13295
-CESC_TryAllShields_Unrolled_ctb13293: ;Main true block ;keep 
+	bne CESC_TryAllShields_Unrolled_localfailed13349
+	jmp CESC_TryAllShields_Unrolled_ctb13308
+CESC_TryAllShields_Unrolled_localfailed13349
+	jmp CESC_TryAllShields_Unrolled_edblock13310
+CESC_TryAllShields_Unrolled_ctb13308: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -8475,17 +8529,17 @@ CESC_TryAllShields_Unrolled_ctb13293: ;Main true block ;keep
 	clc
 	adc #$b
 	 ; end add / sub var with constant
-CESC_TryAllShields_Unrolled_binary_clause_temp_var13357 = $54
-	sta CESC_TryAllShields_Unrolled_binary_clause_temp_var13357
+CESC_TryAllShields_Unrolled_binary_clause_temp_var13372 = $54
+	sta CESC_TryAllShields_Unrolled_binary_clause_temp_var13372
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$3 ; array with const index optimization 
-CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13358 =  $56
-	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13358
-	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13357
-	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13358;keep
-	bcc CESC_TryAllShields_Unrolled_edblock13340
-CESC_TryAllShields_Unrolled_localsuccess13356: ;keep
+CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13373 = $56
+	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13373
+	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13372
+	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13373;keep
+	bcc CESC_TryAllShields_Unrolled_edblock13355
+CESC_TryAllShields_Unrolled_localsuccess13371: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: GREATER
 	; Load Byte array
@@ -8493,18 +8547,18 @@ CESC_TryAllShields_Unrolled_localsuccess13356: ;keep
 	lda SHIELD_X_MAX +$3 ; array with const index optimization 
 	; Compare with pure num / var optimization
 	cmp tas_enemy_x;keep
-	bcc CESC_TryAllShields_Unrolled_edblock13340
-	beq CESC_TryAllShields_Unrolled_edblock13340
-CESC_TryAllShields_Unrolled_ctb13338: ;Main true block ;keep 
+	bcc CESC_TryAllShields_Unrolled_edblock13355
+	beq CESC_TryAllShields_Unrolled_edblock13355
+CESC_TryAllShields_Unrolled_ctb13353: ;Main true block ;keep 
 	; Binary clause Simplified: LESSEQUAL
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$3 ; array with const index optimization 
 	; Compare with pure num / var optimization
 	cmp tas_enemy_x;keep
-	beq CESC_TryAllShields_Unrolled_ctb13361
-	bcs CESC_TryAllShields_Unrolled_eblock13362
-CESC_TryAllShields_Unrolled_ctb13361: ;Main true block ;keep 
+	beq CESC_TryAllShields_Unrolled_ctb13376
+	bcs CESC_TryAllShields_Unrolled_eblock13377
+CESC_TryAllShields_Unrolled_ctb13376: ;Main true block ;keep 
 	
 ; // Try Shield 3
 	; 8 bit binop
@@ -8520,12 +8574,12 @@ CESC_TryAllShields_Unrolled_ctb13361: ;Main true block ;keep
 	lsr
 	; Calling storevariable on generic assign expression
 	sta tas_byte_col
-	jmp CESC_TryAllShields_Unrolled_edblock13363
-CESC_TryAllShields_Unrolled_eblock13362
+	jmp CESC_TryAllShields_Unrolled_edblock13378
+CESC_TryAllShields_Unrolled_eblock13377
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta tas_byte_col
-CESC_TryAllShields_Unrolled_edblock13363
+CESC_TryAllShields_Unrolled_edblock13378
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #9
@@ -8541,8 +8595,8 @@ CESC_TryAllShields_Unrolled_edblock13363
 	lda shield_surface_bot,x 
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CESC_TryAllShields_Unrolled_edblock13371
-CESC_TryAllShields_Unrolled_ctb13369: ;Main true block ;keep 
+	beq CESC_TryAllShields_Unrolled_edblock13386
+CESC_TryAllShields_Unrolled_ctb13384: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -8563,9 +8617,9 @@ CESC_TryAllShields_Unrolled_ctb13369: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta cesc_contact_done
-CESC_TryAllShields_Unrolled_edblock13371
-CESC_TryAllShields_Unrolled_edblock13340
-CESC_TryAllShields_Unrolled_edblock13295
+CESC_TryAllShields_Unrolled_edblock13386
+CESC_TryAllShields_Unrolled_edblock13355
+CESC_TryAllShields_Unrolled_edblock13310
 	rts
 end_procedure_CESC_TryAllShields_Unrolled
 	
@@ -8582,17 +8636,17 @@ cc_row	dc.b	0
 cc_block_col	dc.b	0
 cc_enemy_col	dc.b	0
 cc_row_offset	dc.b	0
-CESC_CheckColumn_block13374
+CESC_CheckColumn_block13389
 CESC_CheckColumn
 	; Binary clause Simplified: EQUALS
 	clc
 	lda cesc_contact_done
 	; cmp #$00 ignored
-	bne CESC_CheckColumn_localfailed13476
-	jmp CESC_CheckColumn_ctb13376
-CESC_CheckColumn_localfailed13476
-	jmp CESC_CheckColumn_edblock13378
-CESC_CheckColumn_ctb13376: ;Main true block ;keep 
+	bne CESC_CheckColumn_localfailed13491
+	jmp CESC_CheckColumn_ctb13391
+CESC_CheckColumn_localfailed13491
+	jmp CESC_CheckColumn_edblock13393
+CESC_CheckColumn_ctb13391: ;Main true block ;keep 
 	
 ; // CESC_CheckColumn
 	; Load Byte array
@@ -8616,8 +8670,8 @@ CESC_CheckColumn_ctb13376: ;Main true block ;keep
 	clc
 	lda cc_enemy_col
 	; cmp #$00 ignored
-	bne CESC_CheckColumn_eblock13480
-CESC_CheckColumn_ctb13479: ;Main true block ;keep 
+	bne CESC_CheckColumn_eblock13495
+CESC_CheckColumn_ctb13494: ;Main true block ;keep 
 	
 ; // Unrolled column masks for efficiency
 	lda #$3
@@ -8626,30 +8680,30 @@ CESC_CheckColumn_ctb13479: ;Main true block ;keep
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta cc_bot_mask
-	jmp CESC_CheckColumn_edblock13481
-CESC_CheckColumn_eblock13480
+	jmp CESC_CheckColumn_edblock13496
+CESC_CheckColumn_eblock13495
 	; Binary clause Simplified: EQUALS
 	lda cc_enemy_col
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne CESC_CheckColumn_eblock13496
-CESC_CheckColumn_ctb13495: ;Main true block ;keep 
+	bne CESC_CheckColumn_eblock13511
+CESC_CheckColumn_ctb13510: ;Main true block ;keep 
 	lda #$c
 	; Calling storevariable on generic assign expression
 	sta cc_col_mask
 	lda #$8
 	; Calling storevariable on generic assign expression
 	sta cc_bot_mask
-	jmp CESC_CheckColumn_edblock13497
-CESC_CheckColumn_eblock13496
+	jmp CESC_CheckColumn_edblock13512
+CESC_CheckColumn_eblock13511
 	lda #$30
 	; Calling storevariable on generic assign expression
 	sta cc_col_mask
 	lda #$20
 	; Calling storevariable on generic assign expression
 	sta cc_bot_mask
-CESC_CheckColumn_edblock13497
-CESC_CheckColumn_edblock13481
+CESC_CheckColumn_edblock13512
+CESC_CheckColumn_edblock13496
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -8658,8 +8712,8 @@ CESC_CheckColumn_edblock13481
 	and cc_col_mask
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq CESC_CheckColumn_edblock13505
-CESC_CheckColumn_ctb13503: ;Main true block ;keep 
+	beq CESC_CheckColumn_edblock13520
+CESC_CheckColumn_ctb13518: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -8668,9 +8722,9 @@ CESC_CheckColumn_ctb13503: ;Main true block ;keep
 	and cc_bot_mask
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq CESC_CheckColumn_localfailed13559
-	jmp CESC_CheckColumn_ctb13542
-CESC_CheckColumn_localfailed13559: ;keep
+	beq CESC_CheckColumn_localfailed13574
+	jmp CESC_CheckColumn_ctb13557
+CESC_CheckColumn_localfailed13574: ;keep
 	; ; logical OR, second chance
 	; Binary clause Simplified: GREATEREQUAL
 	; 8 bit binop
@@ -8686,8 +8740,8 @@ CESC_CheckColumn_localfailed13559: ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$c7;keep
-	bcc CESC_CheckColumn_edblock13544
-CESC_CheckColumn_ctb13542: ;Main true block ;keep 
+	bcc CESC_CheckColumn_edblock13559
+CESC_CheckColumn_ctb13557: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub right value is variable/expression
 	; Right is PURE NUMERIC : Is word =0
@@ -8698,8 +8752,8 @@ CESC_CheckColumn_ctb13542: ;Main true block ;keep
 	jsr multiply_eightbit
 	txa
 	ldy #0 ; ::EightbitMul
-CESC_CheckColumn_rightvarAddSub_var13563 = $54
-	sta CESC_CheckColumn_rightvarAddSub_var13563
+CESC_CheckColumn_rightvarAddSub_var13578 = $54
+	sta CESC_CheckColumn_rightvarAddSub_var13578
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -8714,33 +8768,33 @@ CESC_CheckColumn_rightvarAddSub_var13563 = $54
 	adc monster_base_x
 	 ; end add / sub var with constant
 	clc
-	adc CESC_CheckColumn_rightvarAddSub_var13563
+	adc CESC_CheckColumn_rightvarAddSub_var13578
 	; Calling storevariable on generic assign expression
 	sta cc_enemy_x
 	; Binary clause Simplified: GREATEREQUAL
 	; Compare with pure num / var optimization
 	cmp #$6;keep
-	bcc CESC_CheckColumn_eblock13568
-CESC_CheckColumn_ctb13567: ;Main true block ;keep 
+	bcc CESC_CheckColumn_eblock13583
+CESC_CheckColumn_ctb13582: ;Main true block ;keep 
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : cc_enemy_x
 	lda cc_enemy_x
 	sec
 	sbc #$6
 	sta cc_enemy_x
-	jmp CESC_CheckColumn_edblock13569
-CESC_CheckColumn_eblock13568
+	jmp CESC_CheckColumn_edblock13584
+CESC_CheckColumn_eblock13583
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta cc_enemy_x
-CESC_CheckColumn_edblock13569
+CESC_CheckColumn_edblock13584
 	lda cc_enemy_x
 	; Calling storevariable on generic assign expression
 	sta tas_enemy_x
 	jsr CESC_TryAllShields_Unrolled
-CESC_CheckColumn_edblock13544
-CESC_CheckColumn_edblock13505
-CESC_CheckColumn_edblock13378
+CESC_CheckColumn_edblock13559
+CESC_CheckColumn_edblock13520
+CESC_CheckColumn_edblock13393
 	rts
 end_procedure_CESC_CheckColumn
 	
@@ -8752,7 +8806,7 @@ end_procedure_CESC_CheckColumn
 cb_row	dc.b	0
 cb_block_col	dc.b	0
 cb_row_offset	dc.b	0
-CESC_CheckBlock_block13574
+CESC_CheckBlock_block13589
 CESC_CheckBlock
 	
 ; // CESC_CheckBlock
@@ -8805,7 +8859,7 @@ end_procedure_CESC_CheckBlock
 	;    Procedure type : User-defined procedure
 cr_row	dc.b	0
 cr_row_offset	dc.b	0
-CESC_CheckRow_block13575
+CESC_CheckRow_block13590
 CESC_CheckRow
 	; Binary clause Simplified: NOTEQUALS
 	clc
@@ -8825,8 +8879,8 @@ CESC_CheckRow
 	tax
 	lda block_enemies,x 
 	; cmp #$00 ignored
-	beq CESC_CheckRow_edblock13579
-CESC_CheckRow_ctb13577: ;Main true block ;keep 
+	beq CESC_CheckRow_edblock13594
+CESC_CheckRow_ctb13592: ;Main true block ;keep 
 	
 ; // CESC_CheckRow
 	lda cr_row
@@ -8839,7 +8893,7 @@ CESC_CheckRow_ctb13577: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta cb_row_offset
 	jsr CESC_CheckBlock
-CESC_CheckRow_edblock13579
+CESC_CheckRow_edblock13594
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
@@ -8858,8 +8912,8 @@ CESC_CheckRow_edblock13579
 	tax
 	lda block_enemies,x 
 	; cmp #$00 ignored
-	beq CESC_CheckRow_edblock13585
-CESC_CheckRow_ctb13583: ;Main true block ;keep 
+	beq CESC_CheckRow_edblock13600
+CESC_CheckRow_ctb13598: ;Main true block ;keep 
 	lda cr_row
 	; Calling storevariable on generic assign expression
 	sta cb_row
@@ -8870,7 +8924,7 @@ CESC_CheckRow_ctb13583: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta cb_row_offset
 	jsr CESC_CheckBlock
-CESC_CheckRow_edblock13585
+CESC_CheckRow_edblock13600
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
@@ -8889,8 +8943,8 @@ CESC_CheckRow_edblock13585
 	tax
 	lda block_enemies,x 
 	; cmp #$00 ignored
-	beq CESC_CheckRow_edblock13591
-CESC_CheckRow_ctb13589: ;Main true block ;keep 
+	beq CESC_CheckRow_edblock13606
+CESC_CheckRow_ctb13604: ;Main true block ;keep 
 	lda cr_row
 	; Calling storevariable on generic assign expression
 	sta cb_row
@@ -8901,7 +8955,7 @@ CESC_CheckRow_ctb13589: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta cb_row_offset
 	jsr CESC_CheckBlock
-CESC_CheckRow_edblock13591
+CESC_CheckRow_edblock13606
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
@@ -8920,8 +8974,8 @@ CESC_CheckRow_edblock13591
 	tax
 	lda block_enemies,x 
 	; cmp #$00 ignored
-	beq CESC_CheckRow_edblock13597
-CESC_CheckRow_ctb13595: ;Main true block ;keep 
+	beq CESC_CheckRow_edblock13612
+CESC_CheckRow_ctb13610: ;Main true block ;keep 
 	lda cr_row
 	; Calling storevariable on generic assign expression
 	sta cb_row
@@ -8932,7 +8986,7 @@ CESC_CheckRow_ctb13595: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta cb_row_offset
 	jsr CESC_CheckBlock
-CESC_CheckRow_edblock13597
+CESC_CheckRow_edblock13612
 	rts
 end_procedure_CESC_CheckRow
 	
@@ -8965,17 +9019,17 @@ end_procedure_CESC_CheckRow
 	; ***********  Defining procedure : CheckEnemyShieldContact
 	;    Procedure type : User-defined procedure
 cesc_row_offset	dc.b	0
-CheckEnemyShieldContact_block13600
+CheckEnemyShieldContact_block13615
 CheckEnemyShieldContact
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda enemy_march_tick
 	; cmp #$00 ignored
-	beq CheckEnemyShieldContact_localfailed13707
-	jmp CheckEnemyShieldContact_ctb13602
-CheckEnemyShieldContact_localfailed13707
-	jmp CheckEnemyShieldContact_edblock13604
-CheckEnemyShieldContact_ctb13602: ;Main true block ;keep 
+	beq CheckEnemyShieldContact_localfailed13722
+	jmp CheckEnemyShieldContact_ctb13617
+CheckEnemyShieldContact_localfailed13722
+	jmp CheckEnemyShieldContact_edblock13619
+CheckEnemyShieldContact_ctb13617: ;Main true block ;keep 
 	
 ; // CESC_CheckRow
 ; // CheckEnemyShieldContact
@@ -8986,11 +9040,11 @@ CheckEnemyShieldContact_ctb13602: ;Main true block ;keep
 	clc
 	lda pending_shield_erosion
 	; cmp #$00 ignored
-	bne CheckEnemyShieldContact_localfailed13761
-	jmp CheckEnemyShieldContact_ctb13710
-CheckEnemyShieldContact_localfailed13761
-	jmp CheckEnemyShieldContact_edblock13712
-CheckEnemyShieldContact_ctb13710: ;Main true block ;keep 
+	bne CheckEnemyShieldContact_localfailed13776
+	jmp CheckEnemyShieldContact_ctb13725
+CheckEnemyShieldContact_localfailed13776
+	jmp CheckEnemyShieldContact_edblock13727
+CheckEnemyShieldContact_ctb13725: ;Main true block ;keep 
 	sei
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -9014,8 +9068,8 @@ CheckEnemyShieldContact_ctb13710: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$c7;keep
-	bcc CheckEnemyShieldContact_edblock13766
-CheckEnemyShieldContact_localsuccess13768: ;keep
+	bcc CheckEnemyShieldContact_edblock13781
+CheckEnemyShieldContact_localsuccess13783: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	; 8 bit binop
@@ -9026,8 +9080,8 @@ CheckEnemyShieldContact_localsuccess13768: ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$c9;keep
-	bcs CheckEnemyShieldContact_edblock13766
-CheckEnemyShieldContact_ctb13764: ;Main true block ;keep 
+	bcs CheckEnemyShieldContact_edblock13781
+CheckEnemyShieldContact_ctb13779: ;Main true block ;keep 
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta cr_row
@@ -9035,13 +9089,13 @@ CheckEnemyShieldContact_ctb13764: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta cr_row_offset
 	jsr CESC_CheckRow
-CheckEnemyShieldContact_edblock13766
+CheckEnemyShieldContact_edblock13781
 	; Binary clause Simplified: EQUALS
 	clc
 	lda cesc_contact_done
 	; cmp #$00 ignored
-	bne CheckEnemyShieldContact_edblock13773
-CheckEnemyShieldContact_ctb13771: ;Main true block ;keep 
+	bne CheckEnemyShieldContact_edblock13788
+CheckEnemyShieldContact_ctb13786: ;Main true block ;keep 
 	
 ; // Check formation row 1
 	lda #$1a
@@ -9061,8 +9115,8 @@ CheckEnemyShieldContact_ctb13771: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$c7;keep
-	bcc CheckEnemyShieldContact_edblock13786
-CheckEnemyShieldContact_localsuccess13788: ;keep
+	bcc CheckEnemyShieldContact_edblock13801
+CheckEnemyShieldContact_localsuccess13803: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	; 8 bit binop
@@ -9073,8 +9127,8 @@ CheckEnemyShieldContact_localsuccess13788: ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$c9;keep
-	bcs CheckEnemyShieldContact_edblock13786
-CheckEnemyShieldContact_ctb13784: ;Main true block ;keep 
+	bcs CheckEnemyShieldContact_edblock13801
+CheckEnemyShieldContact_ctb13799: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta cr_row
@@ -9082,14 +9136,14 @@ CheckEnemyShieldContact_ctb13784: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta cr_row_offset
 	jsr CESC_CheckRow
-CheckEnemyShieldContact_edblock13786
-CheckEnemyShieldContact_edblock13773
+CheckEnemyShieldContact_edblock13801
+CheckEnemyShieldContact_edblock13788
 	; Binary clause Simplified: EQUALS
 	clc
 	lda cesc_contact_done
 	; cmp #$00 ignored
-	bne CheckEnemyShieldContact_edblock13793
-CheckEnemyShieldContact_ctb13791: ;Main true block ;keep 
+	bne CheckEnemyShieldContact_edblock13808
+CheckEnemyShieldContact_ctb13806: ;Main true block ;keep 
 	
 ; // Check formation row 0
 	lda #$0
@@ -9109,8 +9163,8 @@ CheckEnemyShieldContact_ctb13791: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$c7;keep
-	bcc CheckEnemyShieldContact_edblock13806
-CheckEnemyShieldContact_localsuccess13808: ;keep
+	bcc CheckEnemyShieldContact_edblock13821
+CheckEnemyShieldContact_localsuccess13823: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	; 8 bit binop
@@ -9121,8 +9175,8 @@ CheckEnemyShieldContact_localsuccess13808: ;keep
 	 ; end add / sub var with constant
 	; Compare with pure num / var optimization
 	cmp #$c9;keep
-	bcs CheckEnemyShieldContact_edblock13806
-CheckEnemyShieldContact_ctb13804: ;Main true block ;keep 
+	bcs CheckEnemyShieldContact_edblock13821
+CheckEnemyShieldContact_ctb13819: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta cr_row
@@ -9130,12 +9184,12 @@ CheckEnemyShieldContact_ctb13804: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta cr_row_offset
 	jsr CESC_CheckRow
-CheckEnemyShieldContact_edblock13806
-CheckEnemyShieldContact_edblock13793
+CheckEnemyShieldContact_edblock13821
+CheckEnemyShieldContact_edblock13808
 	asl $d019
 	cli
-CheckEnemyShieldContact_edblock13712
-CheckEnemyShieldContact_edblock13604
+CheckEnemyShieldContact_edblock13727
+CheckEnemyShieldContact_edblock13619
 	rts
 end_procedure_CheckEnemyShieldContact
 	
@@ -9154,17 +9208,17 @@ esc_i	dc.b	0
 esc_byte_col	dc.b	0
 esc_col_idx	dc.b	0
 esc_hit_row	dc.b	0
-CheckEnemyShieldCollision_block13810
+CheckEnemyShieldCollision_block13825
 CheckEnemyShieldCollision
 	; Binary clause Simplified: EQUALS
 	clc
 	lda pending_shield_erosion
 	; cmp #$00 ignored
-	bne CheckEnemyShieldCollision_localfailed19199
-	jmp CheckEnemyShieldCollision_ctb13812
-CheckEnemyShieldCollision_localfailed19199
-	jmp CheckEnemyShieldCollision_edblock13814
-CheckEnemyShieldCollision_ctb13812: ;Main true block ;keep 
+	bne CheckEnemyShieldCollision_localfailed19214
+	jmp CheckEnemyShieldCollision_ctb13827
+CheckEnemyShieldCollision_localfailed19214
+	jmp CheckEnemyShieldCollision_edblock13829
+CheckEnemyShieldCollision_ctb13827: ;Main true block ;keep 
 	
 ; // bullet slot 0-2
 ; // (bullet_x - shield_base) >> 3
@@ -9173,17 +9227,17 @@ CheckEnemyShieldCollision_ctb13812: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta esc_i
-CheckEnemyShieldCollision_while19201
-CheckEnemyShieldCollision_loopstart19205
+CheckEnemyShieldCollision_while19216
+CheckEnemyShieldCollision_loopstart19220
 	; Binary clause Simplified: LESS
 	lda esc_i
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs CheckEnemyShieldCollision_localfailed21895
-	jmp CheckEnemyShieldCollision_ctb19202
-CheckEnemyShieldCollision_localfailed21895
-	jmp CheckEnemyShieldCollision_edblock19204
-CheckEnemyShieldCollision_ctb19202: ;Main true block ;keep 
+	bcs CheckEnemyShieldCollision_localfailed21910
+	jmp CheckEnemyShieldCollision_ctb19217
+CheckEnemyShieldCollision_localfailed21910
+	jmp CheckEnemyShieldCollision_edblock19219
+CheckEnemyShieldCollision_ctb19217: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	; Load Byte array
 	; CAST type NADA
@@ -9191,11 +9245,11 @@ CheckEnemyShieldCollision_ctb19202: ;Main true block ;keep
 	lda ufo_bullet_active,x 
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne CheckEnemyShieldCollision_localfailed23242
-	jmp CheckEnemyShieldCollision_ctb21898
-CheckEnemyShieldCollision_localfailed23242
-	jmp CheckEnemyShieldCollision_edblock21900
-CheckEnemyShieldCollision_ctb21898: ;Main true block ;keep 
+	bne CheckEnemyShieldCollision_localfailed23257
+	jmp CheckEnemyShieldCollision_ctb21913
+CheckEnemyShieldCollision_localfailed23257
+	jmp CheckEnemyShieldCollision_edblock21915
+CheckEnemyShieldCollision_ctb21913: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	; Load Byte array
 	; CAST type NADA
@@ -9203,8 +9257,8 @@ CheckEnemyShieldCollision_ctb21898: ;Main true block ;keep
 	lda ufo_bullet_y,x 
 	; Compare with pure num / var optimization
 	cmp #$b9;keep
-	bcc CheckEnemyShieldCollision_localfailed23915
-CheckEnemyShieldCollision_localsuccess23916: ;keep
+	bcc CheckEnemyShieldCollision_localfailed23930
+CheckEnemyShieldCollision_localsuccess23931: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	; Load Byte array
@@ -9213,11 +9267,11 @@ CheckEnemyShieldCollision_localsuccess23916: ;keep
 	lda ufo_bullet_y,x 
 	; Compare with pure num / var optimization
 	cmp #$c9;keep
-	bcs CheckEnemyShieldCollision_localfailed23915
-	jmp CheckEnemyShieldCollision_ctb23245
-CheckEnemyShieldCollision_localfailed23915
-	jmp CheckEnemyShieldCollision_edblock23247
-CheckEnemyShieldCollision_ctb23245: ;Main true block ;keep 
+	bcs CheckEnemyShieldCollision_localfailed23930
+	jmp CheckEnemyShieldCollision_ctb23260
+CheckEnemyShieldCollision_localfailed23930
+	jmp CheckEnemyShieldCollision_edblock23262
+CheckEnemyShieldCollision_ctb23260: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	; Load Byte array
 	; CAST type NADA
@@ -9225,8 +9279,8 @@ CheckEnemyShieldCollision_ctb23245: ;Main true block ;keep
 	lda ufo_bullet_x,x 
 	; Compare with pure num / var optimization
 	cmp #$2d;keep
-	bcc CheckEnemyShieldCollision_localfailed24252
-CheckEnemyShieldCollision_localsuccess24253: ;keep
+	bcc CheckEnemyShieldCollision_localfailed24267
+CheckEnemyShieldCollision_localsuccess24268: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	; Load Byte array
@@ -9235,19 +9289,19 @@ CheckEnemyShieldCollision_localsuccess24253: ;keep
 	lda ufo_bullet_x,x 
 	; Compare with pure num / var optimization
 	cmp #$45;keep
-	bcs CheckEnemyShieldCollision_localfailed24252
-	jmp CheckEnemyShieldCollision_ctb23919
-CheckEnemyShieldCollision_localfailed24252
-	jmp CheckEnemyShieldCollision_eblock23920
-CheckEnemyShieldCollision_ctb23919: ;Main true block ;keep 
+	bcs CheckEnemyShieldCollision_localfailed24267
+	jmp CheckEnemyShieldCollision_ctb23934
+CheckEnemyShieldCollision_localfailed24267
+	jmp CheckEnemyShieldCollision_eblock23935
+CheckEnemyShieldCollision_ctb23934: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda shield_top_eroded +$0 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne CheckEnemyShieldCollision_edblock24258
-CheckEnemyShieldCollision_ctb24256: ;Main true block ;keep 
+	bne CheckEnemyShieldCollision_edblock24273
+CheckEnemyShieldCollision_ctb24271: ;Main true block ;keep 
 	
 ; // Y check first — bullets spend most travel outside the shield band.
 	; 8 bit binop
@@ -9275,8 +9329,8 @@ CheckEnemyShieldCollision_ctb24256: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckEnemyShieldCollision_edblock24270
-CheckEnemyShieldCollision_ctb24268: ;Main true block ;keep 
+	beq CheckEnemyShieldCollision_edblock24285
+CheckEnemyShieldCollision_ctb24283: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -9298,10 +9352,10 @@ CheckEnemyShieldCollision_ctb24268: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ufo_bullet_explode_counter,x
-CheckEnemyShieldCollision_edblock24270
-CheckEnemyShieldCollision_edblock24258
-	jmp CheckEnemyShieldCollision_edblock23921
-CheckEnemyShieldCollision_eblock23920
+CheckEnemyShieldCollision_edblock24285
+CheckEnemyShieldCollision_edblock24273
+	jmp CheckEnemyShieldCollision_edblock23936
+CheckEnemyShieldCollision_eblock23935
 	; Binary clause Simplified: GREATEREQUAL
 	; Load Byte array
 	; CAST type NADA
@@ -9309,8 +9363,8 @@ CheckEnemyShieldCollision_eblock23920
 	lda ufo_bullet_x,x 
 	; Compare with pure num / var optimization
 	cmp #$5d;keep
-	bcc CheckEnemyShieldCollision_localfailed24430
-CheckEnemyShieldCollision_localsuccess24431: ;keep
+	bcc CheckEnemyShieldCollision_localfailed24445
+CheckEnemyShieldCollision_localsuccess24446: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	; Load Byte array
@@ -9319,19 +9373,19 @@ CheckEnemyShieldCollision_localsuccess24431: ;keep
 	lda ufo_bullet_x,x 
 	; Compare with pure num / var optimization
 	cmp #$75;keep
-	bcs CheckEnemyShieldCollision_localfailed24430
-	jmp CheckEnemyShieldCollision_ctb24275
-CheckEnemyShieldCollision_localfailed24430
-	jmp CheckEnemyShieldCollision_eblock24276
-CheckEnemyShieldCollision_ctb24275: ;Main true block ;keep 
+	bcs CheckEnemyShieldCollision_localfailed24445
+	jmp CheckEnemyShieldCollision_ctb24290
+CheckEnemyShieldCollision_localfailed24445
+	jmp CheckEnemyShieldCollision_eblock24291
+CheckEnemyShieldCollision_ctb24290: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda shield_top_eroded +$1 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne CheckEnemyShieldCollision_edblock24436
-CheckEnemyShieldCollision_ctb24434: ;Main true block ;keep 
+	bne CheckEnemyShieldCollision_edblock24451
+CheckEnemyShieldCollision_ctb24449: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Load Byte array
@@ -9363,8 +9417,8 @@ CheckEnemyShieldCollision_ctb24434: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckEnemyShieldCollision_edblock24448
-CheckEnemyShieldCollision_ctb24446: ;Main true block ;keep 
+	beq CheckEnemyShieldCollision_edblock24463
+CheckEnemyShieldCollision_ctb24461: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -9385,10 +9439,10 @@ CheckEnemyShieldCollision_ctb24446: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ufo_bullet_explode_counter,x
-CheckEnemyShieldCollision_edblock24448
-CheckEnemyShieldCollision_edblock24436
-	jmp CheckEnemyShieldCollision_edblock24277
-CheckEnemyShieldCollision_eblock24276
+CheckEnemyShieldCollision_edblock24463
+CheckEnemyShieldCollision_edblock24451
+	jmp CheckEnemyShieldCollision_edblock24292
+CheckEnemyShieldCollision_eblock24291
 	; Binary clause Simplified: GREATEREQUAL
 	; Load Byte array
 	; CAST type NADA
@@ -9396,8 +9450,8 @@ CheckEnemyShieldCollision_eblock24276
 	lda ufo_bullet_x,x 
 	; Compare with pure num / var optimization
 	cmp #$8d;keep
-	bcc CheckEnemyShieldCollision_localfailed24519
-CheckEnemyShieldCollision_localsuccess24520: ;keep
+	bcc CheckEnemyShieldCollision_localfailed24534
+CheckEnemyShieldCollision_localsuccess24535: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	; Load Byte array
@@ -9406,19 +9460,19 @@ CheckEnemyShieldCollision_localsuccess24520: ;keep
 	lda ufo_bullet_x,x 
 	; Compare with pure num / var optimization
 	cmp #$a5;keep
-	bcs CheckEnemyShieldCollision_localfailed24519
-	jmp CheckEnemyShieldCollision_ctb24453
-CheckEnemyShieldCollision_localfailed24519
-	jmp CheckEnemyShieldCollision_eblock24454
-CheckEnemyShieldCollision_ctb24453: ;Main true block ;keep 
+	bcs CheckEnemyShieldCollision_localfailed24534
+	jmp CheckEnemyShieldCollision_ctb24468
+CheckEnemyShieldCollision_localfailed24534
+	jmp CheckEnemyShieldCollision_eblock24469
+CheckEnemyShieldCollision_ctb24468: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda shield_top_eroded +$2 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne CheckEnemyShieldCollision_edblock24525
-CheckEnemyShieldCollision_ctb24523: ;Main true block ;keep 
+	bne CheckEnemyShieldCollision_edblock24540
+CheckEnemyShieldCollision_ctb24538: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Load Byte array
@@ -9450,8 +9504,8 @@ CheckEnemyShieldCollision_ctb24523: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckEnemyShieldCollision_edblock24537
-CheckEnemyShieldCollision_ctb24535: ;Main true block ;keep 
+	beq CheckEnemyShieldCollision_edblock24552
+CheckEnemyShieldCollision_ctb24550: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -9473,10 +9527,10 @@ CheckEnemyShieldCollision_ctb24535: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ufo_bullet_explode_counter,x
-CheckEnemyShieldCollision_edblock24537
-CheckEnemyShieldCollision_edblock24525
-	jmp CheckEnemyShieldCollision_edblock24455
-CheckEnemyShieldCollision_eblock24454
+CheckEnemyShieldCollision_edblock24552
+CheckEnemyShieldCollision_edblock24540
+	jmp CheckEnemyShieldCollision_edblock24470
+CheckEnemyShieldCollision_eblock24469
 	; Binary clause Simplified: GREATEREQUAL
 	; Load Byte array
 	; CAST type NADA
@@ -9484,8 +9538,8 @@ CheckEnemyShieldCollision_eblock24454
 	lda ufo_bullet_x,x 
 	; Compare with pure num / var optimization
 	cmp #$bd;keep
-	bcc CheckEnemyShieldCollision_edblock24544
-CheckEnemyShieldCollision_localsuccess24564: ;keep
+	bcc CheckEnemyShieldCollision_edblock24559
+CheckEnemyShieldCollision_localsuccess24579: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	; Load Byte array
@@ -9494,16 +9548,16 @@ CheckEnemyShieldCollision_localsuccess24564: ;keep
 	lda ufo_bullet_x,x 
 	; Compare with pure num / var optimization
 	cmp #$d5;keep
-	bcs CheckEnemyShieldCollision_edblock24544
-CheckEnemyShieldCollision_ctb24542: ;Main true block ;keep 
+	bcs CheckEnemyShieldCollision_edblock24559
+CheckEnemyShieldCollision_ctb24557: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda shield_top_eroded +$3 ; array with const index optimization 
 	; cmp #$00 ignored
-	bne CheckEnemyShieldCollision_edblock24569
-CheckEnemyShieldCollision_ctb24567: ;Main true block ;keep 
+	bne CheckEnemyShieldCollision_edblock24584
+CheckEnemyShieldCollision_ctb24582: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Load Byte array
@@ -9535,8 +9589,8 @@ CheckEnemyShieldCollision_ctb24567: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckEnemyShieldCollision_edblock24581
-CheckEnemyShieldCollision_ctb24579: ;Main true block ;keep 
+	beq CheckEnemyShieldCollision_edblock24596
+CheckEnemyShieldCollision_ctb24594: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -9558,20 +9612,20 @@ CheckEnemyShieldCollision_ctb24579: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ufo_bullet_explode_counter,x
-CheckEnemyShieldCollision_edblock24581
-CheckEnemyShieldCollision_edblock24569
-CheckEnemyShieldCollision_edblock24544
-CheckEnemyShieldCollision_edblock24455
-CheckEnemyShieldCollision_edblock24277
-CheckEnemyShieldCollision_edblock23921
-CheckEnemyShieldCollision_edblock23247
-CheckEnemyShieldCollision_edblock21900
+CheckEnemyShieldCollision_edblock24596
+CheckEnemyShieldCollision_edblock24584
+CheckEnemyShieldCollision_edblock24559
+CheckEnemyShieldCollision_edblock24470
+CheckEnemyShieldCollision_edblock24292
+CheckEnemyShieldCollision_edblock23936
+CheckEnemyShieldCollision_edblock23262
+CheckEnemyShieldCollision_edblock21915
 	; Test Inc dec D
 	inc esc_i
-	jmp CheckEnemyShieldCollision_while19201
-CheckEnemyShieldCollision_edblock19204
-CheckEnemyShieldCollision_loopend19206
-CheckEnemyShieldCollision_edblock13814
+	jmp CheckEnemyShieldCollision_while19216
+CheckEnemyShieldCollision_edblock19219
+CheckEnemyShieldCollision_loopend19221
+CheckEnemyShieldCollision_edblock13829
 	rts
 end_procedure_CheckEnemyShieldCollision
 	
@@ -9586,58 +9640,58 @@ end_procedure_CheckEnemyShieldCollision
 csc_byte_col	dc.b	0
 csc_col_idx	dc.b	0
 csc_hit_row	dc.b	0
-CheckShieldCollision_block24584
+CheckShieldCollision_block24599
 CheckShieldCollision
 	; Binary clause Simplified: EQUALS
 	clc
 	lda pending_shield_erosion
 	; cmp #$00 ignored
-	bne CheckShieldCollision_localfailed25837
-	jmp CheckShieldCollision_ctb24586
-CheckShieldCollision_localfailed25837
-	jmp CheckShieldCollision_edblock24588
-CheckShieldCollision_ctb24586: ;Main true block ;keep 
+	bne CheckShieldCollision_localfailed25852
+	jmp CheckShieldCollision_ctb24601
+CheckShieldCollision_localfailed25852
+	jmp CheckShieldCollision_edblock24603
+CheckShieldCollision_ctb24601: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne CheckShieldCollision_localfailed26464
-	jmp CheckShieldCollision_ctb25840
-CheckShieldCollision_localfailed26464
-	jmp CheckShieldCollision_edblock25842
-CheckShieldCollision_ctb25840: ;Main true block ;keep 
+	bne CheckShieldCollision_localfailed26479
+	jmp CheckShieldCollision_ctb25855
+CheckShieldCollision_localfailed26479
+	jmp CheckShieldCollision_edblock25857
+CheckShieldCollision_ctb25855: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_bullet_y
 	; Compare with pure num / var optimization
 	cmp #$b9;keep
-	bcc CheckShieldCollision_localfailed26777
-CheckShieldCollision_localsuccess26778: ;keep
+	bcc CheckShieldCollision_localfailed26792
+CheckShieldCollision_localsuccess26793: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	lda player_bullet_y
 	; Compare with pure num / var optimization
 	cmp #$c9;keep
-	bcs CheckShieldCollision_localfailed26777
-	jmp CheckShieldCollision_ctb26467
-CheckShieldCollision_localfailed26777
-	jmp CheckShieldCollision_edblock26469
-CheckShieldCollision_ctb26467: ;Main true block ;keep 
+	bcs CheckShieldCollision_localfailed26792
+	jmp CheckShieldCollision_ctb26482
+CheckShieldCollision_localfailed26792
+	jmp CheckShieldCollision_edblock26484
+CheckShieldCollision_ctb26482: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_bullet_x
 	; Compare with pure num / var optimization
 	cmp #$2d;keep
-	bcc CheckShieldCollision_localfailed26934
-CheckShieldCollision_localsuccess26935: ;keep
+	bcc CheckShieldCollision_localfailed26949
+CheckShieldCollision_localsuccess26950: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	lda player_bullet_x
 	; Compare with pure num / var optimization
 	cmp #$45;keep
-	bcs CheckShieldCollision_localfailed26934
-	jmp CheckShieldCollision_ctb26781
-CheckShieldCollision_localfailed26934
-	jmp CheckShieldCollision_eblock26782
-CheckShieldCollision_ctb26781: ;Main true block ;keep 
+	bcs CheckShieldCollision_localfailed26949
+	jmp CheckShieldCollision_ctb26796
+CheckShieldCollision_localfailed26949
+	jmp CheckShieldCollision_eblock26797
+CheckShieldCollision_ctb26796: ;Main true block ;keep 
 	
 ; // (bullet_x - shield_base) >> 3
 ; // shield_idx*3 + byte_col (index into surface cache)
@@ -9670,8 +9724,8 @@ CheckShieldCollision_ctb26781: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckShieldCollision_edblock26940
-CheckShieldCollision_ctb26938: ;Main true block ;keep 
+	beq CheckShieldCollision_edblock26955
+CheckShieldCollision_ctb26953: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -9692,25 +9746,25 @@ CheckShieldCollision_ctb26938: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta explosion_frame_counter
-CheckShieldCollision_edblock26940
-	jmp CheckShieldCollision_edblock26783
-CheckShieldCollision_eblock26782
+CheckShieldCollision_edblock26955
+	jmp CheckShieldCollision_edblock26798
+CheckShieldCollision_eblock26797
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_bullet_x
 	; Compare with pure num / var optimization
 	cmp #$5d;keep
-	bcc CheckShieldCollision_localfailed27016
-CheckShieldCollision_localsuccess27017: ;keep
+	bcc CheckShieldCollision_localfailed27031
+CheckShieldCollision_localsuccess27032: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	lda player_bullet_x
 	; Compare with pure num / var optimization
 	cmp #$75;keep
-	bcs CheckShieldCollision_localfailed27016
-	jmp CheckShieldCollision_ctb26945
-CheckShieldCollision_localfailed27016
-	jmp CheckShieldCollision_eblock26946
-CheckShieldCollision_ctb26945: ;Main true block ;keep 
+	bcs CheckShieldCollision_localfailed27031
+	jmp CheckShieldCollision_ctb26960
+CheckShieldCollision_localfailed27031
+	jmp CheckShieldCollision_eblock26961
+CheckShieldCollision_ctb26960: ;Main true block ;keep 
 	
 ; // Shield 2
 	; 8 bit binop
@@ -9741,8 +9795,8 @@ CheckShieldCollision_ctb26945: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckShieldCollision_edblock27022
-CheckShieldCollision_ctb27020: ;Main true block ;keep 
+	beq CheckShieldCollision_edblock27037
+CheckShieldCollision_ctb27035: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -9764,25 +9818,25 @@ CheckShieldCollision_ctb27020: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta explosion_frame_counter
-CheckShieldCollision_edblock27022
-	jmp CheckShieldCollision_edblock26947
-CheckShieldCollision_eblock26946
+CheckShieldCollision_edblock27037
+	jmp CheckShieldCollision_edblock26962
+CheckShieldCollision_eblock26961
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_bullet_x
 	; Compare with pure num / var optimization
 	cmp #$8d;keep
-	bcc CheckShieldCollision_localfailed27057
-CheckShieldCollision_localsuccess27058: ;keep
+	bcc CheckShieldCollision_localfailed27072
+CheckShieldCollision_localsuccess27073: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	lda player_bullet_x
 	; Compare with pure num / var optimization
 	cmp #$a5;keep
-	bcs CheckShieldCollision_localfailed27057
-	jmp CheckShieldCollision_ctb27027
-CheckShieldCollision_localfailed27057
-	jmp CheckShieldCollision_eblock27028
-CheckShieldCollision_ctb27027: ;Main true block ;keep 
+	bcs CheckShieldCollision_localfailed27072
+	jmp CheckShieldCollision_ctb27042
+CheckShieldCollision_localfailed27072
+	jmp CheckShieldCollision_eblock27043
+CheckShieldCollision_ctb27042: ;Main true block ;keep 
 	
 ; // Shield 3
 	; 8 bit binop
@@ -9813,8 +9867,8 @@ CheckShieldCollision_ctb27027: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckShieldCollision_edblock27063
-CheckShieldCollision_ctb27061: ;Main true block ;keep 
+	beq CheckShieldCollision_edblock27078
+CheckShieldCollision_ctb27076: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -9836,22 +9890,22 @@ CheckShieldCollision_ctb27061: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta explosion_frame_counter
-CheckShieldCollision_edblock27063
-	jmp CheckShieldCollision_edblock27029
-CheckShieldCollision_eblock27028
+CheckShieldCollision_edblock27078
+	jmp CheckShieldCollision_edblock27044
+CheckShieldCollision_eblock27043
 	; Binary clause Simplified: GREATEREQUAL
 	lda player_bullet_x
 	; Compare with pure num / var optimization
 	cmp #$bd;keep
-	bcc CheckShieldCollision_edblock27070
-CheckShieldCollision_localsuccess27078: ;keep
+	bcc CheckShieldCollision_edblock27085
+CheckShieldCollision_localsuccess27093: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: LESS
 	lda player_bullet_x
 	; Compare with pure num / var optimization
 	cmp #$d5;keep
-	bcs CheckShieldCollision_edblock27070
-CheckShieldCollision_ctb27068: ;Main true block ;keep 
+	bcs CheckShieldCollision_edblock27085
+CheckShieldCollision_ctb27083: ;Main true block ;keep 
 	
 ; // Shield 4
 	; 8 bit binop
@@ -9882,8 +9936,8 @@ CheckShieldCollision_ctb27068: ;Main true block ;keep
 	; Binary clause Simplified: NOTEQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq CheckShieldCollision_edblock27083
-CheckShieldCollision_ctb27081: ;Main true block ;keep 
+	beq CheckShieldCollision_edblock27098
+CheckShieldCollision_ctb27096: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
@@ -9905,14 +9959,14 @@ CheckShieldCollision_ctb27081: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta explosion_frame_counter
-CheckShieldCollision_edblock27083
-CheckShieldCollision_edblock27070
-CheckShieldCollision_edblock27029
-CheckShieldCollision_edblock26947
-CheckShieldCollision_edblock26783
-CheckShieldCollision_edblock26469
-CheckShieldCollision_edblock25842
-CheckShieldCollision_edblock24588
+CheckShieldCollision_edblock27098
+CheckShieldCollision_edblock27085
+CheckShieldCollision_edblock27044
+CheckShieldCollision_edblock26962
+CheckShieldCollision_edblock26798
+CheckShieldCollision_edblock26484
+CheckShieldCollision_edblock25857
+CheckShieldCollision_edblock24603
 	rts
 end_procedure_CheckShieldCollision
 	
@@ -9926,7 +9980,7 @@ end_procedure_CheckShieldCollision
 	;    Procedure type : User-defined procedure
 ase_charset_base	dc.w	0
 ase_charset_addr	dc.w	0
-ase_chr_ptr	=  $22
+ase_chr_ptr	= $22
 ase_row	dc.b	0
 ase_stencil	dc.b	0
 ase_bc_off	dc.b	0
@@ -9934,17 +9988,17 @@ ase_row_adj	dc.b	0
 ase_i	dc.b	0
 ase_col_idx	dc.b	0
 ase_new_surface	dc.b	0
-ApplyShieldErosion_block27086
+ApplyShieldErosion_block27101
 ApplyShieldErosion
 	; Binary clause Simplified: EQUALS
 	lda pending_shield_erosion
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne ApplyShieldErosion_localfailed27658
-	jmp ApplyShieldErosion_ctb27088
-ApplyShieldErosion_localfailed27658
-	jmp ApplyShieldErosion_edblock27090
-ApplyShieldErosion_ctb27088: ;Main true block ;keep 
+	bne ApplyShieldErosion_localfailed27673
+	jmp ApplyShieldErosion_ctb27103
+ApplyShieldErosion_localfailed27673
+	jmp ApplyShieldErosion_edblock27105
+ApplyShieldErosion_ctb27103: ;Main true block ;keep 
 	
 ; // pending_byte_col * 8
 ; // ase_row - 8 for bottom charset band
@@ -9971,66 +10025,66 @@ ApplyShieldErosion_ctb27088: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta ase_i
-ApplyShieldErosion_while27660
-ApplyShieldErosion_loopstart27664
+ApplyShieldErosion_while27675
+ApplyShieldErosion_loopstart27679
 	; Binary clause Simplified: LESS
 	lda ase_i
 	; Compare with pure num / var optimization
 	cmp #$4;keep
-	bcs ApplyShieldErosion_localfailed27765
-	jmp ApplyShieldErosion_ctb27661
-ApplyShieldErosion_localfailed27765
-	jmp ApplyShieldErosion_edblock27663
-ApplyShieldErosion_ctb27661: ;Main true block ;keep 
+	bcs ApplyShieldErosion_localfailed27780
+	jmp ApplyShieldErosion_ctb27676
+ApplyShieldErosion_localfailed27780
+	jmp ApplyShieldErosion_edblock27678
+ApplyShieldErosion_ctb27676: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda ase_i
 	; cmp #$00 ignored
-	bne ApplyShieldErosion_edblock27770
-ApplyShieldErosion_ctb27768: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock27785
+ApplyShieldErosion_ctb27783: ;Main true block ;keep 
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta ase_stencil
-ApplyShieldErosion_edblock27770
+ApplyShieldErosion_edblock27785
 	; Binary clause Simplified: EQUALS
 	lda ase_i
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne ApplyShieldErosion_edblock27776
-ApplyShieldErosion_ctb27774: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock27791
+ApplyShieldErosion_ctb27789: ;Main true block ;keep 
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta ase_stencil
-ApplyShieldErosion_edblock27776
+ApplyShieldErosion_edblock27791
 	; Binary clause Simplified: EQUALS
 	lda ase_i
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne ApplyShieldErosion_edblock27782
-ApplyShieldErosion_ctb27780: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock27797
+ApplyShieldErosion_ctb27795: ;Main true block ;keep 
 	lda #$3c
 	; Calling storevariable on generic assign expression
 	sta ase_stencil
-ApplyShieldErosion_edblock27782
+ApplyShieldErosion_edblock27797
 	; Binary clause Simplified: EQUALS
 	lda ase_i
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bne ApplyShieldErosion_edblock27788
-ApplyShieldErosion_ctb27786: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock27803
+ApplyShieldErosion_ctb27801: ;Main true block ;keep 
 	lda #$18
 	; Calling storevariable on generic assign expression
 	sta ase_stencil
-ApplyShieldErosion_edblock27788
+ApplyShieldErosion_edblock27803
 	; Binary clause Simplified: LESS
 	lda ase_row
 	; Compare with pure num / var optimization
 	cmp #$8;keep
-	bcs ApplyShieldErosion_localfailed27809
-	jmp ApplyShieldErosion_ctb27792
-ApplyShieldErosion_localfailed27809
-	jmp ApplyShieldErosion_eblock27793
-ApplyShieldErosion_ctb27792: ;Main true block ;keep 
+	bcs ApplyShieldErosion_localfailed27824
+	jmp ApplyShieldErosion_ctb27807
+ApplyShieldErosion_localfailed27824
+	jmp ApplyShieldErosion_eblock27808
+ApplyShieldErosion_ctb27807: ;Main true block ;keep 
 	
 ; // AND-NOT stencil directly into the charset byte (no sprite round-trip)
 ; // Rows 0-7:  SHIELD_DST[s] + bc*8 + row
@@ -10038,9 +10092,9 @@ ApplyShieldErosion_ctb27792: ;Main true block ;keep
 	; Generic 16 bit op
 	ldy #0
 	lda ase_row
-ApplyShieldErosion_rightvarInteger_var27813 = $54
-	sta ApplyShieldErosion_rightvarInteger_var27813
-	sty ApplyShieldErosion_rightvarInteger_var27813+1
+ApplyShieldErosion_rightvarInteger_var27828 = $54
+	sta ApplyShieldErosion_rightvarInteger_var27828
+	sty ApplyShieldErosion_rightvarInteger_var27828+1
 	; HandleVarBinopB16bit
 	; RHS is pure, optimization
 	ldy ase_charset_base+1 ;keep
@@ -10049,24 +10103,24 @@ ApplyShieldErosion_rightvarInteger_var27813 = $54
 	adc ase_bc_off
 	; Testing for byte:  #0
 	; RHS is byte, optimization
-	bcc ApplyShieldErosion_skip27815
+	bcc ApplyShieldErosion_skip27830
 	iny
-ApplyShieldErosion_skip27815
+ApplyShieldErosion_skip27830
 	; Low bit binop:
 	clc
-	adc ApplyShieldErosion_rightvarInteger_var27813
-ApplyShieldErosion_wordAdd27811
-	sta ApplyShieldErosion_rightvarInteger_var27813
+	adc ApplyShieldErosion_rightvarInteger_var27828
+ApplyShieldErosion_wordAdd27826
+	sta ApplyShieldErosion_rightvarInteger_var27828
 	; High-bit binop
 	tya
-	adc ApplyShieldErosion_rightvarInteger_var27813+1
+	adc ApplyShieldErosion_rightvarInteger_var27828+1
 	tay
-	lda ApplyShieldErosion_rightvarInteger_var27813
+	lda ApplyShieldErosion_rightvarInteger_var27828
 	; Calling storevariable on generic assign expression
 	sta ase_charset_addr
 	sty ase_charset_addr+1
-	jmp ApplyShieldErosion_edblock27794
-ApplyShieldErosion_eblock27793
+	jmp ApplyShieldErosion_edblock27809
+ApplyShieldErosion_eblock27808
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : ase_row
 	lda ase_row
@@ -10075,15 +10129,15 @@ ApplyShieldErosion_eblock27793
 	sta ase_row_adj
 	; Generic 16 bit op
 	ldy #0
-ApplyShieldErosion_rightvarInteger_var27819 = $54
-	sta ApplyShieldErosion_rightvarInteger_var27819
-	sty ApplyShieldErosion_rightvarInteger_var27819+1
+ApplyShieldErosion_rightvarInteger_var27834 = $54
+	sta ApplyShieldErosion_rightvarInteger_var27834
+	sty ApplyShieldErosion_rightvarInteger_var27834+1
 	; Generic 16 bit op
 	ldy #0
 	lda ase_bc_off
-ApplyShieldErosion_rightvarInteger_var27822 =  $56
-	sta ApplyShieldErosion_rightvarInteger_var27822
-	sty ApplyShieldErosion_rightvarInteger_var27822+1
+ApplyShieldErosion_rightvarInteger_var27837 = $56
+	sta ApplyShieldErosion_rightvarInteger_var27837
+	sty ApplyShieldErosion_rightvarInteger_var27837+1
 	; HandleVarBinopB16bit
 	; RHS is pure, optimization
 	ldy ase_charset_base+1 ;keep
@@ -10099,28 +10153,28 @@ ApplyShieldErosion_rightvarInteger_var27822 =  $56
 	pla 
 	; Low bit binop:
 	clc
-	adc ApplyShieldErosion_rightvarInteger_var27822
-ApplyShieldErosion_wordAdd27820
-	sta ApplyShieldErosion_rightvarInteger_var27822
+	adc ApplyShieldErosion_rightvarInteger_var27837
+ApplyShieldErosion_wordAdd27835
+	sta ApplyShieldErosion_rightvarInteger_var27837
 	; High-bit binop
 	tya
-	adc ApplyShieldErosion_rightvarInteger_var27822+1
+	adc ApplyShieldErosion_rightvarInteger_var27837+1
 	tay
-	lda ApplyShieldErosion_rightvarInteger_var27822
+	lda ApplyShieldErosion_rightvarInteger_var27837
 	; Low bit binop:
 	clc
-	adc ApplyShieldErosion_rightvarInteger_var27819
-ApplyShieldErosion_wordAdd27817
-	sta ApplyShieldErosion_rightvarInteger_var27819
+	adc ApplyShieldErosion_rightvarInteger_var27834
+ApplyShieldErosion_wordAdd27832
+	sta ApplyShieldErosion_rightvarInteger_var27834
 	; High-bit binop
 	tya
-	adc ApplyShieldErosion_rightvarInteger_var27819+1
+	adc ApplyShieldErosion_rightvarInteger_var27834+1
 	tay
-	lda ApplyShieldErosion_rightvarInteger_var27819
+	lda ApplyShieldErosion_rightvarInteger_var27834
 	; Calling storevariable on generic assign expression
 	sta ase_charset_addr
 	sty ase_charset_addr+1
-ApplyShieldErosion_edblock27794
+ApplyShieldErosion_edblock27809
 	lda ase_charset_addr
 	ldx ase_charset_addr+1
 	sta ase_chr_ptr
@@ -10132,12 +10186,12 @@ ApplyShieldErosion_edblock27794
 	lda ase_stencil
 	eor #$ff
 	 ; end add / sub var with constant
-ApplyShieldErosion_rightvarAddSub_var27824 = $54
-	sta ApplyShieldErosion_rightvarAddSub_var27824
+ApplyShieldErosion_rightvarAddSub_var27839 = $54
+	sta ApplyShieldErosion_rightvarAddSub_var27839
 	; Load pointer array
 	ldy #$0
 	lda (ase_chr_ptr),y
-	and ApplyShieldErosion_rightvarAddSub_var27824
+	and ApplyShieldErosion_rightvarAddSub_var27839
 	; Calling storevariable on generic assign expression
 	; Storing to a pointer
 	sta (ase_chr_ptr),y
@@ -10145,46 +10199,46 @@ ApplyShieldErosion_rightvarAddSub_var27824 = $54
 	clc
 	lda pending_erosion_dir
 	; cmp #$00 ignored
-	bne ApplyShieldErosion_eblock27827
-ApplyShieldErosion_ctb27826: ;Main true block ;keep 
+	bne ApplyShieldErosion_eblock27842
+ApplyShieldErosion_ctb27841: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda ase_row
 	; cmp #$00 ignored
-	bne ApplyShieldErosion_eblock27850
-ApplyShieldErosion_ctb27849: ;Main true block ;keep 
+	bne ApplyShieldErosion_eblock27865
+ApplyShieldErosion_ctb27864: ;Main true block ;keep 
 	
 ; // Advance row inward; clamp at boundary
 	lda #$4
 	; Calling storevariable on generic assign expression
 	sta ase_i
-	jmp ApplyShieldErosion_edblock27851
-ApplyShieldErosion_eblock27850
+	jmp ApplyShieldErosion_edblock27866
+ApplyShieldErosion_eblock27865
 	; Test Inc dec D
 	dec ase_row
-ApplyShieldErosion_edblock27851
-	jmp ApplyShieldErosion_edblock27828
-ApplyShieldErosion_eblock27827
+ApplyShieldErosion_edblock27866
+	jmp ApplyShieldErosion_edblock27843
+ApplyShieldErosion_eblock27842
 	; Binary clause Simplified: GREATEREQUAL
 	lda ase_row
 	; Compare with pure num / var optimization
 	cmp #$f;keep
-	bcc ApplyShieldErosion_eblock27859
-ApplyShieldErosion_ctb27858: ;Main true block ;keep 
+	bcc ApplyShieldErosion_eblock27874
+ApplyShieldErosion_ctb27873: ;Main true block ;keep 
 	lda #$4
 	; Calling storevariable on generic assign expression
 	sta ase_i
-	jmp ApplyShieldErosion_edblock27860
-ApplyShieldErosion_eblock27859
+	jmp ApplyShieldErosion_edblock27875
+ApplyShieldErosion_eblock27874
 	; Test Inc dec D
 	inc ase_row
-ApplyShieldErosion_edblock27860
-ApplyShieldErosion_edblock27828
+ApplyShieldErosion_edblock27875
+ApplyShieldErosion_edblock27843
 	; Test Inc dec D
 	inc ase_i
-	jmp ApplyShieldErosion_while27660
-ApplyShieldErosion_edblock27663
-ApplyShieldErosion_loopend27665
+	jmp ApplyShieldErosion_while27675
+ApplyShieldErosion_edblock27678
+ApplyShieldErosion_loopend27680
 	
 ; // Update caches deterministically: stencils 0+1 are $FF so surface
 ; // always advances by exactly 2 rows — no pixel rescan needed.
@@ -10210,37 +10264,37 @@ ApplyShieldErosion_loopend27665
 	clc
 	lda pending_erosion_dir
 	; cmp #$00 ignored
-	bne ApplyShieldErosion_localfailed28047
-	jmp ApplyShieldErosion_ctb27866
-ApplyShieldErosion_localfailed28047
-	jmp ApplyShieldErosion_eblock27867
-ApplyShieldErosion_ctb27866: ;Main true block ;keep 
+	bne ApplyShieldErosion_localfailed28062
+	jmp ApplyShieldErosion_ctb27881
+ApplyShieldErosion_localfailed28062
+	jmp ApplyShieldErosion_eblock27882
+ApplyShieldErosion_ctb27881: ;Main true block ;keep 
 	; Binary clause Simplified: LESS
 	lda pending_erase_top
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bcs ApplyShieldErosion_eblock28051
-ApplyShieldErosion_ctb28050: ;Main true block ;keep 
+	bcs ApplyShieldErosion_eblock28066
+ApplyShieldErosion_ctb28065: ;Main true block ;keep 
 	
 ; // Player bullet (bottom-up): surface moves toward row 0
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta ase_new_surface
-	jmp ApplyShieldErosion_edblock28052
-ApplyShieldErosion_eblock28051
+	jmp ApplyShieldErosion_edblock28067
+ApplyShieldErosion_eblock28066
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : pending_erase_top
 	lda pending_erase_top
 	sec
 	sbc #$2
 	sta ase_new_surface
-ApplyShieldErosion_edblock28052
+ApplyShieldErosion_edblock28067
 	; Binary clause Simplified: NOTEQUALS
 	lda ase_new_surface
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq ApplyShieldErosion_edblock28060
-ApplyShieldErosion_ctb28058: ;Main true block ;keep 
+	beq ApplyShieldErosion_edblock28075
+ApplyShieldErosion_ctb28073: ;Main true block ;keep 
 	; Binary clause Simplified: GREATER
 	; Load Byte array
 	; CAST type NADA
@@ -10248,17 +10302,17 @@ ApplyShieldErosion_ctb28058: ;Main true block ;keep
 	lda shield_surface_bot,x 
 	; Compare with pure num / var optimization
 	cmp ase_new_surface;keep
-	bcc ApplyShieldErosion_edblock28072
-	beq ApplyShieldErosion_edblock28072
-ApplyShieldErosion_ctb28070: ;Main true block ;keep 
+	bcc ApplyShieldErosion_edblock28087
+	beq ApplyShieldErosion_edblock28087
+ApplyShieldErosion_ctb28085: ;Main true block ;keep 
 	
 ; // Cross-check: if the updated bottom surface is now above the enemy's top
 ; // surface, the two erosion fronts have met — column is fully tunnelled.
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta ase_new_surface
-ApplyShieldErosion_edblock28072
-ApplyShieldErosion_edblock28060
+ApplyShieldErosion_edblock28087
+ApplyShieldErosion_edblock28075
 	lda ase_new_surface
 	; Calling storevariable on generic assign expression
 	ldx ase_col_idx ; optimized, look out for bugs
@@ -10266,41 +10320,41 @@ ApplyShieldErosion_edblock28060
 	; Binary clause Simplified: EQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	bne ApplyShieldErosion_edblock28078
-ApplyShieldErosion_ctb28076: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock28093
+ApplyShieldErosion_ctb28091: ;Main true block ;keep 
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	ldx ase_col_idx ; optimized, look out for bugs
 	sta shield_surface_bot,x
-ApplyShieldErosion_edblock28078
-	jmp ApplyShieldErosion_edblock27868
-ApplyShieldErosion_eblock27867
+ApplyShieldErosion_edblock28093
+	jmp ApplyShieldErosion_edblock27883
+ApplyShieldErosion_eblock27882
 	; Binary clause Simplified: GREATEREQUAL
 	lda pending_erase_top
 	; Compare with pure num / var optimization
 	cmp #$e;keep
-	bcc ApplyShieldErosion_eblock28084
-ApplyShieldErosion_ctb28083: ;Main true block ;keep 
+	bcc ApplyShieldErosion_eblock28099
+ApplyShieldErosion_ctb28098: ;Main true block ;keep 
 	
 ; // Enemy bullet (top-down): surface moves toward row 15
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta ase_new_surface
-	jmp ApplyShieldErosion_edblock28085
-ApplyShieldErosion_eblock28084
+	jmp ApplyShieldErosion_edblock28100
+ApplyShieldErosion_eblock28099
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : pending_erase_top
 	lda pending_erase_top
 	clc
 	adc #$2
 	sta ase_new_surface
-ApplyShieldErosion_edblock28085
+ApplyShieldErosion_edblock28100
 	; Binary clause Simplified: NOTEQUALS
 	lda ase_new_surface
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	beq ApplyShieldErosion_edblock28093
-ApplyShieldErosion_ctb28091: ;Main true block ;keep 
+	beq ApplyShieldErosion_edblock28108
+ApplyShieldErosion_ctb28106: ;Main true block ;keep 
 	; Binary clause Simplified: LESS
 	; Load Byte array
 	; CAST type NADA
@@ -10308,16 +10362,16 @@ ApplyShieldErosion_ctb28091: ;Main true block ;keep
 	lda shield_surface_top,x 
 	; Compare with pure num / var optimization
 	cmp ase_new_surface;keep
-	bcs ApplyShieldErosion_edblock28105
-ApplyShieldErosion_ctb28103: ;Main true block ;keep 
+	bcs ApplyShieldErosion_edblock28120
+ApplyShieldErosion_ctb28118: ;Main true block ;keep 
 	
 ; // Cross-check: if the updated top surface is now below the player's bottom
 ; // surface, the two erosion fronts have met — column is fully tunnelled.
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta ase_new_surface
-ApplyShieldErosion_edblock28105
-ApplyShieldErosion_edblock28093
+ApplyShieldErosion_edblock28120
+ApplyShieldErosion_edblock28108
 	lda ase_new_surface
 	; Calling storevariable on generic assign expression
 	ldx ase_col_idx ; optimized, look out for bugs
@@ -10325,8 +10379,8 @@ ApplyShieldErosion_edblock28093
 	; Binary clause Simplified: EQUALS
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	bne ApplyShieldErosion_edblock28111
-ApplyShieldErosion_ctb28109: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock28126
+ApplyShieldErosion_ctb28124: ;Main true block ;keep 
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	ldx ase_col_idx ; optimized, look out for bugs
@@ -10346,8 +10400,8 @@ ApplyShieldErosion_ctb28109: ;Main true block ;keep
 	lda shield_surface_bot,x 
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	bne ApplyShieldErosion_edblock28173
-ApplyShieldErosion_ctb28171: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock28188
+ApplyShieldErosion_ctb28186: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	; Load Byte array
 	; CAST type NADA
@@ -10368,8 +10422,8 @@ ApplyShieldErosion_ctb28171: ;Main true block ;keep
 	lda shield_surface_bot,x 
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	bne ApplyShieldErosion_edblock28205
-ApplyShieldErosion_ctb28203: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock28220
+ApplyShieldErosion_ctb28218: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	; Load Byte array
 	; CAST type NADA
@@ -10390,8 +10444,8 @@ ApplyShieldErosion_ctb28203: ;Main true block ;keep
 	lda shield_surface_bot,x 
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	bne ApplyShieldErosion_edblock28221
-ApplyShieldErosion_ctb28219: ;Main true block ;keep 
+	bne ApplyShieldErosion_edblock28236
+ApplyShieldErosion_ctb28234: ;Main true block ;keep 
 	
 ; // If all 3 columns of this shield are now fully tunnelled from the top,
 ; // raise the skip flag so both bullet and contact checks bypass it entirely.
@@ -10399,15 +10453,15 @@ ApplyShieldErosion_ctb28219: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	ldx pending_shield_idx ; optimized, look out for bugs
 	sta shield_top_eroded,x
-ApplyShieldErosion_edblock28221
-ApplyShieldErosion_edblock28205
-ApplyShieldErosion_edblock28173
-ApplyShieldErosion_edblock28111
-ApplyShieldErosion_edblock27868
+ApplyShieldErosion_edblock28236
+ApplyShieldErosion_edblock28220
+ApplyShieldErosion_edblock28188
+ApplyShieldErosion_edblock28126
+ApplyShieldErosion_edblock27883
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta pending_shield_erosion
-ApplyShieldErosion_edblock27090
+ApplyShieldErosion_edblock27105
 	rts
 end_procedure_ApplyShieldErosion
 	
@@ -10425,11 +10479,11 @@ end_procedure_ApplyShieldErosion
 	; ***********  Defining procedure : CopyShieldSprites
 	;    Procedure type : User-defined procedure
 css_scan_addr	dc.w	0
-css_scan_ptr	=  $22
+css_scan_ptr	= $22
 css_row	dc.b	0
 css_bc	dc.b	0
 css_found	dc.b	0
-CopyShieldSprites_block28226
+CopyShieldSprites_block28241
 CopyShieldSprites
         lda $2440
         sta shield_glyph_stage+0
@@ -10563,17 +10617,17 @@ csg_s3  lda shield_glyph_stage,x
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta css_bc
-CopyShieldSprites_while28227
-CopyShieldSprites_loopstart28231
+CopyShieldSprites_while28242
+CopyShieldSprites_loopstart28246
 	; Binary clause Simplified: LESS
 	lda css_bc
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs CopyShieldSprites_localfailed28384
-	jmp CopyShieldSprites_ctb28228
-CopyShieldSprites_localfailed28384
-	jmp CopyShieldSprites_edblock28230
-CopyShieldSprites_ctb28228: ;Main true block ;keep 
+	bcs CopyShieldSprites_localfailed28399
+	jmp CopyShieldSprites_ctb28243
+CopyShieldSprites_localfailed28399
+	jmp CopyShieldSprites_edblock28245
+CopyShieldSprites_ctb28243: ;Main true block ;keep 
 	
 ; // Bottom-up scan → shield_surface_top
 	lda #$f
@@ -10582,31 +10636,31 @@ CopyShieldSprites_ctb28228: ;Main true block ;keep
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta css_found
-CopyShieldSprites_while28386
-CopyShieldSprites_loopstart28390
+CopyShieldSprites_while28401
+CopyShieldSprites_loopstart28405
 	; Binary clause Simplified: EQUALS
 	lda css_found
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	bne CopyShieldSprites_localfailed28423
-	jmp CopyShieldSprites_ctb28387
-CopyShieldSprites_localfailed28423
-	jmp CopyShieldSprites_edblock28389
-CopyShieldSprites_ctb28387: ;Main true block ;keep 
+	bne CopyShieldSprites_localfailed28438
+	jmp CopyShieldSprites_ctb28402
+CopyShieldSprites_localfailed28438
+	jmp CopyShieldSprites_edblock28404
+CopyShieldSprites_ctb28402: ;Main true block ;keep 
 	; Generic 16 bit op
 	ldy #0
 	lda css_bc
-CopyShieldSprites_rightvarInteger_var28427 = $54
-	sta CopyShieldSprites_rightvarInteger_var28427
-	sty CopyShieldSprites_rightvarInteger_var28427+1
+CopyShieldSprites_rightvarInteger_var28442 = $54
+	sta CopyShieldSprites_rightvarInteger_var28442
+	sty CopyShieldSprites_rightvarInteger_var28442+1
 	; Generic 16 bit op
 	; Integer constant assigning
 	; Load16bitvariable : #$2440
 	ldy #$24
 	lda #$40
-CopyShieldSprites_rightvarInteger_var28430 =  $56
-	sta CopyShieldSprites_rightvarInteger_var28430
-	sty CopyShieldSprites_rightvarInteger_var28430+1
+CopyShieldSprites_rightvarInteger_var28445 = $56
+	sta CopyShieldSprites_rightvarInteger_var28445
+	sty CopyShieldSprites_rightvarInteger_var28445+1
 	; Right is PURE NUMERIC : Is word =1
 	; 16 bit mul or div
 	; Mul 16x8 setup
@@ -10620,24 +10674,24 @@ CopyShieldSprites_rightvarInteger_var28430 =  $56
 	jsr mul16x8_procedure
 	; Low bit binop:
 	clc
-	adc CopyShieldSprites_rightvarInteger_var28430
-CopyShieldSprites_wordAdd28428
-	sta CopyShieldSprites_rightvarInteger_var28430
+	adc CopyShieldSprites_rightvarInteger_var28445
+CopyShieldSprites_wordAdd28443
+	sta CopyShieldSprites_rightvarInteger_var28445
 	; High-bit binop
 	tya
-	adc CopyShieldSprites_rightvarInteger_var28430+1
+	adc CopyShieldSprites_rightvarInteger_var28445+1
 	tay
-	lda CopyShieldSprites_rightvarInteger_var28430
+	lda CopyShieldSprites_rightvarInteger_var28445
 	; Low bit binop:
 	clc
-	adc CopyShieldSprites_rightvarInteger_var28427
-CopyShieldSprites_wordAdd28425
-	sta CopyShieldSprites_rightvarInteger_var28427
+	adc CopyShieldSprites_rightvarInteger_var28442
+CopyShieldSprites_wordAdd28440
+	sta CopyShieldSprites_rightvarInteger_var28442
 	; High-bit binop
 	tya
-	adc CopyShieldSprites_rightvarInteger_var28427+1
+	adc CopyShieldSprites_rightvarInteger_var28442+1
 	tay
-	lda CopyShieldSprites_rightvarInteger_var28427
+	lda CopyShieldSprites_rightvarInteger_var28442
 	; Calling storevariable on generic assign expression
 	sta css_scan_addr
 	sty css_scan_addr+1
@@ -10650,41 +10704,41 @@ CopyShieldSprites_wordAdd28425
 	ldy #$0
 	lda (css_scan_ptr),y
 	; cmp #$00 ignored
-	beq CopyShieldSprites_eblock28433
-CopyShieldSprites_ctb28432: ;Main true block ;keep 
+	beq CopyShieldSprites_eblock28448
+CopyShieldSprites_ctb28447: ;Main true block ;keep 
 	lda css_row
 	; Calling storevariable on generic assign expression
 	sta css_found
-	jmp CopyShieldSprites_edblock28434
-CopyShieldSprites_eblock28433
+	jmp CopyShieldSprites_edblock28449
+CopyShieldSprites_eblock28448
 	; Binary clause Simplified: EQUALS
 	clc
 	lda css_row
 	; cmp #$00 ignored
-	bne CopyShieldSprites_eblock28449
-CopyShieldSprites_ctb28448: ;Main true block ;keep 
+	bne CopyShieldSprites_eblock28464
+CopyShieldSprites_ctb28463: ;Main true block ;keep 
 	lda #$fe
 	; Calling storevariable on generic assign expression
 	sta css_found
-	jmp CopyShieldSprites_edblock28450
-CopyShieldSprites_eblock28449
+	jmp CopyShieldSprites_edblock28465
+CopyShieldSprites_eblock28464
 	; Test Inc dec D
 	dec css_row
-CopyShieldSprites_edblock28450
-CopyShieldSprites_edblock28434
-	jmp CopyShieldSprites_while28386
-CopyShieldSprites_edblock28389
-CopyShieldSprites_loopend28391
+CopyShieldSprites_edblock28465
+CopyShieldSprites_edblock28449
+	jmp CopyShieldSprites_while28401
+CopyShieldSprites_edblock28404
+CopyShieldSprites_loopend28406
 	; Binary clause Simplified: GREATEREQUAL
 	lda css_found
 	; Compare with pure num / var optimization
 	cmp #$10;keep
-	bcc CopyShieldSprites_edblock28458
-CopyShieldSprites_ctb28456: ;Main true block ;keep 
+	bcc CopyShieldSprites_edblock28473
+CopyShieldSprites_ctb28471: ;Main true block ;keep 
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta css_found
-CopyShieldSprites_edblock28458
+CopyShieldSprites_edblock28473
 	lda css_found
 	; Calling storevariable on generic assign expression
 	ldx css_bc ; optimized, look out for bugs
@@ -10732,31 +10786,31 @@ CopyShieldSprites_edblock28458
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta css_found
-CopyShieldSprites_while28461
-CopyShieldSprites_loopstart28465
+CopyShieldSprites_while28476
+CopyShieldSprites_loopstart28480
 	; Binary clause Simplified: EQUALS
 	lda css_found
 	; Compare with pure num / var optimization
 	cmp #$ff;keep
-	bne CopyShieldSprites_localfailed28498
-	jmp CopyShieldSprites_ctb28462
-CopyShieldSprites_localfailed28498
-	jmp CopyShieldSprites_edblock28464
-CopyShieldSprites_ctb28462: ;Main true block ;keep 
+	bne CopyShieldSprites_localfailed28513
+	jmp CopyShieldSprites_ctb28477
+CopyShieldSprites_localfailed28513
+	jmp CopyShieldSprites_edblock28479
+CopyShieldSprites_ctb28477: ;Main true block ;keep 
 	; Generic 16 bit op
 	ldy #0
 	lda css_bc
-CopyShieldSprites_rightvarInteger_var28502 = $54
-	sta CopyShieldSprites_rightvarInteger_var28502
-	sty CopyShieldSprites_rightvarInteger_var28502+1
+CopyShieldSprites_rightvarInteger_var28517 = $54
+	sta CopyShieldSprites_rightvarInteger_var28517
+	sty CopyShieldSprites_rightvarInteger_var28517+1
 	; Generic 16 bit op
 	; Integer constant assigning
 	; Load16bitvariable : #$2440
 	ldy #$24
 	lda #$40
-CopyShieldSprites_rightvarInteger_var28505 =  $56
-	sta CopyShieldSprites_rightvarInteger_var28505
-	sty CopyShieldSprites_rightvarInteger_var28505+1
+CopyShieldSprites_rightvarInteger_var28520 = $56
+	sta CopyShieldSprites_rightvarInteger_var28520
+	sty CopyShieldSprites_rightvarInteger_var28520+1
 	; Right is PURE NUMERIC : Is word =1
 	; 16 bit mul or div
 	; Mul 16x8 setup
@@ -10770,24 +10824,24 @@ CopyShieldSprites_rightvarInteger_var28505 =  $56
 	jsr mul16x8_procedure
 	; Low bit binop:
 	clc
-	adc CopyShieldSprites_rightvarInteger_var28505
-CopyShieldSprites_wordAdd28503
-	sta CopyShieldSprites_rightvarInteger_var28505
+	adc CopyShieldSprites_rightvarInteger_var28520
+CopyShieldSprites_wordAdd28518
+	sta CopyShieldSprites_rightvarInteger_var28520
 	; High-bit binop
 	tya
-	adc CopyShieldSprites_rightvarInteger_var28505+1
+	adc CopyShieldSprites_rightvarInteger_var28520+1
 	tay
-	lda CopyShieldSprites_rightvarInteger_var28505
+	lda CopyShieldSprites_rightvarInteger_var28520
 	; Low bit binop:
 	clc
-	adc CopyShieldSprites_rightvarInteger_var28502
-CopyShieldSprites_wordAdd28500
-	sta CopyShieldSprites_rightvarInteger_var28502
+	adc CopyShieldSprites_rightvarInteger_var28517
+CopyShieldSprites_wordAdd28515
+	sta CopyShieldSprites_rightvarInteger_var28517
 	; High-bit binop
 	tya
-	adc CopyShieldSprites_rightvarInteger_var28502+1
+	adc CopyShieldSprites_rightvarInteger_var28517+1
 	tay
-	lda CopyShieldSprites_rightvarInteger_var28502
+	lda CopyShieldSprites_rightvarInteger_var28517
 	; Calling storevariable on generic assign expression
 	sta css_scan_addr
 	sty css_scan_addr+1
@@ -10800,41 +10854,41 @@ CopyShieldSprites_wordAdd28500
 	ldy #$0
 	lda (css_scan_ptr),y
 	; cmp #$00 ignored
-	beq CopyShieldSprites_eblock28508
-CopyShieldSprites_ctb28507: ;Main true block ;keep 
+	beq CopyShieldSprites_eblock28523
+CopyShieldSprites_ctb28522: ;Main true block ;keep 
 	lda css_row
 	; Calling storevariable on generic assign expression
 	sta css_found
-	jmp CopyShieldSprites_edblock28509
-CopyShieldSprites_eblock28508
+	jmp CopyShieldSprites_edblock28524
+CopyShieldSprites_eblock28523
 	; Binary clause Simplified: GREATEREQUAL
 	lda css_row
 	; Compare with pure num / var optimization
 	cmp #$f;keep
-	bcc CopyShieldSprites_eblock28524
-CopyShieldSprites_ctb28523: ;Main true block ;keep 
+	bcc CopyShieldSprites_eblock28539
+CopyShieldSprites_ctb28538: ;Main true block ;keep 
 	lda #$fe
 	; Calling storevariable on generic assign expression
 	sta css_found
-	jmp CopyShieldSprites_edblock28525
-CopyShieldSprites_eblock28524
+	jmp CopyShieldSprites_edblock28540
+CopyShieldSprites_eblock28539
 	; Test Inc dec D
 	inc css_row
-CopyShieldSprites_edblock28525
-CopyShieldSprites_edblock28509
-	jmp CopyShieldSprites_while28461
-CopyShieldSprites_edblock28464
-CopyShieldSprites_loopend28466
+CopyShieldSprites_edblock28540
+CopyShieldSprites_edblock28524
+	jmp CopyShieldSprites_while28476
+CopyShieldSprites_edblock28479
+CopyShieldSprites_loopend28481
 	; Binary clause Simplified: GREATEREQUAL
 	lda css_found
 	; Compare with pure num / var optimization
 	cmp #$10;keep
-	bcc CopyShieldSprites_edblock28533
-CopyShieldSprites_ctb28531: ;Main true block ;keep 
+	bcc CopyShieldSprites_edblock28548
+CopyShieldSprites_ctb28546: ;Main true block ;keep 
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	sta css_found
-CopyShieldSprites_edblock28533
+CopyShieldSprites_edblock28548
 	lda css_found
 	; Calling storevariable on generic assign expression
 	ldx css_bc ; optimized, look out for bugs
@@ -10876,9 +10930,9 @@ CopyShieldSprites_edblock28533
 	sta shield_surface_bot,x
 	; Test Inc dec D
 	inc css_bc
-	jmp CopyShieldSprites_while28227
-CopyShieldSprites_edblock28230
-CopyShieldSprites_loopend28232
+	jmp CopyShieldSprites_while28242
+CopyShieldSprites_edblock28245
+CopyShieldSprites_loopend28247
 	asl $d019
 	cli
 	
@@ -10904,19 +10958,19 @@ end_procedure_CopyShieldSprites
 	; ***********  Defining procedure : DisableShieldLogic
 	;    Procedure type : User-defined procedure
 dsl_idx	dc.b	0
-DisableShieldLogic_block28536
+DisableShieldLogic_block28551
 DisableShieldLogic
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta dsl_idx
-DisableShieldLogic_while28537
-DisableShieldLogic_loopstart28541
+DisableShieldLogic_while28552
+DisableShieldLogic_loopstart28556
 	; Binary clause Simplified: LESS
 	lda dsl_idx
 	; Compare with pure num / var optimization
 	cmp #$c;keep
-	bcs DisableShieldLogic_edblock28540
-DisableShieldLogic_ctb28538: ;Main true block ;keep 
+	bcs DisableShieldLogic_edblock28555
+DisableShieldLogic_ctb28553: ;Main true block ;keep 
 	lda #$ff
 	; Calling storevariable on generic assign expression
 	ldx dsl_idx ; optimized, look out for bugs
@@ -10925,9 +10979,9 @@ DisableShieldLogic_ctb28538: ;Main true block ;keep
 	sta shield_surface_bot,x
 	; Test Inc dec D
 	inc dsl_idx
-	jmp DisableShieldLogic_while28537
-DisableShieldLogic_edblock28540
-DisableShieldLogic_loopend28542
+	jmp DisableShieldLogic_while28552
+DisableShieldLogic_edblock28555
+DisableShieldLogic_loopend28557
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta shield_top_eroded+$0
@@ -10953,15 +11007,20 @@ end_procedure_DisableShieldLogic
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : DisplayText
 	;    Procedure type : User-defined procedure
-test_ptr	=  $22
-DisplayText_block28545
+test_ptr	= $22
+DisplayText_block28560
 DisplayText
-	
-; //moveto(29,1,hi(screen_char_loc));
+	;asm ("
+; //		lda #$01     ; WHITE letters
+; //        sta $0286    ; Set color
+; //        ");
+; //moveto(29,1,hi(screen_char_loc));	
+; //PrintString("HELLO", 0, 10);
+; //Screen::PrintString(" ",29,0,#Screen::screen0);
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28547
-	ldy #>DisplayText_stringassignstr28547
+	lda #<DisplayText_stringassignstr28562
+	ldy #>DisplayText_stringassignstr28562
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -10975,33 +11034,18 @@ DisplayText
 	sta Screen_p2
 	stx Screen_p2+1
 	jsr Screen_PrintString
+	
+; //Screen::PrintString("     00000",29,2,#Screen::screen0);		
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28549
-	ldy #>DisplayText_stringassignstr28549
+	lda #<DisplayText_stringassignstr28564
+	ldy #>DisplayText_stringassignstr28564
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
 	; Calling storevariable on generic assign expression
 	sta Screen_x
-	lda #$1
-	; Calling storevariable on generic assign expression
-	sta Screen_y
-	lda #$00
-	ldx #$04
-	sta Screen_p2
-	stx Screen_p2+1
-	jsr Screen_PrintString
-	; Assigning a string : Screen_p1
-	;has array index
-	lda #<DisplayText_stringassignstr28551
-	ldy #>DisplayText_stringassignstr28551
-	sta Screen_p1
-	sty Screen_p1+1
-	lda #$1d
-	; Calling storevariable on generic assign expression
-	sta Screen_x
-	lda #$b
+	lda #$7
 	; Calling storevariable on generic assign expression
 	sta Screen_y
 	lda #$00
@@ -11010,11 +11054,32 @@ DisplayText
 	stx Screen_p2+1
 	jsr Screen_PrintString
 	
-; //Screen::PrintString("         1",29,13,#Screen::screen0);
+; //Screen::PrintString("     00000",29,9,#Screen::screen0);
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28553
-	ldy #>DisplayText_stringassignstr28553
+	lda #<DisplayText_stringassignstr28566
+	ldy #>DisplayText_stringassignstr28566
+	sta Screen_p1
+	sty Screen_p1+1
+	lda #$1d
+	; Calling storevariable on generic assign expression
+	sta Screen_x
+	lda #$e
+	; Calling storevariable on generic assign expression
+	sta Screen_y
+	lda #$00
+	ldx #$04
+	sta Screen_p2
+	stx Screen_p2+1
+	jsr Screen_PrintString
+	
+; //Screen::PrintString("         1",29,17,#Screen::screen0);
+; //Screen::PrintString("CODE MUSIC",29,16,#Screen::screen0);
+; //Screen::PrintString(" SG UCTUMI",29,18,#Screen::screen0);
+	; Assigning a string : Screen_p1
+	;has array index
+	lda #<DisplayText_stringassignstr28568
+	ldy #>DisplayText_stringassignstr28568
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$1d
@@ -11042,8 +11107,8 @@ DisplayText
 ; // Keep startup screen shield-free. LevelStart() places/clears shields for the selected level.
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28555
-	ldy #>DisplayText_stringassignstr28555
+	lda #<DisplayText_stringassignstr28570
+	ldy #>DisplayText_stringassignstr28570
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -11059,8 +11124,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28557
-	ldy #>DisplayText_stringassignstr28557
+	lda #<DisplayText_stringassignstr28572
+	ldy #>DisplayText_stringassignstr28572
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$a
@@ -11076,8 +11141,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28559
-	ldy #>DisplayText_stringassignstr28559
+	lda #<DisplayText_stringassignstr28574
+	ldy #>DisplayText_stringassignstr28574
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -11093,8 +11158,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28561
-	ldy #>DisplayText_stringassignstr28561
+	lda #<DisplayText_stringassignstr28576
+	ldy #>DisplayText_stringassignstr28576
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -11110,8 +11175,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28563
-	ldy #>DisplayText_stringassignstr28563
+	lda #<DisplayText_stringassignstr28578
+	ldy #>DisplayText_stringassignstr28578
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$4
@@ -11127,8 +11192,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28565
-	ldy #>DisplayText_stringassignstr28565
+	lda #<DisplayText_stringassignstr28580
+	ldy #>DisplayText_stringassignstr28580
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$a
@@ -11144,8 +11209,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28567
-	ldy #>DisplayText_stringassignstr28567
+	lda #<DisplayText_stringassignstr28582
+	ldy #>DisplayText_stringassignstr28582
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$10
@@ -11161,8 +11226,8 @@ DisplayText
 	jsr Screen_PrintString
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28569
-	ldy #>DisplayText_stringassignstr28569
+	lda #<DisplayText_stringassignstr28584
+	ldy #>DisplayText_stringassignstr28584
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$16
@@ -11182,8 +11247,8 @@ DisplayText
 ; //UpdateLivesDisplay();
 	; Assigning a string : Screen_p1
 	;has array index
-	lda #<DisplayText_stringassignstr28571
-	ldy #>DisplayText_stringassignstr28571
+	lda #<DisplayText_stringassignstr28586
+	ldy #>DisplayText_stringassignstr28586
 	sta Screen_p1
 	sty Screen_p1+1
 	lda #$0
@@ -11207,16 +11272,16 @@ UpdateShieldDisplayForCurrentLevel
 	lda total_level_counter
 	; Compare with pure num / var optimization
 	cmp #$7;keep
-	bcs UpdateShieldDisplayForCurrentLevel_edblock28576
-UpdateShieldDisplayForCurrentLevel_localsuccess28578: ;keep
+	bcs UpdateShieldDisplayForCurrentLevel_edblock28591
+UpdateShieldDisplayForCurrentLevel_localsuccess28593: ;keep
 	; ; logical AND, second requirement
 	; Optimization: replacing a > N with a >= N+1
 	; Binary clause Simplified: GREATEREQUAL
 	lda total_level_counter
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bcc UpdateShieldDisplayForCurrentLevel_edblock28576
-UpdateShieldDisplayForCurrentLevel_ctb28574: ;Main true block ;keep 
+	bcc UpdateShieldDisplayForCurrentLevel_edblock28591
+UpdateShieldDisplayForCurrentLevel_ctb28589: ;Main true block ;keep 
 	sei
 	; Integer constant assigning
 	; Load16bitvariable : #$6fc
@@ -11264,7 +11329,7 @@ UpdateShieldDisplayForCurrentLevel_ctb28574: ;Main true block ;keep
 	jsr Helpers_PlaceShieldBlock
 	asl $d019
 	cli
-UpdateShieldDisplayForCurrentLevel_edblock28576
+UpdateShieldDisplayForCurrentLevel_edblock28591
 	rts
 end_procedure_UpdateShieldDisplayForCurrentLevel
 	
@@ -11295,7 +11360,7 @@ sgrt_text_msg1		dc.b	"GET READY FOR"
 	dc.b	0
 sgrt_text_msg2		dc.b	"LEVEL "
 	dc.b	0
-ShowGetReadyText_block28580
+ShowGetReadyText_block28595
 ShowGetReadyText
 	
 ; // Disable all sprites to hide them during intermission
@@ -11367,11 +11432,11 @@ sgrt_buf2 lda $0613,x
 	; Binary clause Simplified: GREATEREQUAL
 	; Compare with pure num / var optimization
 	cmp #$64;keep
-	bcc ShowGetReadyText_localfailed28615
-	jmp ShowGetReadyText_ctb28582
-ShowGetReadyText_localfailed28615
-	jmp ShowGetReadyText_eblock28583
-ShowGetReadyText_ctb28582: ;Main true block ;keep 
+	bcc ShowGetReadyText_localfailed28630
+	jmp ShowGetReadyText_ctb28597
+ShowGetReadyText_localfailed28630
+	jmp ShowGetReadyText_eblock28598
+ShowGetReadyText_ctb28597: ;Main true block ;keep 
 	; Right is PURE NUMERIC : Is word =0
 	; 8 bit div
 	lda sgrt_temp
@@ -11404,11 +11469,11 @@ ShowGetReadyText_ctb28582: ;Main true block ;keep
 	jsr multiply_eightbit
 	txa
 	ldy #0 ; ::EightbitMul
-ShowGetReadyText_rightvarAddSub_var28621 = $54
-	sta ShowGetReadyText_rightvarAddSub_var28621
+ShowGetReadyText_rightvarAddSub_var28636 = $54
+	sta ShowGetReadyText_rightvarAddSub_var28636
 	lda sgrt_temp
 	sec
-	sbc ShowGetReadyText_rightvarAddSub_var28621
+	sbc ShowGetReadyText_rightvarAddSub_var28636
 	; Calling storevariable on generic assign expression
 	sta sgrt_temp
 	; Right is PURE NUMERIC : Is word =0
@@ -11442,11 +11507,11 @@ ShowGetReadyText_rightvarAddSub_var28621 = $54
 	jsr multiply_eightbit
 	txa
 	ldy #0 ; ::EightbitMul
-ShowGetReadyText_rightvarAddSub_var28626 = $54
-	sta ShowGetReadyText_rightvarAddSub_var28626
+ShowGetReadyText_rightvarAddSub_var28641 = $54
+	sta ShowGetReadyText_rightvarAddSub_var28641
 	lda sgrt_temp
 	sec
-	sbc ShowGetReadyText_rightvarAddSub_var28626
+	sbc ShowGetReadyText_rightvarAddSub_var28641
 	; Calling storevariable on generic assign expression
 	sta sgrt_temp
 	; Poke
@@ -11461,14 +11526,14 @@ ShowGetReadyText_rightvarAddSub_var28626 = $54
 	; Optimization: shift is zero
 	lda #$e
 	sta $da1b
-	jmp ShowGetReadyText_edblock28584
-ShowGetReadyText_eblock28583
+	jmp ShowGetReadyText_edblock28599
+ShowGetReadyText_eblock28598
 	; Binary clause Simplified: GREATEREQUAL
 	lda total_level_counter
 	; Compare with pure num / var optimization
 	cmp #$a;keep
-	bcc ShowGetReadyText_eblock28630
-ShowGetReadyText_ctb28629: ;Main true block ;keep 
+	bcc ShowGetReadyText_eblock28645
+ShowGetReadyText_ctb28644: ;Main true block ;keep 
 	; Right is PURE NUMERIC : Is word =0
 	; 8 bit div
 	lda sgrt_temp
@@ -11501,11 +11566,11 @@ ShowGetReadyText_ctb28629: ;Main true block ;keep
 	jsr multiply_eightbit
 	txa
 	ldy #0 ; ::EightbitMul
-ShowGetReadyText_rightvarAddSub_var28644 = $54
-	sta ShowGetReadyText_rightvarAddSub_var28644
+ShowGetReadyText_rightvarAddSub_var28659 = $54
+	sta ShowGetReadyText_rightvarAddSub_var28659
 	lda sgrt_temp
 	sec
-	sbc ShowGetReadyText_rightvarAddSub_var28644
+	sbc ShowGetReadyText_rightvarAddSub_var28659
 	; Calling storevariable on generic assign expression
 	sta sgrt_temp
 	; Poke
@@ -11520,8 +11585,8 @@ ShowGetReadyText_rightvarAddSub_var28644 = $54
 	; Optimization: shift is zero
 	lda #$e
 	sta $da1a
-	jmp ShowGetReadyText_edblock28631
-ShowGetReadyText_eblock28630
+	jmp ShowGetReadyText_edblock28646
+ShowGetReadyText_eblock28645
 	; Poke
 	; Optimization: shift is zero
 	; 8 bit binop
@@ -11535,8 +11600,8 @@ ShowGetReadyText_eblock28630
 	; Optimization: shift is zero
 	lda #$e
 	sta $da19
-ShowGetReadyText_edblock28631
-ShowGetReadyText_edblock28584
+ShowGetReadyText_edblock28646
+ShowGetReadyText_edblock28599
         ldx #5
         lda #$0E
 sgrt_col2 sta $DA13,x
@@ -11559,7 +11624,7 @@ rightmost_enemies_byte	dc.b	0
 rightmost_found_flag	dc.b	0
 rightmost_result_offset	dc.b	0
 rightmost_column_loop_done	dc.b	0
-GetRightmostEnemyOffset_block28646
+GetRightmostEnemyOffset_block28661
 GetRightmostEnemyOffset
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -11573,40 +11638,40 @@ GetRightmostEnemyOffset
 	lda #$3
 	; Calling storevariable on generic assign expression
 	sta rightmost_block_column
-GetRightmostEnemyOffset_while28647
-GetRightmostEnemyOffset_loopstart28651
+GetRightmostEnemyOffset_while28662
+GetRightmostEnemyOffset_loopstart28666
 	; Binary clause Simplified: EQUALS
 	clc
 	lda rightmost_column_loop_done
 	; cmp #$00 ignored
-	bne GetRightmostEnemyOffset_localfailed28825
-	jmp GetRightmostEnemyOffset_ctb28648
-GetRightmostEnemyOffset_localfailed28825
-	jmp GetRightmostEnemyOffset_edblock28650
-GetRightmostEnemyOffset_ctb28648: ;Main true block ;keep 
+	bne GetRightmostEnemyOffset_localfailed28840
+	jmp GetRightmostEnemyOffset_ctb28663
+GetRightmostEnemyOffset_localfailed28840
+	jmp GetRightmostEnemyOffset_edblock28665
+GetRightmostEnemyOffset_ctb28663: ;Main true block ;keep 
 	
 ; // Check all 3 rows for this block column
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta rightmost_row_index
-GetRightmostEnemyOffset_while28827
-GetRightmostEnemyOffset_loopstart28831
+GetRightmostEnemyOffset_while28842
+GetRightmostEnemyOffset_loopstart28846
 	; Binary clause Simplified: LESS
 	lda rightmost_row_index
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs GetRightmostEnemyOffset_localfailed28910
-GetRightmostEnemyOffset_localsuccess28911: ;keep
+	bcs GetRightmostEnemyOffset_localfailed28925
+GetRightmostEnemyOffset_localsuccess28926: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda rightmost_found_flag
 	; cmp #$00 ignored
-	bne GetRightmostEnemyOffset_localfailed28910
-	jmp GetRightmostEnemyOffset_ctb28828
-GetRightmostEnemyOffset_localfailed28910
-	jmp GetRightmostEnemyOffset_edblock28830
-GetRightmostEnemyOffset_ctb28828: ;Main true block ;keep 
+	bne GetRightmostEnemyOffset_localfailed28925
+	jmp GetRightmostEnemyOffset_ctb28843
+GetRightmostEnemyOffset_localfailed28925
+	jmp GetRightmostEnemyOffset_edblock28845
+GetRightmostEnemyOffset_ctb28843: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -11633,8 +11698,8 @@ GetRightmostEnemyOffset_ctb28828: ;Main true block ;keep
 	and #$30
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetRightmostEnemyOffset_eblock28915
-GetRightmostEnemyOffset_ctb28914: ;Main true block ;keep 
+	beq GetRightmostEnemyOffset_eblock28930
+GetRightmostEnemyOffset_ctb28929: ;Main true block ;keep 
 	
 ; // Column-based indexing: check right to left
 ; // bits 4,5 set (right column: enemies 4,5)
@@ -11656,8 +11721,8 @@ GetRightmostEnemyOffset_ctb28914: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta rightmost_found_flag
-	jmp GetRightmostEnemyOffset_edblock28916
-GetRightmostEnemyOffset_eblock28915
+	jmp GetRightmostEnemyOffset_edblock28931
+GetRightmostEnemyOffset_eblock28930
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -11666,8 +11731,8 @@ GetRightmostEnemyOffset_eblock28915
 	and #$c
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetRightmostEnemyOffset_eblock28959
-GetRightmostEnemyOffset_ctb28958: ;Main true block ;keep 
+	beq GetRightmostEnemyOffset_eblock28974
+GetRightmostEnemyOffset_ctb28973: ;Main true block ;keep 
 	
 ; // bits 2,3 set (middle column: enemies 2,3)
 	; 8 bit binop
@@ -11688,8 +11753,8 @@ GetRightmostEnemyOffset_ctb28958: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta rightmost_found_flag
-	jmp GetRightmostEnemyOffset_edblock28960
-GetRightmostEnemyOffset_eblock28959
+	jmp GetRightmostEnemyOffset_edblock28975
+GetRightmostEnemyOffset_eblock28974
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -11698,8 +11763,8 @@ GetRightmostEnemyOffset_eblock28959
 	and #$3
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetRightmostEnemyOffset_edblock28982
-GetRightmostEnemyOffset_ctb28980: ;Main true block ;keep 
+	beq GetRightmostEnemyOffset_edblock28997
+GetRightmostEnemyOffset_ctb28995: ;Main true block ;keep 
 	
 ; // bits 0,1 set (left column: enemies 0,1)
 	; Right is PURE NUMERIC : Is word =0
@@ -11715,41 +11780,41 @@ GetRightmostEnemyOffset_ctb28980: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta rightmost_found_flag
-GetRightmostEnemyOffset_edblock28982
-GetRightmostEnemyOffset_edblock28960
-GetRightmostEnemyOffset_edblock28916
+GetRightmostEnemyOffset_edblock28997
+GetRightmostEnemyOffset_edblock28975
+GetRightmostEnemyOffset_edblock28931
 	; Test Inc dec D
 	inc rightmost_row_index
-	jmp GetRightmostEnemyOffset_while28827
-GetRightmostEnemyOffset_edblock28830
-GetRightmostEnemyOffset_loopend28832
+	jmp GetRightmostEnemyOffset_while28842
+GetRightmostEnemyOffset_edblock28845
+GetRightmostEnemyOffset_loopend28847
 	; Binary clause Simplified: EQUALS
 	lda rightmost_found_flag
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne GetRightmostEnemyOffset_localfailed28995
-	jmp GetRightmostEnemyOffset_ctb28990
-GetRightmostEnemyOffset_localfailed28995: ;keep
+	bne GetRightmostEnemyOffset_localfailed29010
+	jmp GetRightmostEnemyOffset_ctb29005
+GetRightmostEnemyOffset_localfailed29010: ;keep
 	; ; logical OR, second chance
 	; Binary clause Simplified: EQUALS
 	clc
 	lda rightmost_block_column
 	; cmp #$00 ignored
-	bne GetRightmostEnemyOffset_eblock28991
-GetRightmostEnemyOffset_ctb28990: ;Main true block ;keep 
+	bne GetRightmostEnemyOffset_eblock29006
+GetRightmostEnemyOffset_ctb29005: ;Main true block ;keep 
 	
 ; // Exit if found or if we've checked column 0
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta rightmost_column_loop_done
-	jmp GetRightmostEnemyOffset_edblock28992
-GetRightmostEnemyOffset_eblock28991
+	jmp GetRightmostEnemyOffset_edblock29007
+GetRightmostEnemyOffset_eblock29006
 	; Test Inc dec D
 	dec rightmost_block_column
-GetRightmostEnemyOffset_edblock28992
-	jmp GetRightmostEnemyOffset_while28647
-GetRightmostEnemyOffset_edblock28650
-GetRightmostEnemyOffset_loopend28652
+GetRightmostEnemyOffset_edblock29007
+	jmp GetRightmostEnemyOffset_while28662
+GetRightmostEnemyOffset_edblock28665
+GetRightmostEnemyOffset_loopend28667
 	lda rightmost_result_offset
 	rts
 end_procedure_GetRightmostEnemyOffset
@@ -11765,7 +11830,7 @@ leftmost_enemies_byte	dc.b	0
 leftmost_found_flag	dc.b	0
 leftmost_result_offset	dc.b	0
 leftmost_column_loop_done	dc.b	0
-GetLeftmostEnemyOffset_block28998
+GetLeftmostEnemyOffset_block29013
 GetLeftmostEnemyOffset
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -11778,40 +11843,40 @@ GetLeftmostEnemyOffset
 ; // Scan from leftmost block column (0) to right (3)
 	; Calling storevariable on generic assign expression
 	sta leftmost_block_column
-GetLeftmostEnemyOffset_while28999
-GetLeftmostEnemyOffset_loopstart29003
+GetLeftmostEnemyOffset_while29014
+GetLeftmostEnemyOffset_loopstart29018
 	; Binary clause Simplified: EQUALS
 	clc
 	lda leftmost_column_loop_done
 	; cmp #$00 ignored
-	bne GetLeftmostEnemyOffset_localfailed29177
-	jmp GetLeftmostEnemyOffset_ctb29000
-GetLeftmostEnemyOffset_localfailed29177
-	jmp GetLeftmostEnemyOffset_edblock29002
-GetLeftmostEnemyOffset_ctb29000: ;Main true block ;keep 
+	bne GetLeftmostEnemyOffset_localfailed29192
+	jmp GetLeftmostEnemyOffset_ctb29015
+GetLeftmostEnemyOffset_localfailed29192
+	jmp GetLeftmostEnemyOffset_edblock29017
+GetLeftmostEnemyOffset_ctb29015: ;Main true block ;keep 
 	
 ; // Check all 3 rows for this block column
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta leftmost_row_index
-GetLeftmostEnemyOffset_while29179
-GetLeftmostEnemyOffset_loopstart29183
+GetLeftmostEnemyOffset_while29194
+GetLeftmostEnemyOffset_loopstart29198
 	; Binary clause Simplified: LESS
 	lda leftmost_row_index
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs GetLeftmostEnemyOffset_localfailed29262
-GetLeftmostEnemyOffset_localsuccess29263: ;keep
+	bcs GetLeftmostEnemyOffset_localfailed29277
+GetLeftmostEnemyOffset_localsuccess29278: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda leftmost_found_flag
 	; cmp #$00 ignored
-	bne GetLeftmostEnemyOffset_localfailed29262
-	jmp GetLeftmostEnemyOffset_ctb29180
-GetLeftmostEnemyOffset_localfailed29262
-	jmp GetLeftmostEnemyOffset_edblock29182
-GetLeftmostEnemyOffset_ctb29180: ;Main true block ;keep 
+	bne GetLeftmostEnemyOffset_localfailed29277
+	jmp GetLeftmostEnemyOffset_ctb29195
+GetLeftmostEnemyOffset_localfailed29277
+	jmp GetLeftmostEnemyOffset_edblock29197
+GetLeftmostEnemyOffset_ctb29195: ;Main true block ;keep 
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; Right is PURE NUMERIC : Is word =0
@@ -11838,8 +11903,8 @@ GetLeftmostEnemyOffset_ctb29180: ;Main true block ;keep
 	and #$3
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetLeftmostEnemyOffset_eblock29267
-GetLeftmostEnemyOffset_ctb29266: ;Main true block ;keep 
+	beq GetLeftmostEnemyOffset_eblock29282
+GetLeftmostEnemyOffset_ctb29281: ;Main true block ;keep 
 	
 ; // Column-based indexing: check left to right
 ; // bits 0,1 set (left column: enemies 0,1)
@@ -11856,8 +11921,8 @@ GetLeftmostEnemyOffset_ctb29266: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta leftmost_found_flag
-	jmp GetLeftmostEnemyOffset_edblock29268
-GetLeftmostEnemyOffset_eblock29267
+	jmp GetLeftmostEnemyOffset_edblock29283
+GetLeftmostEnemyOffset_eblock29282
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -11866,8 +11931,8 @@ GetLeftmostEnemyOffset_eblock29267
 	and #$c
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetLeftmostEnemyOffset_eblock29311
-GetLeftmostEnemyOffset_ctb29310: ;Main true block ;keep 
+	beq GetLeftmostEnemyOffset_eblock29326
+GetLeftmostEnemyOffset_ctb29325: ;Main true block ;keep 
 	
 ; // bits 2,3 set (middle column: enemies 2,3)
 	; 8 bit binop
@@ -11888,8 +11953,8 @@ GetLeftmostEnemyOffset_ctb29310: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta leftmost_found_flag
-	jmp GetLeftmostEnemyOffset_edblock29312
-GetLeftmostEnemyOffset_eblock29311
+	jmp GetLeftmostEnemyOffset_edblock29327
+GetLeftmostEnemyOffset_eblock29326
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -11898,8 +11963,8 @@ GetLeftmostEnemyOffset_eblock29311
 	and #$30
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetLeftmostEnemyOffset_edblock29334
-GetLeftmostEnemyOffset_ctb29332: ;Main true block ;keep 
+	beq GetLeftmostEnemyOffset_edblock29349
+GetLeftmostEnemyOffset_ctb29347: ;Main true block ;keep 
 	
 ; // bits 4,5 set (right column: enemies 4,5)
 	; 8 bit binop
@@ -11920,41 +11985,41 @@ GetLeftmostEnemyOffset_ctb29332: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta leftmost_found_flag
-GetLeftmostEnemyOffset_edblock29334
-GetLeftmostEnemyOffset_edblock29312
-GetLeftmostEnemyOffset_edblock29268
+GetLeftmostEnemyOffset_edblock29349
+GetLeftmostEnemyOffset_edblock29327
+GetLeftmostEnemyOffset_edblock29283
 	; Test Inc dec D
 	inc leftmost_row_index
-	jmp GetLeftmostEnemyOffset_while29179
-GetLeftmostEnemyOffset_edblock29182
-GetLeftmostEnemyOffset_loopend29184
+	jmp GetLeftmostEnemyOffset_while29194
+GetLeftmostEnemyOffset_edblock29197
+GetLeftmostEnemyOffset_loopend29199
 	; Binary clause Simplified: EQUALS
 	lda leftmost_found_flag
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne GetLeftmostEnemyOffset_localfailed29347
-	jmp GetLeftmostEnemyOffset_ctb29342
-GetLeftmostEnemyOffset_localfailed29347: ;keep
+	bne GetLeftmostEnemyOffset_localfailed29362
+	jmp GetLeftmostEnemyOffset_ctb29357
+GetLeftmostEnemyOffset_localfailed29362: ;keep
 	; ; logical OR, second chance
 	; Binary clause Simplified: EQUALS
 	lda leftmost_block_column
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bne GetLeftmostEnemyOffset_eblock29343
-GetLeftmostEnemyOffset_ctb29342: ;Main true block ;keep 
+	bne GetLeftmostEnemyOffset_eblock29358
+GetLeftmostEnemyOffset_ctb29357: ;Main true block ;keep 
 	
 ; // Exit if found or if we've checked column 3
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta leftmost_column_loop_done
-	jmp GetLeftmostEnemyOffset_edblock29344
-GetLeftmostEnemyOffset_eblock29343
+	jmp GetLeftmostEnemyOffset_edblock29359
+GetLeftmostEnemyOffset_eblock29358
 	; Test Inc dec D
 	inc leftmost_block_column
-GetLeftmostEnemyOffset_edblock29344
-	jmp GetLeftmostEnemyOffset_while28999
-GetLeftmostEnemyOffset_edblock29002
-GetLeftmostEnemyOffset_loopend29004
+GetLeftmostEnemyOffset_edblock29359
+	jmp GetLeftmostEnemyOffset_while29014
+GetLeftmostEnemyOffset_edblock29017
+GetLeftmostEnemyOffset_loopend29019
 	lda leftmost_result_offset
 	rts
 end_procedure_GetLeftmostEnemyOffset
@@ -11973,7 +12038,7 @@ gleby_row_offset	dc.b	0
 gleby_has_bottom_enemy	dc.b	0
 gleby_bottom_in_sprite	dc.b	0
 gleby_result	dc.b	0
-GetLowestEnemyBottomY_block29350
+GetLowestEnemyBottomY_block29365
 GetLowestEnemyBottomY
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -11985,42 +12050,42 @@ GetLowestEnemyBottomY
 	sta gleby_r
 	
 ; // at r=0 wraps to 255, exiting the while
-GetLowestEnemyBottomY_while29351
-GetLowestEnemyBottomY_loopstart29355
+GetLowestEnemyBottomY_while29366
+GetLowestEnemyBottomY_loopstart29370
 	; Optimization: replacing a <= N with a <= N-1
 	; Binary clause Simplified: LESS
 	lda gleby_r
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs GetLowestEnemyBottomY_edblock29354
-GetLowestEnemyBottomY_localsuccess29385: ;keep
-	; ; logical AND, second requirement
-	; Binary clause Simplified: EQUALS
-	clc
-	lda gleby_found
-	; cmp #$00 ignored
-	bne GetLowestEnemyBottomY_edblock29354
-GetLowestEnemyBottomY_ctb29352: ;Main true block ;keep 
-	
-; // Scan from bottom row (2) upward; dec past 0 wraps to 255 which exits 'r <= 2'
-	lda #$0
-	; Calling storevariable on generic assign expression
-	sta gleby_b
-GetLowestEnemyBottomY_while29387
-GetLowestEnemyBottomY_loopstart29391
-	; Binary clause Simplified: LESS
-	lda gleby_b
-	; Compare with pure num / var optimization
-	cmp #$4;keep
-	bcs GetLowestEnemyBottomY_edblock29390
+	bcs GetLowestEnemyBottomY_edblock29369
 GetLowestEnemyBottomY_localsuccess29400: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	clc
 	lda gleby_found
 	; cmp #$00 ignored
-	bne GetLowestEnemyBottomY_edblock29390
-GetLowestEnemyBottomY_ctb29388: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_edblock29369
+GetLowestEnemyBottomY_ctb29367: ;Main true block ;keep 
+	
+; // Scan from bottom row (2) upward; dec past 0 wraps to 255 which exits 'r <= 2'
+	lda #$0
+	; Calling storevariable on generic assign expression
+	sta gleby_b
+GetLowestEnemyBottomY_while29402
+GetLowestEnemyBottomY_loopstart29406
+	; Binary clause Simplified: LESS
+	lda gleby_b
+	; Compare with pure num / var optimization
+	cmp #$4;keep
+	bcs GetLowestEnemyBottomY_edblock29405
+GetLowestEnemyBottomY_localsuccess29415: ;keep
+	; ; logical AND, second requirement
+	; Binary clause Simplified: EQUALS
+	clc
+	lda gleby_found
+	; cmp #$00 ignored
+	bne GetLowestEnemyBottomY_edblock29405
+GetLowestEnemyBottomY_ctb29403: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
@@ -12039,61 +12104,61 @@ GetLowestEnemyBottomY_ctb29388: ;Main true block ;keep
 	tax
 	lda block_enemies,x 
 	; cmp #$00 ignored
-	beq GetLowestEnemyBottomY_edblock29405
-GetLowestEnemyBottomY_ctb29403: ;Main true block ;keep 
+	beq GetLowestEnemyBottomY_edblock29420
+GetLowestEnemyBottomY_ctb29418: ;Main true block ;keep 
 	lda gleby_r
 	; Calling storevariable on generic assign expression
 	sta gleby_lowest_row
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta gleby_found
-GetLowestEnemyBottomY_edblock29405
+GetLowestEnemyBottomY_edblock29420
 	; Test Inc dec D
 	inc gleby_b
-	jmp GetLowestEnemyBottomY_while29387
-GetLowestEnemyBottomY_edblock29390
-GetLowestEnemyBottomY_loopend29392
+	jmp GetLowestEnemyBottomY_while29402
+GetLowestEnemyBottomY_edblock29405
+GetLowestEnemyBottomY_loopend29407
 	; Binary clause Simplified: EQUALS
 	clc
 	lda gleby_found
 	; cmp #$00 ignored
-	bne GetLowestEnemyBottomY_edblock29411
-GetLowestEnemyBottomY_ctb29409: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_edblock29426
+GetLowestEnemyBottomY_ctb29424: ;Main true block ;keep 
 	; Test Inc dec D
 	dec gleby_r
-GetLowestEnemyBottomY_edblock29411
-	jmp GetLowestEnemyBottomY_while29351
-GetLowestEnemyBottomY_edblock29354
-GetLowestEnemyBottomY_loopend29356
+GetLowestEnemyBottomY_edblock29426
+	jmp GetLowestEnemyBottomY_while29366
+GetLowestEnemyBottomY_edblock29369
+GetLowestEnemyBottomY_loopend29371
 	; Binary clause Simplified: EQUALS
 	clc
 	lda gleby_lowest_row
 	; cmp #$00 ignored
-	bne GetLowestEnemyBottomY_eblock29416
-GetLowestEnemyBottomY_ctb29415: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_eblock29431
+GetLowestEnemyBottomY_ctb29430: ;Main true block ;keep 
 	
 ; // Row Y offsets: row 0 = 0, row 1 = MONSTER_ROW_OFFSET, row 2 = 52
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta gleby_row_offset
-	jmp GetLowestEnemyBottomY_edblock29417
-GetLowestEnemyBottomY_eblock29416
+	jmp GetLowestEnemyBottomY_edblock29432
+GetLowestEnemyBottomY_eblock29431
 	; Binary clause Simplified: EQUALS
 	lda gleby_lowest_row
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne GetLowestEnemyBottomY_eblock29432
-GetLowestEnemyBottomY_ctb29431: ;Main true block ;keep 
+	bne GetLowestEnemyBottomY_eblock29447
+GetLowestEnemyBottomY_ctb29446: ;Main true block ;keep 
 	lda #$1a
 	; Calling storevariable on generic assign expression
 	sta gleby_row_offset
-	jmp GetLowestEnemyBottomY_edblock29433
-GetLowestEnemyBottomY_eblock29432
+	jmp GetLowestEnemyBottomY_edblock29448
+GetLowestEnemyBottomY_eblock29447
 	lda #$34
 	; Calling storevariable on generic assign expression
 	sta gleby_row_offset
-GetLowestEnemyBottomY_edblock29433
-GetLowestEnemyBottomY_edblock29417
+GetLowestEnemyBottomY_edblock29448
+GetLowestEnemyBottomY_edblock29432
 	
 ; // Check whether any 'bottom' enemy (odd index; bits 1,3,5 = mask $2A) is alive in this row.
 ; // Bottom enemies occupy sprite pixel rows 13-20 (bottom pixel offset = 20).
@@ -12103,15 +12168,15 @@ GetLowestEnemyBottomY_edblock29417
 	sta gleby_has_bottom_enemy
 	; Calling storevariable on generic assign expression
 	sta gleby_b
-GetLowestEnemyBottomY_while29438
-GetLowestEnemyBottomY_loopstart29442
+GetLowestEnemyBottomY_while29453
+GetLowestEnemyBottomY_loopstart29457
 	; Optimization: replacing a <= N with a <= N-1
 	; Binary clause Simplified: LESS
 	lda gleby_b
 	; Compare with pure num / var optimization
 	cmp #$4;keep
-	bcs GetLowestEnemyBottomY_edblock29441
-GetLowestEnemyBottomY_ctb29439: ;Main true block ;keep 
+	bcs GetLowestEnemyBottomY_edblock29456
+GetLowestEnemyBottomY_ctb29454: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; 8 bit binop
@@ -12134,32 +12199,32 @@ GetLowestEnemyBottomY_ctb29439: ;Main true block ;keep
 	and #$2a
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	beq GetLowestEnemyBottomY_edblock29455
-GetLowestEnemyBottomY_ctb29453: ;Main true block ;keep 
+	beq GetLowestEnemyBottomY_edblock29470
+GetLowestEnemyBottomY_ctb29468: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta gleby_has_bottom_enemy
-GetLowestEnemyBottomY_edblock29455
+GetLowestEnemyBottomY_edblock29470
 	; Test Inc dec D
 	inc gleby_b
-	jmp GetLowestEnemyBottomY_while29438
-GetLowestEnemyBottomY_edblock29441
-GetLowestEnemyBottomY_loopend29443
+	jmp GetLowestEnemyBottomY_while29453
+GetLowestEnemyBottomY_edblock29456
+GetLowestEnemyBottomY_loopend29458
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda gleby_has_bottom_enemy
 	; cmp #$00 ignored
-	beq GetLowestEnemyBottomY_eblock29460
-GetLowestEnemyBottomY_ctb29459: ;Main true block ;keep 
+	beq GetLowestEnemyBottomY_eblock29475
+GetLowestEnemyBottomY_ctb29474: ;Main true block ;keep 
 	lda #$14
 	; Calling storevariable on generic assign expression
 	sta gleby_bottom_in_sprite
-	jmp GetLowestEnemyBottomY_edblock29461
-GetLowestEnemyBottomY_eblock29460
+	jmp GetLowestEnemyBottomY_edblock29476
+GetLowestEnemyBottomY_eblock29475
 	lda #$7
 	; Calling storevariable on generic assign expression
 	sta gleby_bottom_in_sprite
-GetLowestEnemyBottomY_edblock29461
+GetLowestEnemyBottomY_edblock29476
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	; 8 bit binop
@@ -12183,23 +12248,23 @@ enemy_count_diff	dc.b	0
 right_edge	dc.b	0
 left_edge	dc.b	0
 prev_direction	dc.b	0
-UpdateTick_block29466
+UpdateTick_block29481
 UpdateTick
 	; Binary clause Simplified: EQUALS
 	clc
 	lda player_respawn_state
 	; cmp #$00 ignored
-	bne UpdateTick_localfailed29831
-	jmp UpdateTick_ctb29468
-UpdateTick_localfailed29831
-	jmp UpdateTick_edblock29470
-UpdateTick_ctb29468: ;Main true block ;keep 
+	bne UpdateTick_localfailed29846
+	jmp UpdateTick_ctb29483
+UpdateTick_localfailed29846
+	jmp UpdateTick_edblock29485
+UpdateTick_ctb29483: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda pending_edge_rescan
 	; cmp #$00 ignored
-	beq UpdateTick_edblock29836
-UpdateTick_ctb29834: ;Main true block ;keep 
+	beq UpdateTick_edblock29851
+UpdateTick_ctb29849: ;Main true block ;keep 
 	
 ; // 1 = table lookup, 0 = pure linear (arcade-accurate)
 ; // 1 = prevent formation from dropping into player
@@ -12216,7 +12281,7 @@ UpdateTick_ctb29834: ;Main true block ;keep
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta pending_edge_rescan
-UpdateTick_edblock29836
+UpdateTick_edblock29851
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #$47
@@ -12232,22 +12297,22 @@ UpdateTick_edblock29836
 	clc
 	lda enemyMoveCounter
 	; cmp #$00 ignored
-	beq UpdateTick_eblock29841
-UpdateTick_ctb29840: ;Main true block ;keep 
+	beq UpdateTick_eblock29856
+UpdateTick_ctb29855: ;Main true block ;keep 
 	; Test Inc dec D
 	dec enemyMoveCounter
 	; Binary clause Simplified: EQUALS
 	lda enemyMoveCounter
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne UpdateTick_edblock29887
-UpdateTick_ctb29885: ;Main true block ;keep 
+	bne UpdateTick_edblock29902
+UpdateTick_ctb29900: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	lda current_speed_delay
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcc UpdateTick_edblock29899
-UpdateTick_ctb29897: ;Main true block ;keep 
+	bcc UpdateTick_edblock29914
+UpdateTick_ctb29912: ;Main true block ;keep 
 	
 ; // Premove: fires 2 frames before the main tick to smooth out the
 ; // direction-change transition. Suppressed when delay <= 2 because
@@ -12255,16 +12320,16 @@ UpdateTick_ctb29897: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta should_move_enemy
-UpdateTick_edblock29899
-UpdateTick_edblock29887
-	jmp UpdateTick_edblock29842
-UpdateTick_eblock29841
+UpdateTick_edblock29914
+UpdateTick_edblock29902
+	jmp UpdateTick_edblock29857
+UpdateTick_eblock29856
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda #$0
 	; cmp #$00 ignored
-	beq UpdateTick_eblock29905
-UpdateTick_ctb29904: ;Main true block ;keep 
+	beq UpdateTick_eblock29920
+UpdateTick_ctb29919: ;Main true block ;keep 
 	
 ; // Reload delay.
 ; // USE_SPEED_TABLE=1: table lookup capped to linear (gentle staircase boost).
@@ -12279,18 +12344,18 @@ UpdateTick_ctb29904: ;Main true block ;keep
 	lda enemy_count_diff
 	; Compare with pure num / var optimization
 	cmp current_speed_delay;keep
-	bcs UpdateTick_edblock29919
-UpdateTick_ctb29917: ;Main true block ;keep 
+	bcs UpdateTick_edblock29934
+UpdateTick_ctb29932: ;Main true block ;keep 
 	lda enemy_count_diff
 	; Calling storevariable on generic assign expression
 	sta current_speed_delay
-UpdateTick_edblock29919
-	jmp UpdateTick_edblock29906
-UpdateTick_eblock29905
+UpdateTick_edblock29934
+	jmp UpdateTick_edblock29921
+UpdateTick_eblock29920
 	lda enemy_count_diff
 	; Calling storevariable on generic assign expression
 	sta current_speed_delay
-UpdateTick_edblock29906
+UpdateTick_edblock29921
 	lda current_speed_delay
 	; Calling storevariable on generic assign expression
 	sta enemyMoveCounter
@@ -12310,16 +12375,16 @@ UpdateTick_edblock29906
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta should_move_enemy
-UpdateTick_edblock29842
+UpdateTick_edblock29857
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda should_move_enemy
 	; cmp #$00 ignored
-	beq UpdateTick_localfailed30059
-	jmp UpdateTick_ctb29924
-UpdateTick_localfailed30059
-	jmp UpdateTick_edblock29926
-UpdateTick_ctb29924: ;Main true block ;keep 
+	beq UpdateTick_localfailed30074
+	jmp UpdateTick_ctb29939
+UpdateTick_localfailed30074
+	jmp UpdateTick_edblock29941
+UpdateTick_ctb29939: ;Main true block ;keep 
 	
 ; // Read cached edge offsets — updated in ClearMonster, so O(1) cost here
 ; // every tick regardless of enemy count.
@@ -12353,59 +12418,59 @@ UpdateTick_ctb29924: ;Main true block ;keep
 	lda right_edge
 	; Compare with pure num / var optimization
 	cmp #$f2;keep
-	bcc UpdateTick_eblock30063
-UpdateTick_ctb30062: ;Main true block ;keep 
+	bcc UpdateTick_eblock30078
+UpdateTick_ctb30077: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta enemy_direction
-	jmp UpdateTick_edblock30064
-UpdateTick_eblock30063
+	jmp UpdateTick_edblock30079
+UpdateTick_eblock30078
 	; Binary clause Simplified: LESS
 	lda left_edge
 	; Compare with pure num / var optimization
 	cmp #$25;keep
-	bcs UpdateTick_edblock30078
-UpdateTick_ctb30076: ;Main true block ;keep 
+	bcs UpdateTick_edblock30093
+UpdateTick_ctb30091: ;Main true block ;keep 
 	
 ; // 47 = 36 + BULLET_X_CONTACT_REACH; ensures cbcc_block_x >= 11 for leftmost survivors
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta enemy_direction
-UpdateTick_edblock30078
-UpdateTick_edblock30064
+UpdateTick_edblock30093
+UpdateTick_edblock30079
 	; Binary clause Simplified: NOTEQUALS
 	lda prev_direction
 	; Compare with pure num / var optimization
 	cmp enemy_direction;keep
-	beq UpdateTick_localfailed30138
-	jmp UpdateTick_ctb30082
-UpdateTick_localfailed30138
-	jmp UpdateTick_eblock30083
-UpdateTick_ctb30082: ;Main true block ;keep 
+	beq UpdateTick_localfailed30153
+	jmp UpdateTick_ctb30097
+UpdateTick_localfailed30153
+	jmp UpdateTick_eblock30098
+UpdateTick_ctb30097: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda #$1
 	; cmp #$00 ignored
-	bne UpdateTick_localfailed30146
-	jmp UpdateTick_ctb30141
-UpdateTick_localfailed30146: ;keep
+	bne UpdateTick_localfailed30161
+	jmp UpdateTick_ctb30156
+UpdateTick_localfailed30161: ;keep
 	; ; logical OR, second chance
 	; Binary clause Simplified: LESS
 	jsr GetLowestEnemyBottomY
-UpdateTick_binary_clause_temp_var30147 = $54
-	sta UpdateTick_binary_clause_temp_var30147
+UpdateTick_binary_clause_temp_var30162 = $54
+	sta UpdateTick_binary_clause_temp_var30162
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda player_sprite_y
 	sec
 	sbc #$6
 	 ; end add / sub var with constant
-UpdateTick_binary_clause_temp_2_var30148 =  $56
-	sta UpdateTick_binary_clause_temp_2_var30148
-	lda UpdateTick_binary_clause_temp_var30147
-	cmp UpdateTick_binary_clause_temp_2_var30148;keep
-	bcs UpdateTick_eblock30142
-UpdateTick_ctb30141: ;Main true block ;keep 
+UpdateTick_binary_clause_temp_2_var30163 = $56
+	sta UpdateTick_binary_clause_temp_2_var30163
+	lda UpdateTick_binary_clause_temp_var30162
+	cmp UpdateTick_binary_clause_temp_2_var30163;keep
+	bcs UpdateTick_eblock30157
+UpdateTick_ctb30156: ;Main true block ;keep 
 	
 ; // If direction changed, drop instead of moving horizontally this tick.
 ; // This keeps movement flow clean: one tick = one action (drop OR move, never both).
@@ -12415,8 +12480,8 @@ UpdateTick_ctb30141: ;Main true block ;keep
 	clc
 	adc #$6
 	sta monster_base_y
-	jmp UpdateTick_edblock30143
-UpdateTick_eblock30142
+	jmp UpdateTick_edblock30158
+UpdateTick_eblock30157
 	
 ; // Formation reached player floor: immediate game over.
 ; // TODO: Perhaps add a little more ceremony here. Also maybe make this variable dependent for debugging.
@@ -12430,21 +12495,21 @@ UpdateTick_eblock30142
 	sta get_ready_mode
 	; Calling storevariable on generic assign expression
 	sta pending_palette
-UpdateTick_edblock30143
-	jmp UpdateTick_edblock30084
-UpdateTick_eblock30083
+UpdateTick_edblock30158
+	jmp UpdateTick_edblock30099
+UpdateTick_eblock30098
 	; Binary clause Simplified: LESS
 	lda current_speed_delay
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bcs UpdateTick_eblock30154
-UpdateTick_ctb30153: ;Main true block ;keep 
+	bcs UpdateTick_eblock30169
+UpdateTick_ctb30168: ;Main true block ;keep 
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda enemy_direction
 	; cmp #$00 ignored
-	beq UpdateTick_eblock30177
-UpdateTick_ctb30176: ;Main true block ;keep 
+	beq UpdateTick_eblock30192
+UpdateTick_ctb30191: ;Main true block ;keep 
 	
 ; // No direction change: move horizontally.
 ; // When premove is suppressed (delay <= 2), the main tick must move
@@ -12455,39 +12520,39 @@ UpdateTick_ctb30176: ;Main true block ;keep
 	clc
 	adc #$2
 	sta monster_base_x
-	jmp UpdateTick_edblock30178
-UpdateTick_eblock30177
+	jmp UpdateTick_edblock30193
+UpdateTick_eblock30192
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : monster_base_x
 	lda monster_base_x
 	sec
 	sbc #$2
 	sta monster_base_x
-UpdateTick_edblock30178
-	jmp UpdateTick_edblock30155
-UpdateTick_eblock30154
+UpdateTick_edblock30193
+	jmp UpdateTick_edblock30170
+UpdateTick_eblock30169
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda enemy_direction
 	; cmp #$00 ignored
-	beq UpdateTick_eblock30186
-UpdateTick_ctb30185: ;Main true block ;keep 
+	beq UpdateTick_eblock30201
+UpdateTick_ctb30200: ;Main true block ;keep 
 	; Test Inc dec D
 	inc monster_base_x
-	jmp UpdateTick_edblock30187
-UpdateTick_eblock30186
+	jmp UpdateTick_edblock30202
+UpdateTick_eblock30201
 	; Test Inc dec D
 	dec monster_base_x
-UpdateTick_edblock30187
-UpdateTick_edblock30155
-UpdateTick_edblock30084
+UpdateTick_edblock30202
+UpdateTick_edblock30170
+UpdateTick_edblock30099
 	
 ; // Signal contact-erosion check: run once per march step, not per frame.
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta enemy_march_tick
-UpdateTick_edblock29926
-UpdateTick_edblock29470
+UpdateTick_edblock29941
+UpdateTick_edblock29485
 	rts
 end_procedure_UpdateTick
 	
@@ -12498,7 +12563,7 @@ end_procedure_UpdateTick
 monster_sprite_color	dc.b	$03
 lm_level	dc.b	0
 lm_offset	dc.b	0
-MakeMonsters_block30192
+MakeMonsters_block30207
 MakeMonsters
 	
 ; // counter for level loop
@@ -12511,14 +12576,14 @@ MakeMonsters
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta lm_level
-MakeMonsters_while30193
-MakeMonsters_loopstart30197
+MakeMonsters_while30208
+MakeMonsters_loopstart30212
 	; Binary clause Simplified: LESS
 	lda lm_level
 	; Compare with pure num / var optimization
 	cmp current_level;keep
-	bcs MakeMonsters_edblock30196
-MakeMonsters_ctb30194: ;Main true block ;keep 
+	bcs MakeMonsters_edblock30211
+MakeMonsters_ctb30209: ;Main true block ;keep 
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : lm_offset
 	lda lm_offset
@@ -12527,9 +12592,9 @@ MakeMonsters_ctb30194: ;Main true block ;keep
 	sta lm_offset
 	; Test Inc dec D
 	inc lm_level
-	jmp MakeMonsters_while30193
-MakeMonsters_edblock30196
-MakeMonsters_loopend30198
+	jmp MakeMonsters_while30208
+MakeMonsters_edblock30211
+MakeMonsters_loopend30213
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda #$66
@@ -12584,68 +12649,68 @@ MakeMonsters_loopend30198
 	sta $d01d
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit30201
+MakeMonsters_shiftbit30216
 	cpx #0
-	beq MakeMonsters_shiftbitdone30202
+	beq MakeMonsters_shiftbitdone30217
 	asl
 	dex
-	jmp MakeMonsters_shiftbit30201
-MakeMonsters_shiftbitdone30202
-MakeMonsters_bitmask_var30203 = $54
-	sta MakeMonsters_bitmask_var30203
+	jmp MakeMonsters_shiftbit30216
+MakeMonsters_shiftbitdone30217
+MakeMonsters_bitmask_var30218 = $54
+	sta MakeMonsters_bitmask_var30218
 	lda $d01d
-	ora MakeMonsters_bitmask_var30203
+	ora MakeMonsters_bitmask_var30218
 	sta $d01d
 	; Toggle bit with constant
 	ora #%100
 	sta $d01d
 	ldx #$2 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit30204
+MakeMonsters_shiftbit30219
 	cpx #0
-	beq MakeMonsters_shiftbitdone30205
+	beq MakeMonsters_shiftbitdone30220
 	asl
 	dex
-	jmp MakeMonsters_shiftbit30204
-MakeMonsters_shiftbitdone30205
-MakeMonsters_bitmask_var30206 = $54
-	sta MakeMonsters_bitmask_var30206
+	jmp MakeMonsters_shiftbit30219
+MakeMonsters_shiftbitdone30220
+MakeMonsters_bitmask_var30221 = $54
+	sta MakeMonsters_bitmask_var30221
 	lda $d01d
-	ora MakeMonsters_bitmask_var30206
+	ora MakeMonsters_bitmask_var30221
 	sta $d01d
 	; Toggle bit with constant
 	ora #%1000
 	sta $d01d
 	ldx #$3 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit30207
+MakeMonsters_shiftbit30222
 	cpx #0
-	beq MakeMonsters_shiftbitdone30208
+	beq MakeMonsters_shiftbitdone30223
 	asl
 	dex
-	jmp MakeMonsters_shiftbit30207
-MakeMonsters_shiftbitdone30208
-MakeMonsters_bitmask_var30209 = $54
-	sta MakeMonsters_bitmask_var30209
+	jmp MakeMonsters_shiftbit30222
+MakeMonsters_shiftbitdone30223
+MakeMonsters_bitmask_var30224 = $54
+	sta MakeMonsters_bitmask_var30224
 	lda $d01d
-	ora MakeMonsters_bitmask_var30209
+	ora MakeMonsters_bitmask_var30224
 	sta $d01d
 	; Toggle bit with constant
 	ora #%10000
 	sta $d01d
 	ldx #$4 ; optimized, look out for bugs
 	lda #1
-MakeMonsters_shiftbit30210
+MakeMonsters_shiftbit30225
 	cpx #0
-	beq MakeMonsters_shiftbitdone30211
+	beq MakeMonsters_shiftbitdone30226
 	asl
 	dex
-	jmp MakeMonsters_shiftbit30210
-MakeMonsters_shiftbitdone30211
-MakeMonsters_bitmask_var30212 = $54
-	sta MakeMonsters_bitmask_var30212
+	jmp MakeMonsters_shiftbit30225
+MakeMonsters_shiftbitdone30226
+MakeMonsters_bitmask_var30227 = $54
+	sta MakeMonsters_bitmask_var30227
 	lda $d01d
-	ora MakeMonsters_bitmask_var30212
+	ora MakeMonsters_bitmask_var30227
 	sta $d01d
 	
 ; // Enable UFO bullet sprites
@@ -12705,8 +12770,8 @@ IntermissionChain
 	lda pending_palette
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne IntermissionChain_edblock30217
-IntermissionChain_ctb30215: ;Main true block ;keep 
+	bne IntermissionChain_edblock30232
+IntermissionChain_ctb30230: ;Main true block ;keep 
 	
 ; // Flush deferred palette update before advancing the SID engine.
 ; // Running at I=1 here (inside interrupt) — immune to the SID play routine
@@ -12738,26 +12803,26 @@ IntermissionChain_ctb30215: ;Main true block ;keep
 	lda game_over_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne IntermissionChain_eblock30230
-IntermissionChain_ctb30229: ;Main true block ;keep 
+	bne IntermissionChain_eblock30245
+IntermissionChain_ctb30244: ;Main true block ;keep 
 	
 ; // Show appropriate text based on mode
 	jsr ShowGameOverText
-	jmp IntermissionChain_edblock30231
-IntermissionChain_eblock30230
+	jmp IntermissionChain_edblock30246
+IntermissionChain_eblock30245
 	jsr ShowGetReadyText
-IntermissionChain_edblock30231
-IntermissionChain_edblock30217
+IntermissionChain_edblock30246
+IntermissionChain_edblock30232
 	; Binary clause Simplified: EQUALS
 	clc
 	lda #$0
 	; cmp #$00 ignored
-	bne IntermissionChain_edblock30239
-IntermissionChain_ctb30237: ;Main true block ;keep 
+	bne IntermissionChain_edblock30254
+IntermissionChain_ctb30252: ;Main true block ;keep 
 	
 ; // Play music during intermission
 	jsr $1003
-IntermissionChain_edblock30239
+IntermissionChain_edblock30254
 	
 ; // Check fire button to proceed
 	lda #%11111111  ; CIA#1 port A = outputs 
@@ -12771,20 +12836,20 @@ IntermissionChain_edblock30239
 	lda joystickbutton
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne IntermissionChain_eblock30244
-IntermissionChain_ctb30243: ;Main true block ;keep 
+	bne IntermissionChain_eblock30259
+IntermissionChain_ctb30258: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	lda game_over_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne IntermissionChain_eblock30285
-IntermissionChain_ctb30284: ;Main true block ;keep 
+	bne IntermissionChain_eblock30300
+IntermissionChain_ctb30299: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda game_over_prev_fire
 	; cmp #$00 ignored
-	bne IntermissionChain_edblock30306
-IntermissionChain_ctb30304: ;Main true block ;keep 
+	bne IntermissionChain_edblock30321
+IntermissionChain_ctb30319: ;Main true block ;keep 
 	
 ; // Game over screen: return to startup on fire
 	jsr HideGameOverText
@@ -12799,52 +12864,52 @@ IntermissionChain_ctb30304: ;Main true block ;keep
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta startup_mode
-IntermissionChain_edblock30306
-	jmp IntermissionChain_edblock30286
-IntermissionChain_eblock30285
+IntermissionChain_edblock30321
+	jmp IntermissionChain_edblock30301
+IntermissionChain_eblock30300
 	; Binary clause Simplified: EQUALS
 	clc
 	lda get_ready_prev_fire
 	; cmp #$00 ignored
-	bne IntermissionChain_edblock30313
-IntermissionChain_localsuccess30315: ;keep
+	bne IntermissionChain_edblock30328
+IntermissionChain_localsuccess30330: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	lda level_advance_ready
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne IntermissionChain_edblock30313
-IntermissionChain_ctb30311: ;Main true block ;keep 
+	bne IntermissionChain_edblock30328
+IntermissionChain_ctb30326: ;Main true block ;keep 
 	jsr LevelStart
 	
 ; // Exits intermission, switches to full game chain
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta get_ready_prev_fire
-IntermissionChain_edblock30313
-IntermissionChain_edblock30286
-	jmp IntermissionChain_edblock30245
-IntermissionChain_eblock30244
+IntermissionChain_edblock30328
+IntermissionChain_edblock30301
+	jmp IntermissionChain_edblock30260
+IntermissionChain_eblock30259
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta get_ready_prev_fire
 	; Calling storevariable on generic assign expression
 	sta game_over_prev_fire
-IntermissionChain_edblock30245
+IntermissionChain_edblock30260
 	; Binary clause Simplified: EQUALS
 	lda get_ready_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne IntermissionChain_localfailed30332
-	jmp IntermissionChain_ctb30319
-IntermissionChain_localfailed30332: ;keep
+	bne IntermissionChain_localfailed30347
+	jmp IntermissionChain_ctb30334
+IntermissionChain_localfailed30347: ;keep
 	; ; logical OR, second chance
 	; Binary clause Simplified: EQUALS
 	lda game_over_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne IntermissionChain_eblock30320
-IntermissionChain_ctb30319: ;Main true block ;keep 
+	bne IntermissionChain_eblock30335
+IntermissionChain_ctb30334: ;Main true block ;keep 
 	
 ; // Schedule next step based on current mode.
 ; // If LevelStart() just ran, get_ready_mode is now 0 and we must not overwrite
@@ -12856,14 +12921,14 @@ IntermissionChain_ctb30319: ;Main true block ;keep
 	sta $fffe
 	lda #>IntermissionStarfield
 	sta $ffff
-	jmp IntermissionChain_edblock30321
-IntermissionChain_eblock30320
+	jmp IntermissionChain_edblock30336
+IntermissionChain_eblock30335
 	; Binary clause Simplified: EQUALS
 	lda startup_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne IntermissionChain_eblock30337
-IntermissionChain_ctb30336: ;Main true block ;keep 
+	bne IntermissionChain_eblock30352
+IntermissionChain_ctb30351: ;Main true block ;keep 
 	; RasterIRQ : Hook a procedure
 	lda #$0
 	sta $d012
@@ -12871,8 +12936,8 @@ IntermissionChain_ctb30336: ;Main true block ;keep
 	sta $fffe
 	lda #>StartupChain
 	sta $ffff
-	jmp IntermissionChain_edblock30338
-IntermissionChain_eblock30337
+	jmp IntermissionChain_edblock30353
+IntermissionChain_eblock30352
 	; RasterIRQ : Hook a procedure
 	lda #$0
 	sta $d012
@@ -12880,8 +12945,8 @@ IntermissionChain_eblock30337
 	sta $fffe
 	lda #>MainRasterChain
 	sta $ffff
-IntermissionChain_edblock30338
-IntermissionChain_edblock30321
+IntermissionChain_edblock30353
+IntermissionChain_edblock30336
 	; CloseIRQ
 	pla
 	tay
@@ -12938,10 +13003,10 @@ StartupChain
 	clc
 	lda #$0
 	; cmp #$00 ignored
-	bne StartupChain_edblock30348
-StartupChain_ctb30346: ;Main true block ;keep 
+	bne StartupChain_edblock30363
+StartupChain_ctb30361: ;Main true block ;keep 
 	jsr $1003
-StartupChain_edblock30348
+StartupChain_edblock30363
 	lda #%11111111  ; CIA#1 port A = outputs 
 	sta $dc03             
 	lda #%00000000  ; CIA#1 port B = inputs
@@ -12953,8 +13018,8 @@ StartupChain_edblock30348
 	lda joystickleft
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne StartupChain_eblock30353
-StartupChain_ctb30352: ;Main true block ;keep 
+	bne StartupChain_eblock30368
+StartupChain_ctb30367: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; 8 bit binop
@@ -12963,22 +13028,22 @@ StartupChain_ctb30352: ;Main true block ;keep
 	and #$2
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	bne StartupChain_edblock30383
-StartupChain_ctb30381: ;Main true block ;keep 
+	bne StartupChain_edblock30398
+StartupChain_ctb30396: ;Main true block ;keep 
 	; Binary clause Simplified: GREATEREQUAL
 	lda current_level
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bcc StartupChain_eblock30396
-StartupChain_ctb30395: ;Main true block ;keep 
+	bcc StartupChain_eblock30411
+StartupChain_ctb30410: ;Main true block ;keep 
 	; Test Inc dec D
 	dec current_level
-	jmp StartupChain_edblock30397
-StartupChain_eblock30396
+	jmp StartupChain_edblock30412
+StartupChain_eblock30411
 	lda #$9
 	; Calling storevariable on generic assign expression
 	sta current_level
-StartupChain_edblock30397
+StartupChain_edblock30412
 	jsr UpdateStartupLevelSelectDigit
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -12987,9 +13052,9 @@ StartupChain_edblock30397
 	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta startup_prev_inputs
-StartupChain_edblock30383
-	jmp StartupChain_edblock30354
-StartupChain_eblock30353
+StartupChain_edblock30398
+	jmp StartupChain_edblock30369
+StartupChain_eblock30368
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda startup_prev_inputs
@@ -12997,13 +13062,13 @@ StartupChain_eblock30353
 	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta startup_prev_inputs
-StartupChain_edblock30354
+StartupChain_edblock30369
 	; Binary clause Simplified: EQUALS
 	lda joystickright
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne StartupChain_eblock30405
-StartupChain_ctb30404: ;Main true block ;keep 
+	bne StartupChain_eblock30420
+StartupChain_ctb30419: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; 8 bit binop
@@ -13012,22 +13077,22 @@ StartupChain_ctb30404: ;Main true block ;keep
 	and #$4
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	bne StartupChain_edblock30435
-StartupChain_ctb30433: ;Main true block ;keep 
+	bne StartupChain_edblock30450
+StartupChain_ctb30448: ;Main true block ;keep 
 	; Binary clause Simplified: LESS
 	lda current_level
 	; Compare with pure num / var optimization
 	cmp #$9;keep
-	bcs StartupChain_eblock30448
-StartupChain_ctb30447: ;Main true block ;keep 
+	bcs StartupChain_eblock30463
+StartupChain_ctb30462: ;Main true block ;keep 
 	; Test Inc dec D
 	inc current_level
-	jmp StartupChain_edblock30449
-StartupChain_eblock30448
+	jmp StartupChain_edblock30464
+StartupChain_eblock30463
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta current_level
-StartupChain_edblock30449
+StartupChain_edblock30464
 	jsr UpdateStartupLevelSelectDigit
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -13036,9 +13101,9 @@ StartupChain_edblock30449
 	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta startup_prev_inputs
-StartupChain_edblock30435
-	jmp StartupChain_edblock30406
-StartupChain_eblock30405
+StartupChain_edblock30450
+	jmp StartupChain_edblock30421
+StartupChain_eblock30420
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda startup_prev_inputs
@@ -13046,13 +13111,13 @@ StartupChain_eblock30405
 	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta startup_prev_inputs
-StartupChain_edblock30406
+StartupChain_edblock30421
 	; Binary clause Simplified: EQUALS
 	lda joystickbutton
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne StartupChain_eblock30457
-StartupChain_ctb30456: ;Main true block ;keep 
+	bne StartupChain_eblock30472
+StartupChain_ctb30471: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	; 8 bit binop
@@ -13061,8 +13126,8 @@ StartupChain_ctb30456: ;Main true block ;keep
 	and #$1
 	 ; end add / sub var with constant
 	; cmp #$00 ignored
-	bne StartupChain_edblock30471
-StartupChain_ctb30469: ;Main true block ;keep 
+	bne StartupChain_edblock30486
+StartupChain_ctb30484: ;Main true block ;keep 
 	jsr HideStartupText
 	lda #$0
 	; Calling storevariable on generic assign expression
@@ -13085,9 +13150,9 @@ StartupChain_ctb30469: ;Main true block ;keep
 	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta startup_prev_inputs
-StartupChain_edblock30471
-	jmp StartupChain_edblock30458
-StartupChain_eblock30457
+StartupChain_edblock30486
+	jmp StartupChain_edblock30473
+StartupChain_eblock30472
 	; 8 bit binop
 	; Add/sub where right value is constant number
 	lda startup_prev_inputs
@@ -13095,13 +13160,13 @@ StartupChain_eblock30457
 	 ; end add / sub var with constant
 	; Calling storevariable on generic assign expression
 	sta startup_prev_inputs
-StartupChain_edblock30458
+StartupChain_edblock30473
 	; Binary clause Simplified: EQUALS
 	lda startup_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne StartupChain_eblock30477
-StartupChain_ctb30476: ;Main true block ;keep 
+	bne StartupChain_eblock30492
+StartupChain_ctb30491: ;Main true block ;keep 
 	; RasterIRQ : Hook a procedure
 	lda #$fa
 	sta $d012
@@ -13109,14 +13174,14 @@ StartupChain_ctb30476: ;Main true block ;keep
 	sta $fffe
 	lda #>StartupStarfield
 	sta $ffff
-	jmp StartupChain_edblock30478
-StartupChain_eblock30477
+	jmp StartupChain_edblock30493
+StartupChain_eblock30492
 	; Binary clause Simplified: EQUALS
 	lda get_ready_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne StartupChain_eblock30493
-StartupChain_ctb30492: ;Main true block ;keep 
+	bne StartupChain_eblock30508
+StartupChain_ctb30507: ;Main true block ;keep 
 	; RasterIRQ : Hook a procedure
 	lda #$0
 	sta $d012
@@ -13124,8 +13189,8 @@ StartupChain_ctb30492: ;Main true block ;keep
 	sta $fffe
 	lda #>IntermissionChain
 	sta $ffff
-	jmp StartupChain_edblock30494
-StartupChain_eblock30493
+	jmp StartupChain_edblock30509
+StartupChain_eblock30508
 	; RasterIRQ : Hook a procedure
 	lda #$0
 	sta $d012
@@ -13133,8 +13198,8 @@ StartupChain_eblock30493
 	sta $fffe
 	lda #>MainRasterChain
 	sta $ffff
-StartupChain_edblock30494
-StartupChain_edblock30478
+StartupChain_edblock30509
+StartupChain_edblock30493
 	; CloseIRQ
 	pla
 	tay
@@ -13191,15 +13256,15 @@ MainRasterPlayer
 	clc
 	lda #$0
 	; cmp #$00 ignored
-	bne MainRasterPlayer_eblock30503
-MainRasterPlayer_ctb30502: ;Main true block ;keep 
+	bne MainRasterPlayer_eblock30518
+MainRasterPlayer_ctb30517: ;Main true block ;keep 
 	jsr $1003
-	jmp MainRasterPlayer_edblock30504
-MainRasterPlayer_eblock30503
+	jmp MainRasterPlayer_edblock30519
+MainRasterPlayer_eblock30518
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta $d020
-MainRasterPlayer_edblock30504
+MainRasterPlayer_edblock30519
 	; StartIRQ
 	pha
 	txa
@@ -13211,16 +13276,16 @@ MainRasterPlayer_edblock30504
 	lda get_ready_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterPlayer_localfailed30515
-	jmp MainRasterPlayer_ctb30510
-MainRasterPlayer_localfailed30515: ;keep
+	bne MainRasterPlayer_localfailed30530
+	jmp MainRasterPlayer_ctb30525
+MainRasterPlayer_localfailed30530: ;keep
 	; ; logical OR, second chance
 	; Binary clause Simplified: EQUALS
 	lda game_over_mode
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterPlayer_eblock30511
-MainRasterPlayer_ctb30510: ;Main true block ;keep 
+	bne MainRasterPlayer_eblock30526
+MainRasterPlayer_ctb30525: ;Main true block ;keep 
 	
 ; // Schedule MainRasterChain FIRST — same logic as the RasterIRQ-before-heavy-work
 ; // pattern in MainRasterChain.  CheckBulletCollision (kill frame), UpdateTick
@@ -13233,8 +13298,8 @@ MainRasterPlayer_ctb30510: ;Main true block ;keep
 	sta $fffe
 	lda #>IntermissionChain
 	sta $ffff
-	jmp MainRasterPlayer_edblock30512
-MainRasterPlayer_eblock30511
+	jmp MainRasterPlayer_edblock30527
+MainRasterPlayer_eblock30526
 	; RasterIRQ : Hook a procedure
 	lda #$0
 	sta $d012
@@ -13242,7 +13307,7 @@ MainRasterPlayer_eblock30511
 	sta $fffe
 	lda #>MainRasterChain
 	sta $ffff
-MainRasterPlayer_edblock30512
+MainRasterPlayer_edblock30527
 	
 ; // Run game logic unconditionally — intermission uses separate chain
 	jsr CheckShieldCollision
@@ -13251,13 +13316,13 @@ MainRasterPlayer_edblock30512
 	lda player_bullet_active
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterPlayer_edblock30521
-MainRasterPlayer_ctb30519: ;Main true block ;keep 
+	bne MainRasterPlayer_edblock30536
+MainRasterPlayer_ctb30534: ;Main true block ;keep 
 	
 ; // Check collisions AFTER all sprite rows have been displayed
 ; // Only check when bullet is actively moving (not exploding)
 	jsr CheckBulletCollision
-MainRasterPlayer_edblock30521
+MainRasterPlayer_edblock30536
 	
 ; //asm(" lda $D01E");
 ; //asm(" lda $D01F");
@@ -13276,11 +13341,11 @@ MainRasterPlayer_edblock30521
 	lda player_sprite_x
 	ldx #0
 	sta $D000,x
-MainRasterPlayer_spritepos30524
+MainRasterPlayer_spritepos30539
 	lda $D010
 	and #%11111110
 	sta $D010
-MainRasterPlayer_spriteposcontinue30525
+MainRasterPlayer_spriteposcontinue30540
 	inx
 	txa
 	tay
@@ -13326,8 +13391,8 @@ MainRasterRow3
 	; CAST type NADA
 	lda row_has_monsters +$2 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterRow3_edblock30530
-MainRasterRow3_ctb30528: ;Main true block ;keep 
+	beq MainRasterRow3_edblock30545
+MainRasterRow3_ctb30543: ;Main true block ;keep 
 	
 ; // Update bottom row only if it still contains monsters
 	lda #$34
@@ -13340,7 +13405,7 @@ MainRasterRow3_ctb30528: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta enemyRow
 	jsr AnimateMonsters
-MainRasterRow3_edblock30530
+MainRasterRow3_edblock30545
 	; RasterIRQ : Hook a procedure
 	lda #$de
 	sta $d012
@@ -13352,12 +13417,12 @@ MainRasterRow3_edblock30530
 	lda #$0
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterRow3_edblock30536
-MainRasterRow3_ctb30534: ;Main true block ;keep 
+	bne MainRasterRow3_edblock30551
+MainRasterRow3_ctb30549: ;Main true block ;keep 
 	lda #$5
 	; Calling storevariable on generic assign expression
 	sta $d020
-MainRasterRow3_edblock30536
+MainRasterRow3_edblock30551
 	; CloseIRQ
 	pla
 	tay
@@ -13385,8 +13450,8 @@ MainRasterRow2
 	; CAST type NADA
 	lda row_has_monsters +$1 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterRow2_edblock30543
-MainRasterRow2_ctb30541: ;Main true block ;keep 
+	beq MainRasterRow2_edblock30558
+MainRasterRow2_ctb30556: ;Main true block ;keep 
 	
 ; //ShowBullet();
 ; //border_debug_color := peek(^$D01E, 0);
@@ -13408,15 +13473,15 @@ MainRasterRow2_ctb30541: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta enemyRow
 	jsr AnimateMonsters
-MainRasterRow2_edblock30543
+MainRasterRow2_edblock30558
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda row_has_monsters +$2 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterRow2_eblock30548
-MainRasterRow2_ctb30547: ;Main true block ;keep 
+	beq MainRasterRow2_eblock30563
+MainRasterRow2_ctb30562: ;Main true block ;keep 
 	
 ; // If bottom row still has monsters, go to row3; otherwise skip to joystick handler
 	; RasterIRQ : Hook a procedure
@@ -13431,8 +13496,8 @@ MainRasterRow2_ctb30547: ;Main true block ;keep
 	sta $fffe
 	lda #>MainRasterRow3
 	sta $ffff
-	jmp MainRasterRow2_edblock30549
-MainRasterRow2_eblock30548
+	jmp MainRasterRow2_edblock30564
+MainRasterRow2_eblock30563
 	; RasterIRQ : Hook a procedure
 	lda #$de
 	sta $d012
@@ -13440,17 +13505,17 @@ MainRasterRow2_eblock30548
 	sta $fffe
 	lda #>MainRasterPlayer
 	sta $ffff
-MainRasterRow2_edblock30549
+MainRasterRow2_edblock30564
 	; Binary clause Simplified: EQUALS
 	lda #$0
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterRow2_edblock30557
-MainRasterRow2_ctb30555: ;Main true block ;keep 
+	bne MainRasterRow2_edblock30572
+MainRasterRow2_ctb30570: ;Main true block ;keep 
 	lda #$6
 	; Calling storevariable on generic assign expression
 	sta $d020
-MainRasterRow2_edblock30557
+MainRasterRow2_edblock30572
 	; CloseIRQ
 	pla
 	tay
@@ -13478,17 +13543,17 @@ MainRasterRow1
 	sta $d01d
 	ldx #$1 ; optimized, look out for bugs
 	lda #1
-MainRasterRow1_shiftbit30561
+MainRasterRow1_shiftbit30576
 	cpx #0
-	beq MainRasterRow1_shiftbitdone30562
+	beq MainRasterRow1_shiftbitdone30577
 	asl
 	dex
-	jmp MainRasterRow1_shiftbit30561
-MainRasterRow1_shiftbitdone30562
-MainRasterRow1_bitmask_var30563 = $54
-	sta MainRasterRow1_bitmask_var30563
+	jmp MainRasterRow1_shiftbit30576
+MainRasterRow1_shiftbitdone30577
+MainRasterRow1_bitmask_var30578 = $54
+	sta MainRasterRow1_bitmask_var30578
 	lda $d01d
-	ora MainRasterRow1_bitmask_var30563
+	ora MainRasterRow1_bitmask_var30578
 	sta $d01d
 	
 ; // Set image pointers for row 0 — also transitions sprite 1 from UFO to enemy
@@ -13498,8 +13563,8 @@ MainRasterRow1_bitmask_var30563 = $54
 	; CAST type NADA
 	lda row_has_monsters +$0 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterRow1_edblock30567
-MainRasterRow1_ctb30565: ;Main true block ;keep 
+	beq MainRasterRow1_edblock30582
+MainRasterRow1_ctb30580: ;Main true block ;keep 
 	
 ; // Update first row of monsters only if there are monsters in that row
 	lda #$0
@@ -13512,15 +13577,15 @@ MainRasterRow1_ctb30565: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta enemyRow
 	jsr AnimateMonsters
-MainRasterRow1_edblock30567
+MainRasterRow1_edblock30582
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda row_has_monsters +$1 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterRow1_eblock30572
-MainRasterRow1_ctb30571: ;Main true block ;keep 
+	beq MainRasterRow1_eblock30587
+MainRasterRow1_ctb30586: ;Main true block ;keep 
 	
 ; // Choose next raster handler based on which subsequent rows still have monsters
 	; RasterIRQ : Hook a procedure
@@ -13535,16 +13600,16 @@ MainRasterRow1_ctb30571: ;Main true block ;keep
 	sta $fffe
 	lda #>MainRasterRow2
 	sta $ffff
-	jmp MainRasterRow1_edblock30573
-MainRasterRow1_eblock30572
+	jmp MainRasterRow1_edblock30588
+MainRasterRow1_eblock30587
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda row_has_monsters +$2 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterRow1_eblock30588
-MainRasterRow1_ctb30587: ;Main true block ;keep 
+	beq MainRasterRow1_eblock30603
+MainRasterRow1_ctb30602: ;Main true block ;keep 
 	; RasterIRQ : Hook a procedure
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -13557,8 +13622,8 @@ MainRasterRow1_ctb30587: ;Main true block ;keep
 	sta $fffe
 	lda #>MainRasterRow3
 	sta $ffff
-	jmp MainRasterRow1_edblock30589
-MainRasterRow1_eblock30588
+	jmp MainRasterRow1_edblock30604
+MainRasterRow1_eblock30603
 	; RasterIRQ : Hook a procedure
 	lda #$de
 	sta $d012
@@ -13566,18 +13631,18 @@ MainRasterRow1_eblock30588
 	sta $fffe
 	lda #>MainRasterPlayer
 	sta $ffff
-MainRasterRow1_edblock30589
-MainRasterRow1_edblock30573
+MainRasterRow1_edblock30604
+MainRasterRow1_edblock30588
 	; Binary clause Simplified: EQUALS
 	lda #$0
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterRow1_edblock30597
-MainRasterRow1_ctb30595: ;Main true block ;keep 
+	bne MainRasterRow1_edblock30612
+MainRasterRow1_ctb30610: ;Main true block ;keep 
 	lda #$2
 	; Calling storevariable on generic assign expression
 	sta $d020
-MainRasterRow1_edblock30597
+MainRasterRow1_edblock30612
 	; CloseIRQ
 	pla
 	tay
@@ -13601,8 +13666,8 @@ MainRasterChain
 	lda flagGotoNextLevel
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterChain_eblock30603
-MainRasterChain_ctb30602: ;Main true block ;keep 
+	bne MainRasterChain_eblock30618
+MainRasterChain_ctb30617: ;Main true block ;keep 
 	
 ; // Schedule the next raster IRQ FIRST — before the SID player, before any game logic.
 ; // Reason: call(sidfile_1_play) takes 1000–3000 cycles (16–50 raster lines) and varies
@@ -13614,16 +13679,16 @@ MainRasterChain_ctb30602: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta flagGotoNextLevel
 	jsr LevelAdvance
-	jmp MainRasterChain_edblock30604
-MainRasterChain_eblock30603
+	jmp MainRasterChain_edblock30619
+MainRasterChain_eblock30618
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda row_has_monsters +$0 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterChain_eblock30667
-MainRasterChain_ctb30666: ;Main true block ;keep 
+	beq MainRasterChain_eblock30682
+MainRasterChain_ctb30681: ;Main true block ;keep 
 	; RasterIRQ : Hook a procedure
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -13636,16 +13701,16 @@ MainRasterChain_ctb30666: ;Main true block ;keep
 	sta $fffe
 	lda #>MainRasterRow1
 	sta $ffff
-	jmp MainRasterChain_edblock30668
-MainRasterChain_eblock30667
+	jmp MainRasterChain_edblock30683
+MainRasterChain_eblock30682
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda row_has_monsters +$1 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterChain_eblock30699
-MainRasterChain_ctb30698: ;Main true block ;keep 
+	beq MainRasterChain_eblock30714
+MainRasterChain_ctb30713: ;Main true block ;keep 
 	; RasterIRQ : Hook a procedure
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -13658,16 +13723,16 @@ MainRasterChain_ctb30698: ;Main true block ;keep
 	sta $fffe
 	lda #>MainRasterRow2
 	sta $ffff
-	jmp MainRasterChain_edblock30700
-MainRasterChain_eblock30699
+	jmp MainRasterChain_edblock30715
+MainRasterChain_eblock30714
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	; Load Byte array
 	; CAST type NADA
 	lda row_has_monsters +$2 ; array with const index optimization 
 	; cmp #$00 ignored
-	beq MainRasterChain_eblock30715
-MainRasterChain_ctb30714: ;Main true block ;keep 
+	beq MainRasterChain_eblock30730
+MainRasterChain_ctb30729: ;Main true block ;keep 
 	; RasterIRQ : Hook a procedure
 	; 8 bit binop
 	; Add/sub where right value is constant number
@@ -13680,8 +13745,8 @@ MainRasterChain_ctb30714: ;Main true block ;keep
 	sta $fffe
 	lda #>MainRasterRow3
 	sta $ffff
-	jmp MainRasterChain_edblock30716
-MainRasterChain_eblock30715
+	jmp MainRasterChain_edblock30731
+MainRasterChain_eblock30730
 	; RasterIRQ : Hook a procedure
 	lda #$de
 	sta $d012
@@ -13689,10 +13754,10 @@ MainRasterChain_eblock30715
 	sta $fffe
 	lda #>MainRasterPlayer
 	sta $ffff
-MainRasterChain_edblock30716
-MainRasterChain_edblock30700
-MainRasterChain_edblock30668
-MainRasterChain_edblock30604
+MainRasterChain_edblock30731
+MainRasterChain_edblock30715
+MainRasterChain_edblock30683
+MainRasterChain_edblock30619
 	
 ; // Game logic runs unconditionally — intermission uses separate chain
 	jsr ShowBullet
@@ -13737,44 +13802,44 @@ MainRasterChain_edblock30604
 	lda joystickbutton
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainRasterChain_eblock30723
-MainRasterChain_ctb30722: ;Main true block ;keep 
+	bne MainRasterChain_eblock30738
+MainRasterChain_ctb30737: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda previous_fire_state
 	; cmp #$00 ignored
-	bne MainRasterChain_edblock30773
-MainRasterChain_ctb30771: ;Main true block ;keep 
+	bne MainRasterChain_edblock30788
+MainRasterChain_ctb30786: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda player_bullet_active
 	; cmp #$00 ignored
-	bne MainRasterChain_edblock30797
-MainRasterChain_ctb30795: ;Main true block ;keep 
+	bne MainRasterChain_edblock30812
+MainRasterChain_ctb30810: ;Main true block ;keep 
 	
 ; //inc(border_debug_color);
 	; Binary clause Simplified: EQUALS
 	clc
 	lda player_respawn_state
 	; cmp #$00 ignored
-	bne MainRasterChain_edblock30809
-MainRasterChain_ctb30807: ;Main true block ;keep 
+	bne MainRasterChain_edblock30824
+MainRasterChain_ctb30822: ;Main true block ;keep 
 	
 ; // Check fire button with debounce (only fire on button press, not hold)
 ; // Disabled during player respawn sequence
 	jsr FirePlayerBullet
-MainRasterChain_edblock30809
-MainRasterChain_edblock30797
-MainRasterChain_edblock30773
+MainRasterChain_edblock30824
+MainRasterChain_edblock30812
+MainRasterChain_edblock30788
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta previous_fire_state
-	jmp MainRasterChain_edblock30724
-MainRasterChain_eblock30723
+	jmp MainRasterChain_edblock30739
+MainRasterChain_eblock30738
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta previous_fire_state
-MainRasterChain_edblock30724
+MainRasterChain_edblock30739
 	
 ; // Check player bullet vs UFO — must run after UpdatePlayerBullet so bullet position is current.
 	jsr CheckUFOCollision
@@ -13832,12 +13897,12 @@ LevelAdvance
 	lda current_level
 	; Compare with pure num / var optimization
 	cmp #$a;keep
-	bcc LevelAdvance_edblock30817
-LevelAdvance_ctb30815: ;Main true block ;keep 
+	bcc LevelAdvance_edblock30832
+LevelAdvance_ctb30830: ;Main true block ;keep 
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta current_level
-LevelAdvance_edblock30817
+LevelAdvance_edblock30832
 	; Test Inc dec D
 	inc total_level_counter
 	
@@ -13861,33 +13926,33 @@ LevelAdvance_edblock30817
 	lda total_level_counter
 	; Calling storevariable on generic assign expression
 	sta advancelevel_palette_level
-LevelAdvance_while30820
-LevelAdvance_loopstart30824
+LevelAdvance_while30835
+LevelAdvance_loopstart30839
 	; Optimization: replacing a > N with a >= N+1
 	; Binary clause Simplified: GREATEREQUAL
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$a;keep
-	bcc LevelAdvance_edblock30823
-LevelAdvance_ctb30821: ;Main true block ;keep 
+	bcc LevelAdvance_edblock30838
+LevelAdvance_ctb30836: ;Main true block ;keep 
 	; Optimizer: a = a +/- b
 	; Load16bitvariable : advancelevel_palette_level
 	lda advancelevel_palette_level
 	sec
 	sbc #$9
 	sta advancelevel_palette_level
-	jmp LevelAdvance_while30820
-LevelAdvance_edblock30823
-LevelAdvance_loopend30825
+	jmp LevelAdvance_while30835
+LevelAdvance_edblock30838
+LevelAdvance_loopend30840
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne LevelAdvance_localfailed32649
-	jmp LevelAdvance_ctb30829
-LevelAdvance_localfailed32649
-	jmp LevelAdvance_eblock30830
-LevelAdvance_ctb30829: ;Main true block ;keep 
+	bne LevelAdvance_localfailed32664
+	jmp LevelAdvance_ctb30844
+LevelAdvance_localfailed32664
+	jmp LevelAdvance_eblock30845
+LevelAdvance_ctb30844: ;Main true block ;keep 
 	lda #$6
 	; Calling storevariable on generic assign expression
 	sta pal_col1
@@ -13906,17 +13971,17 @@ LevelAdvance_ctb30829: ;Main true block ;keep
 	lda #$b
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-	jmp LevelAdvance_edblock30831
-LevelAdvance_eblock30830
+	jmp LevelAdvance_edblock30846
+LevelAdvance_eblock30845
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$2;keep
-	bne LevelAdvance_localfailed33561
-	jmp LevelAdvance_ctb32653
-LevelAdvance_localfailed33561
-	jmp LevelAdvance_eblock32654
-LevelAdvance_ctb32653: ;Main true block ;keep 
+	bne LevelAdvance_localfailed33576
+	jmp LevelAdvance_ctb32668
+LevelAdvance_localfailed33576
+	jmp LevelAdvance_eblock32669
+LevelAdvance_ctb32668: ;Main true block ;keep 
 	
 ; // Purple Haze
 	lda #$b
@@ -13937,17 +14002,17 @@ LevelAdvance_ctb32653: ;Main true block ;keep
 	lda #$6
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-	jmp LevelAdvance_edblock32655
-LevelAdvance_eblock32654
+	jmp LevelAdvance_edblock32670
+LevelAdvance_eblock32669
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$3;keep
-	bne LevelAdvance_localfailed34017
-	jmp LevelAdvance_ctb33565
-LevelAdvance_localfailed34017
-	jmp LevelAdvance_eblock33566
-LevelAdvance_ctb33565: ;Main true block ;keep 
+	bne LevelAdvance_localfailed34032
+	jmp LevelAdvance_ctb33580
+LevelAdvance_localfailed34032
+	jmp LevelAdvance_eblock33581
+LevelAdvance_ctb33580: ;Main true block ;keep 
 	
 ; // RGB
 	lda #$2
@@ -13968,17 +14033,17 @@ LevelAdvance_ctb33565: ;Main true block ;keep
 	lda #$6
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-	jmp LevelAdvance_edblock33567
-LevelAdvance_eblock33566
+	jmp LevelAdvance_edblock33582
+LevelAdvance_eblock33581
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$4;keep
-	bne LevelAdvance_localfailed34245
-	jmp LevelAdvance_ctb34021
-LevelAdvance_localfailed34245
-	jmp LevelAdvance_eblock34022
-LevelAdvance_ctb34021: ;Main true block ;keep 
+	bne LevelAdvance_localfailed34260
+	jmp LevelAdvance_ctb34036
+LevelAdvance_localfailed34260
+	jmp LevelAdvance_eblock34037
+LevelAdvance_ctb34036: ;Main true block ;keep 
 	
 ; // Various			
 	lda #$6
@@ -13999,17 +14064,17 @@ LevelAdvance_ctb34021: ;Main true block ;keep
 	lda #$b
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-	jmp LevelAdvance_edblock34023
-LevelAdvance_eblock34022
+	jmp LevelAdvance_edblock34038
+LevelAdvance_eblock34037
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$5;keep
-	bne LevelAdvance_localfailed34359
-	jmp LevelAdvance_ctb34249
-LevelAdvance_localfailed34359
-	jmp LevelAdvance_eblock34250
-LevelAdvance_ctb34249: ;Main true block ;keep 
+	bne LevelAdvance_localfailed34374
+	jmp LevelAdvance_ctb34264
+LevelAdvance_localfailed34374
+	jmp LevelAdvance_eblock34265
+LevelAdvance_ctb34264: ;Main true block ;keep 
 	
 ; // Jungle Green				
 	lda #$2
@@ -14030,17 +14095,17 @@ LevelAdvance_ctb34249: ;Main true block ;keep
 	lda #$9
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-	jmp LevelAdvance_edblock34251
-LevelAdvance_eblock34250
+	jmp LevelAdvance_edblock34266
+LevelAdvance_eblock34265
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$6;keep
-	bne LevelAdvance_localfailed34416
-	jmp LevelAdvance_ctb34363
-LevelAdvance_localfailed34416
-	jmp LevelAdvance_eblock34364
-LevelAdvance_ctb34363: ;Main true block ;keep 
+	bne LevelAdvance_localfailed34431
+	jmp LevelAdvance_ctb34378
+LevelAdvance_localfailed34431
+	jmp LevelAdvance_eblock34379
+LevelAdvance_ctb34378: ;Main true block ;keep 
 	
 ; // Lava		
 	lda #$6
@@ -14061,14 +14126,14 @@ LevelAdvance_ctb34363: ;Main true block ;keep
 	lda #$b
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-	jmp LevelAdvance_edblock34365
-LevelAdvance_eblock34364
+	jmp LevelAdvance_edblock34380
+LevelAdvance_eblock34379
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$7;keep
-	bne LevelAdvance_eblock34421
-LevelAdvance_ctb34420: ;Main true block ;keep 
+	bne LevelAdvance_eblock34436
+LevelAdvance_ctb34435: ;Main true block ;keep 
 	
 ; // Ice Blue					
 	lda #$2
@@ -14088,14 +14153,14 @@ LevelAdvance_ctb34420: ;Main true block ;keep
 	lda #$9
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-	jmp LevelAdvance_edblock34422
-LevelAdvance_eblock34421
+	jmp LevelAdvance_edblock34437
+LevelAdvance_eblock34436
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$8;keep
-	bne LevelAdvance_eblock34449
-LevelAdvance_ctb34448: ;Main true block ;keep 
+	bne LevelAdvance_eblock34464
+LevelAdvance_ctb34463: ;Main true block ;keep 
 	
 ; // Gold
 	lda #$b
@@ -14116,16 +14181,16 @@ LevelAdvance_ctb34448: ;Main true block ;keep
 	lda #$b
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-	jmp LevelAdvance_edblock34450
-LevelAdvance_eblock34449
+	jmp LevelAdvance_edblock34465
+LevelAdvance_eblock34464
 	
 ; // Red
 	; Binary clause Simplified: EQUALS
 	lda advancelevel_palette_level
 	; Compare with pure num / var optimization
 	cmp #$9;keep
-	bne LevelAdvance_edblock34464
-LevelAdvance_ctb34462: ;Main true block ;keep 
+	bne LevelAdvance_edblock34479
+LevelAdvance_ctb34477: ;Main true block ;keep 
 	
 ; // Christmas		
 	lda #$2
@@ -14146,15 +14211,15 @@ LevelAdvance_ctb34462: ;Main true block ;keep
 	lda #$9
 	; Calling storevariable on generic assign expression
 	sta pal_col6
-LevelAdvance_edblock34464
-LevelAdvance_edblock34450
-LevelAdvance_edblock34422
-LevelAdvance_edblock34365
-LevelAdvance_edblock34251
-LevelAdvance_edblock34023
-LevelAdvance_edblock33567
-LevelAdvance_edblock32655
-LevelAdvance_edblock30831
+LevelAdvance_edblock34479
+LevelAdvance_edblock34465
+LevelAdvance_edblock34437
+LevelAdvance_edblock34380
+LevelAdvance_edblock34266
+LevelAdvance_edblock34038
+LevelAdvance_edblock33582
+LevelAdvance_edblock32670
+LevelAdvance_edblock30846
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta pending_palette
@@ -14162,13 +14227,13 @@ LevelAdvance_edblock30831
 	lda total_level_counter
 	; Compare with pure num / var optimization
 	cmp #$7;keep
-	bcs LevelAdvance_edblock34470
-LevelAdvance_ctb34468: ;Main true block ;keep 
+	bcs LevelAdvance_edblock34485
+LevelAdvance_ctb34483: ;Main true block ;keep 
 	
 ; // Restore shields — IRQ-safe: glyph copies use inline ASM (no ZP);
 ; // surface scan wrapped in PreventIRQ/EnableIRQ inside CopyShieldSprites.
 	jsr CopyShieldSprites
-LevelAdvance_edblock34470
+LevelAdvance_edblock34485
 	
 ; // Signal the main-context polling loop to run ReadyMonsters + MakeMonsters.
 ; // Those are wrapped in PreventIRQ/EnableIRQ there to protect ZP $24/$68 from
@@ -14225,7 +14290,18 @@ main_block_begin_
 ; // ---------------------------------------------------------------------------------------------------------------------------------
 ; // Main program loop. Turn CIA interrupts off, copy the character set from ROM into RAM and tell the machine to look at CharSetLoc
 ; // for its character set, initialise the pointers and start the raster chain off.
-; // ---------------------------------------------------------------------------------------------------------------------------------MakeSprites();
+; // ---------------------------------------------------------------------------------------------------------------------------------
+	; Clear screen with offset
+	lda #$e
+	ldx #$fa
+MainProgram_clearloop34489
+	dex
+	sta $0000+$d800,x
+	sta $00fa+$d800,x
+	sta $01f4+$d800,x
+	sta $02ee+$d800,x
+	bne MainProgram_clearloop34489
+	;MakeSprites();
 ; //	
 ; //	InitSid(sidfile_1_init);
 ; //	DisableCIAInterrupts();
@@ -14359,27 +14435,27 @@ main_block_begin_
 ; //call(sidfile_1_play); 
 ; // alternative: keep commented if you prefer raster IRQ playback
 	jsr CreateSolidBlock
-MainProgram_while34474
-MainProgram_loopstart34478
+MainProgram_while34490
+MainProgram_loopstart34494
 	; Binary clause Simplified: NOTEQUALS
 	clc
 	lda #$1
 	; cmp #$00 ignored
-	beq MainProgram_edblock34477
-MainProgram_ctb34475: ;Main true block ;keep 
+	beq MainProgram_edblock34493
+MainProgram_ctb34491: ;Main true block ;keep 
 	; Binary clause Simplified: EQUALS
 	clc
 	lda total_level_counter
 	; cmp #$00 ignored
-	bne MainProgram_edblock34498
-MainProgram_localsuccess34500: ;keep
+	bne MainProgram_edblock34514
+MainProgram_localsuccess34516: ;keep
 	; ; logical AND, second requirement
 	; Binary clause Simplified: EQUALS
 	lda startUpDirty
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainProgram_edblock34498
-MainProgram_ctb34496: ;Main true block ;keep 
+	bne MainProgram_edblock34514
+MainProgram_ctb34512: ;Main true block ;keep 
 	
 ; //loop();
 ; // Main context spin-loop: raster IRQs preempt freely here, so music advances
@@ -14400,15 +14476,15 @@ MainProgram_ctb34496: ;Main true block ;keep
 	; Calling storevariable on generic assign expression
 	sta startUpDirty
 	jsr ShowStartupText
-MainProgram_edblock34498
+MainProgram_edblock34514
 	
 ; // ungate fire-to-start in IntermissionChain
 	; Binary clause Simplified: EQUALS
 	lda level_advance_pending
 	; Compare with pure num / var optimization
 	cmp #$1;keep
-	bne MainProgram_edblock34505
-MainProgram_ctb34503: ;Main true block ;keep 
+	bne MainProgram_edblock34521
+MainProgram_ctb34519: ;Main true block ;keep 
 	lda #$0
 	; Calling storevariable on generic assign expression
 	sta level_advance_pending
@@ -14419,14 +14495,17 @@ MainProgram_ctb34503: ;Main true block ;keep
 ; // ReadyMonsters uses inline ASM with absolute indexed addressing — no ZP
 ; // pointers touched, fully IRQ-safe. PreventIRQ/EnableIRQ no longer needed.
 	jsr ReadyMonsters
+	
+; //PreventIRQ();
 	jsr PreclearLeftmostAndBottomEnemies
 	
+; //EnableIRQ();
 ; // MakeMonsters uses no ZP pointer variables — runs safely with IRQs enabled.
 	jsr MakeMonsters
 	lda #$1
 	; Calling storevariable on generic assign expression
 	sta level_advance_ready
-MainProgram_edblock34505
+MainProgram_edblock34521
 	
 ; //if (score_dirty = 1) then
 	jsr DisplayScore
@@ -14436,33 +14515,28 @@ MainProgram_edblock34505
 	sty $dd0d   ; Turn off CIAs Timer interrupts ;keep
 	lda $dc0d   ; cancel all CIA-IRQs in queue/unprocessed ;keep
 	lda $dd0d   ; cancel all CIA-IRQs in queue/unprocessed ;keep
+	jsr DisplayHighScore
 	jsr DisplayLevel
 	jsr DisplayLives
 	asl $d019
 	cli
-	jmp MainProgram_while34474
-MainProgram_edblock34477
-MainProgram_loopend34479
+	jmp MainProgram_while34490
+MainProgram_edblock34493
+MainProgram_loopend34495
 main_block_end_
 	; End of program
 	; Ending memory block at $4800
-ShowStartupText_stringassignstr8830		dc.b	"nnnnnnnn"
+ShowStartupText_stringassignstr8836		dc.b	"nnnnnnnn"
 	dc.b	0
-ShowStartupText_stringassignstr8832		dc.b	"nnnnnn"
+ShowStartupText_stringassignstr8838		dc.b	"nnnnnn"
 	dc.b	0
-ShowStartupText_stringassignstr8834		dc.b	"nn"
+ShowStartupText_stringassignstr8840		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8836		dc.b	"nnnnnnnnnn"
+ShowStartupText_stringassignstr8842		dc.b	"nnnnnnnnnn"
 	dc.b	0
-ShowStartupText_stringassignstr8838		dc.b	"nnnnnnnnnnnn"
+ShowStartupText_stringassignstr8844		dc.b	"nnnnnnnnnnnn"
 	dc.b	0
-ShowStartupText_stringassignstr8840		dc.b	"nnnnnnnn"
-	dc.b	0
-ShowStartupText_stringassignstr8842		dc.b	"nn"
-	dc.b	0
-ShowStartupText_stringassignstr8844		dc.b	"nn"
-	dc.b	0
-ShowStartupText_stringassignstr8846		dc.b	"nn"
+ShowStartupText_stringassignstr8846		dc.b	"nnnnnnnn"
 	dc.b	0
 ShowStartupText_stringassignstr8848		dc.b	"nn"
 	dc.b	0
@@ -14472,73 +14546,79 @@ ShowStartupText_stringassignstr8852		dc.b	"nn"
 	dc.b	0
 ShowStartupText_stringassignstr8854		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8856		dc.b	"nnnnnnnnnnnnnnnn"
+ShowStartupText_stringassignstr8856		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8858		dc.b	"nnnnnnnn"
+ShowStartupText_stringassignstr8858		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8860		dc.b	"nnn"
+ShowStartupText_stringassignstr8860		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8862		dc.b	"nn"
+ShowStartupText_stringassignstr8862		dc.b	"nnnnnnnnnnnnnnnn"
 	dc.b	0
-ShowStartupText_stringassignstr8864		dc.b	"nnn"
+ShowStartupText_stringassignstr8864		dc.b	"nnnnnnnn"
 	dc.b	0
-ShowStartupText_stringassignstr8866		dc.b	"nn"
+ShowStartupText_stringassignstr8866		dc.b	"nnn"
 	dc.b	0
-ShowStartupText_stringassignstr8868		dc.b	"n"
+ShowStartupText_stringassignstr8868		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8870		dc.b	"n"
+ShowStartupText_stringassignstr8870		dc.b	"nnn"
 	dc.b	0
 ShowStartupText_stringassignstr8872		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8874		dc.b	"nn"
+ShowStartupText_stringassignstr8874		dc.b	"n"
 	dc.b	0
-ShowStartupText_stringassignstr8876		dc.b	"nnnnnnnn"
+ShowStartupText_stringassignstr8876		dc.b	"n"
 	dc.b	0
-ShowStartupText_stringassignstr8878		dc.b	"INVADERS"
+ShowStartupText_stringassignstr8878		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8880		dc.b	"MMXXVI"
+ShowStartupText_stringassignstr8880		dc.b	"nn"
 	dc.b	0
-ShowStartupText_stringassignstr8882		dc.b	"FIRE"
+ShowStartupText_stringassignstr8882		dc.b	"nnnnnnnn"
 	dc.b	0
-ShowStartupText_stringassignstr8884		dc.b	"BUTTON"
+ShowStartupText_stringassignstr8884		dc.b	"INVADERS"
 	dc.b	0
-ShowStartupText_stringassignstr8886		dc.b	"TO"
+ShowStartupText_stringassignstr8886		dc.b	"MMXXVI"
 	dc.b	0
-ShowStartupText_stringassignstr8888		dc.b	"START"
+ShowStartupText_stringassignstr8888		dc.b	"FIRE"
 	dc.b	0
-ShowStartupText_stringassignstr8890		dc.b	"LEVEL"
+ShowStartupText_stringassignstr8890		dc.b	"BUTTON"
 	dc.b	0
-ShowStartupText_stringassignstr8892		dc.b	"SELECT"
+ShowStartupText_stringassignstr8892		dc.b	"TO"
 	dc.b	0
-ShowStartupText_stringassignstr8894		dc.b	"("
+ShowStartupText_stringassignstr8894		dc.b	"START"
 	dc.b	0
-ShowStartupText_stringassignstr8896		dc.b	")"
+ShowStartupText_stringassignstr8896		dc.b	"LEVEL"
 	dc.b	0
-DisplayText_stringassignstr28547		dc.b	" "
+ShowStartupText_stringassignstr8898		dc.b	"SELECT"
 	dc.b	0
-DisplayText_stringassignstr28549		dc.b	"  SCORE(1)"
+ShowStartupText_stringassignstr8900		dc.b	"("
 	dc.b	0
-DisplayText_stringassignstr28551		dc.b	"     LEVEL"
+ShowStartupText_stringassignstr8902		dc.b	")"
 	dc.b	0
-DisplayText_stringassignstr28553		dc.b	"     LIVES"
+DisplayText_stringassignstr28562		dc.b	"  HI-SCORE"
 	dc.b	0
-DisplayText_stringassignstr28555		dc.b	"   "
+DisplayText_stringassignstr28564		dc.b	"     SCORE"
 	dc.b	0
-DisplayText_stringassignstr28557		dc.b	"   "
+DisplayText_stringassignstr28566		dc.b	"     LEVEL"
 	dc.b	0
-DisplayText_stringassignstr28559		dc.b	"   "
+DisplayText_stringassignstr28568		dc.b	"     LIVES"
 	dc.b	0
-DisplayText_stringassignstr28561		dc.b	"   "
+DisplayText_stringassignstr28570		dc.b	"   "
 	dc.b	0
-DisplayText_stringassignstr28563		dc.b	"   "
+DisplayText_stringassignstr28572		dc.b	"   "
 	dc.b	0
-DisplayText_stringassignstr28565		dc.b	"   "
+DisplayText_stringassignstr28574		dc.b	"   "
 	dc.b	0
-DisplayText_stringassignstr28567		dc.b	"   "
+DisplayText_stringassignstr28576		dc.b	"   "
 	dc.b	0
-DisplayText_stringassignstr28569		dc.b	"   "
+DisplayText_stringassignstr28578		dc.b	"   "
 	dc.b	0
-DisplayText_stringassignstr28571		dc.b	"ooooooooooooooooooooooooooooo"
+DisplayText_stringassignstr28580		dc.b	"   "
+	dc.b	0
+DisplayText_stringassignstr28582		dc.b	"   "
+	dc.b	0
+DisplayText_stringassignstr28584		dc.b	"   "
+	dc.b	0
+DisplayText_stringassignstr28586		dc.b	"ooooooooooooooooooooooooooooo"
 	dc.b	0
 EndBlock4800:
 

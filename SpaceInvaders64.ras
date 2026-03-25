@@ -54,7 +54,7 @@ var
 	flagGotoNextLevel : byte = 0;
 	startUpDirty : byte = 1;
 	highScore : integer = 0;
-	highScoreDirty : byte = 0;
+	highScoreDirty : byte = 1;
 	
 	//const useKernal:byte=0;
 	
@@ -91,7 +91,7 @@ var
 	const SPRITE_HEIGHT : byte = 21;
 
 	// Debug flag: set to 1 to enable debug color changes, 0 to disable
-	const DEBUG_ENABLE : byte = 1;
+	const DEBUG_ENABLE : byte = 0;
 	
 	enemyMoveCounter : byte = INITIAL_INVADER_COUNT; // equals number of invaders
 	current_speed_delay : byte = 50; // frames per march step (table or linear)
@@ -1146,6 +1146,11 @@ sgot_col sta $D9EA,x
         dex
         bpl sgot_col
 	");
+	if (score >= highScore ) then
+	begin
+		highScore := score;
+		highScoreDirty := 1;
+	end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1938,7 +1943,7 @@ Begin
 		asm("
 			lda ds_div
 			ora #$30
-			sta $049A
+			sta $058A
 		");
 		
 		// Thousands place
@@ -1952,7 +1957,7 @@ Begin
 		asm("
 			lda ds_div
 			ora #$30
-			sta $049B
+			sta $058B
 		");
 		
 		// Hundreds place
@@ -1966,7 +1971,7 @@ Begin
 		asm("
 			lda ds_div
 			ora #$30
-			sta $049C
+			sta $058C
 		");
 		
 		// Tens place
@@ -1980,14 +1985,14 @@ Begin
 		asm("
 			lda ds_div
 			ora #$30
-			sta $049D
+			sta $058D
 		");
 		
 		// Ones place (remainder)
 		asm("
 			lda ds_val
 			ora #$30
-			sta $049E
+			sta $058E
 		");
 		
 		score_dirty := 0;
@@ -2018,10 +2023,9 @@ end;
 procedure DisplayHighScore();
 begin
 	if highScoreDirty = 1 then
-	begin
-		// Display remaining_ships as a single character at row 23, col 29
-		moveto(38, 23, hi(screen_char_loc));
-		PrintDecimal(highScore, 0);
+	begin		
+		moveto(34, 2, hi(screen_char_loc));
+		PrintDecimal(highScore, 4);
 		highScoreDirty := 0;
 	end;
 end;
@@ -3348,14 +3352,20 @@ var
 	test_ptr : pointer of byte;
 begin
 		
+	/*asm ("
+		lda #$01     ; WHITE letters
+        sta $0286    ; Set color
+        ");*/
 	//moveto(29,1,hi(screen_char_loc));	
-	Screen::PrintString(" ",29,0,#Screen::screen0);
+	//PrintString("HELLO", 0, 10);
+	
+	//Screen::PrintString(" ",29,0,#Screen::screen0);
 	
 	Screen::PrintString("  HI-SCORE",29,0,#Screen::screen0);
-	Screen::PrintString("     00000",29,2,#Screen::screen0);		
+	//Screen::PrintString("     00000",29,2,#Screen::screen0);		
 	
 	Screen::PrintString("     SCORE",29,7,#Screen::screen0);
-	Screen::PrintString("     00000",29,9,#Screen::screen0);
+	//Screen::PrintString("     00000",29,9,#Screen::screen0);
 	
 	Screen::PrintString("     LEVEL",29,14,#Screen::screen0);
 	//Screen::PrintString("         1",29,17,#Screen::screen0);
@@ -4584,8 +4594,9 @@ begin
 		//if (score_dirty = 1) then
 		
 		
-		//DisplayScore();
+		DisplayScore();
 		DisableCIAInterrupts();
+		DisplayHighScore();
 		DisplayLevel();
 		DisplayLives();
 		EnableIRQ();
