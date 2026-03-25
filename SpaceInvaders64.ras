@@ -48,7 +48,8 @@ program SpaceInvaders64;
 // ============================================================================
 
 var
-	sidfile: incsid("sid/Courier.sid",2);
+	//sidfile: incsid("sid/Courier.sid",2);
+	sidfile: incsid("sid/Courier-1000.sid",2);
 	
 	advancelevel_palette_level : byte;
 	flagGotoNextLevel : byte = 0;
@@ -4628,10 +4629,10 @@ begin
 		
 		
 		DisplayScore();
-		DisableCIAInterrupts();
+		//DisableCIAInterrupts();
 		DisplayHighScore();
 		DisplayLevel();
 		DisplayLives();
-		EnableIRQ();
+		//EnableIRQ();
 	end;
 end.

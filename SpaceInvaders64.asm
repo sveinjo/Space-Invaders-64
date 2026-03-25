@@ -14,7 +14,7 @@ EndBlock801:
 	org $1000
 StartBlock1000:
 	org $1000
-	incbin	"F:/Dev/TRSE/Space-Invaders-64//sid/_Courier.dat"
+	incbin	"F:/Dev/TRSE/Space-Invaders-64//sid/_Courier-1000.dat"
 EndBlock1000:
 	org $2000
 StartBlock2000:
@@ -29,8 +29,8 @@ StartBlock4800:
 SpaceInvaders64
 	jmp block1
 Screen_p1	= $02
-Screen_sp	= $04
-Screen_p2	= $08
+Screen_sp	=    $04
+Screen_p2	=    $08
 Screen_i	dc.b	0
 Screen_j	dc.b	0
 Screen_x	dc.b	0
@@ -40,15 +40,15 @@ Screen_tab40	dc.w $00, $28, $50, $78, $a0, $c8, $f0, $118
 	dc.w $140, $168, $190, $1b8, $1e0, $208, $230, $258
 	dc.w $280, $2a8, $2d0, $2f8, $320, $348, $370, $398
 	dc.w $3c0
-Memory_p	= $16
+Memory_p	=    $16
 Memory_v	dc.b	0
 Memory_v2	dc.b	0
 StarField_RasterCount	dc.b	0
-StarField_StarfieldPtr	= $0B
-StarField_StarfieldPtr2	= $0D
-StarField_StarfieldPtr3	= $10
-StarField_StarfieldPtr4	= $12
-StarField_StaticStarPtr	= $24
+StarField_StarfieldPtr	=    $0B
+StarField_StarfieldPtr2	=    $0D
+StarField_StarfieldPtr3	=    $10
+StarField_StarfieldPtr4	=    $12
+StarField_StaticStarPtr	=    $24
 StarField_StarfieldRow	dc.b $3a, $5c, $49, $40, $5b, $3e, $5d, $51
 	dc.b $42, $5e, $56, $3b, $4f, $57, $50, $47
 	dc.b $4c, $43, $52, $5f, $64, $4e, $63, $3c
@@ -176,7 +176,7 @@ ufo_bullet_reload_timer	dc.b $0, $0, $0
 	;    Requires initialization : no
 initdiv16x8_divisor = $4c     ;$59 used for hi-byte
 initdiv16x8_dividend = $4e	  ;$fc used for hi-byte
-initdiv16x8_remainder = $50	  ;$fe used for hi-byte
+initdiv16x8_remainder = $47	  ;$fe used for hi-byte
 initdiv16x8_result = $4e ;save memory by reusing divident to store the result
 divide16x8
 	lda #0	        ;preset remainder to 0
@@ -208,7 +208,7 @@ end_procedure_init16x8div
 	;    Requires initialization : no
 mul16x8_num1Hi = $4c
 mul16x8_num1 = $4e
-mul16x8_num2 = $50
+mul16x8_num2 = $47
 mul16x8_procedure
 	lda #$00
 	ldy #$00
@@ -236,7 +236,7 @@ end_procedure_init16x8mul
 	;    Requires initialization : no
 div8x8_c = $4c
 div8x8_d = $4e
-div8x8_e = $50
+div8x8_e = $47
 	; Normal 8x8 bin div
 div8x8_procedure
 	lda #$00
@@ -305,31 +305,31 @@ callJoystick
 	sta joystickright
 	sta joystickbutton
 	lda #%00000001 ; mask joystick up mment
-	bit $50      ; bitwise AND with address 56320
+	bit $47      ; bitwise AND with address 56320
 	bne joystick_down       ; zero flag is not set -> skip to down
 	lda #1
 	sta joystickup
 joystick_down
 	lda #%00000010 ; mask joystick down movement
-	bit $50      ; bitwise AND with address 56320
+	bit $47      ; bitwise AND with address 56320
 	bne joystick_left       ; zero flag is not set -> skip to down
 	lda #1
 	sta joystickdown
 joystick_left
 	lda #%00000100 ; mask joystick left movement
-	bit $50      ; bitwise AND with address 56320
+	bit $47      ; bitwise AND with address 56320
 	bne joystick_right       ; zero flag is not set -> skip to down
 	lda #1
 	sta joystickleft
 joystick_right
 	lda #%00001000 ; mask joystick up movement
-	bit $50      ; bitwise AND with address 56320
+	bit $47      ; bitwise AND with address 56320
 	bne joystick_button       ; zero flag is not set -> skip to down
 	lda #1
 	sta joystickright
 joystick_button
 	lda #%00010000 ; mask joystick up movement
-	bit $50      ; bitwise AND with address 56320
+	bit $47      ; bitwise AND with address 56320
 	bne callJoystick_end       ; zero flag is not set -> skip to down
 	lda #1
 	sta joystickbutton
@@ -808,8 +808,8 @@ StarField_saddr	dc.w
 	org StarField_saddr+36
 StarField_caddr	dc.w	 
 	org StarField_caddr+36
-StarField_screenmemory	= $22
-StarField_colormemory	= $4b
+StarField_screenmemory	=    $22
+StarField_colormemory	=    $4b
 StarField_CreateStarScreen_block36
 StarField_CreateStarScreen
 	; Clear screen with offset
@@ -2177,7 +2177,7 @@ end_procedure_Helpers_GetSquigglyFireColumn
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : Helpers_WriteShieldRow
 	;    Procedure type : User-defined procedure
-Helpers_wsr_ptr	= $22
+Helpers_wsr_ptr	=    $22
 Helpers_wsr_addr	dc.w	0
 Helpers_wsr_c0	dc.b	0
 Helpers_wsr_c1	dc.b	0
@@ -2417,7 +2417,7 @@ ShowUFO_ctb380: ;Main true block ;keep
 ; // Exploding — show score display sprite frozen at hit position
 	; Set sprite location
 	lda #$1
-	sta $50
+	sta $47
 	; Generic 16 bit op
 	ldy #0
 	lda ufo_score_sprite
@@ -2436,7 +2436,7 @@ ShowUFO_wordAdd397
 	adc ShowUFO_rightvarInteger_var399+1
 	tay
 	lda ShowUFO_rightvarInteger_var399
-	ldx $50
+	ldx $47
 	sta $07f8 + $0,x
 	; Setting sprite position
 	; isi-pisi: value is constant
@@ -3553,7 +3553,7 @@ ShowUFOBullet_edblock4338
 ; // Explosion frame
 	; Set sprite location
 	lda ub_sprite
-	sta $50
+	sta $47
 	; Generic 16 bit op
 	ldy #0
 	lda #$1
@@ -3563,7 +3563,7 @@ ShowUFOBullet_rightvarInteger_var4393 = $54
 	; Generic 16 bit op
 	ldy #0
 	lda ub_sprite_index
-ShowUFOBullet_rightvarInteger_var4396 = $56
+ShowUFOBullet_rightvarInteger_var4396 =    $56
 	sta ShowUFOBullet_rightvarInteger_var4396
 	sty ShowUFOBullet_rightvarInteger_var4396+1
 	lda #128
@@ -3588,7 +3588,7 @@ ShowUFOBullet_wordAdd4391
 	sbc ShowUFOBullet_rightvarInteger_var4393+1
 	tay
 	lda ShowUFOBullet_rightvarInteger_var4393
-	ldx $50
+	ldx $47
 	sta $07f8 + $0,x
 	; Setting sprite position
 	; Load Byte array
@@ -4053,7 +4053,7 @@ CheckShotVsShotCollision_binary_clause_temp_var8134 = $54
 	; CAST type NADA
 	ldx sc_i
 	lda ufo_bullet_y,x 
-CheckShotVsShotCollision_binary_clause_temp_2_var8135 = $56
+CheckShotVsShotCollision_binary_clause_temp_2_var8135 =    $56
 	sta CheckShotVsShotCollision_binary_clause_temp_2_var8135
 	lda CheckShotVsShotCollision_binary_clause_temp_var8134
 	cmp CheckShotVsShotCollision_binary_clause_temp_2_var8135;keep
@@ -4296,7 +4296,7 @@ CheckEnemyShotPlayerCollision_binary_clause_temp_var8771 = $54
 	sec
 	sbc #$15
 	 ; end add / sub var with constant
-CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8772 = $56
+CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8772 =    $56
 	sta CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8772
 	lda CheckEnemyShotPlayerCollision_binary_clause_temp_var8771
 	cmp CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8772;keep
@@ -4316,7 +4316,7 @@ CheckEnemyShotPlayerCollision_binary_clause_temp_var8773 = $54
 	sec
 	sbc #$d
 	 ; end add / sub var with constant
-CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8774 = $56
+CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8774 =    $56
 	sta CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8774
 	lda CheckEnemyShotPlayerCollision_binary_clause_temp_var8773
 	cmp CheckEnemyShotPlayerCollision_binary_clause_temp_2_var8774;keep
@@ -5986,7 +5986,7 @@ end_procedure_LevelStart
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : ClearMonster
 	;    Procedure type : User-defined procedure
-sprite_data_ptr	= $22
+sprite_data_ptr	=    $22
 frame1_sprite_index	dc.b	0
 frame2_sprite_index	dc.b	0
 sprite_offset_start	dc.b	0
@@ -6123,7 +6123,7 @@ ClearMonster_rightvarInteger_var8942 = $54
 	; Generic 16 bit op
 	ldy sprite_base_address+1 ;keep
 	lda sprite_base_address
-ClearMonster_rightvarInteger_var8945 = $56
+ClearMonster_rightvarInteger_var8945 =    $56
 	sta ClearMonster_rightvarInteger_var8945
 	sty ClearMonster_rightvarInteger_var8945+1
 	; Integer constant assigning
@@ -6219,7 +6219,7 @@ ClearMonster_rightvarInteger_var8949 = $54
 	; Generic 16 bit op
 	ldy sprite_base_address+1 ;keep
 	lda sprite_base_address
-ClearMonster_rightvarInteger_var8952 = $56
+ClearMonster_rightvarInteger_var8952 =    $56
 	sta ClearMonster_rightvarInteger_var8952
 	sty ClearMonster_rightvarInteger_var8952+1
 	; Integer constant assigning
@@ -7398,7 +7398,7 @@ ShowBullet_edblock9584
 ; // Normal bullet sprite
 	; Set sprite location
 	lda #$0
-	sta $50
+	sta $47
 	; Generic 16 bit op
 	ldy #0
 	lda bullet_sprite_index
@@ -7417,7 +7417,7 @@ ShowBullet_wordAdd9605
 	adc ShowBullet_rightvarInteger_var9607+1
 	tay
 	lda ShowBullet_rightvarInteger_var9607
-	ldx $50
+	ldx $47
 	sta $07f8 + $0,x
 	; Setting sprite position
 	; isi-pisi: value is constant
@@ -8220,7 +8220,7 @@ CESC_TryAllShields_Unrolled_binary_clause_temp_var13126 = $54
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$0 ; array with const index optimization 
-CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13127 = $56
+CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13127 =    $56
 	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13127
 	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13126
 	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13127;keep
@@ -8336,7 +8336,7 @@ CESC_TryAllShields_Unrolled_binary_clause_temp_var13208 = $54
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$1 ; array with const index optimization 
-CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13209 = $56
+CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13209 =    $56
 	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13209
 	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13208
 	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13209;keep
@@ -8451,7 +8451,7 @@ CESC_TryAllShields_Unrolled_binary_clause_temp_var13290 = $54
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$2 ; array with const index optimization 
-CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13291 = $56
+CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13291 =    $56
 	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13291
 	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13290
 	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13291;keep
@@ -8567,7 +8567,7 @@ CESC_TryAllShields_Unrolled_binary_clause_temp_var13372 = $54
 	; Load Byte array
 	; CAST type NADA
 	lda SHIELD_X_MIN +$3 ; array with const index optimization 
-CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13373 = $56
+CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13373 =    $56
 	sta CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13373
 	lda CESC_TryAllShields_Unrolled_binary_clause_temp_var13372
 	cmp CESC_TryAllShields_Unrolled_binary_clause_temp_2_var13373;keep
@@ -10013,7 +10013,7 @@ end_procedure_CheckShieldCollision
 	;    Procedure type : User-defined procedure
 ase_charset_base	dc.w	0
 ase_charset_addr	dc.w	0
-ase_chr_ptr	= $22
+ase_chr_ptr	=    $22
 ase_row	dc.b	0
 ase_stencil	dc.b	0
 ase_bc_off	dc.b	0
@@ -10168,7 +10168,7 @@ ApplyShieldErosion_rightvarInteger_var27834 = $54
 	; Generic 16 bit op
 	ldy #0
 	lda ase_bc_off
-ApplyShieldErosion_rightvarInteger_var27837 = $56
+ApplyShieldErosion_rightvarInteger_var27837 =    $56
 	sta ApplyShieldErosion_rightvarInteger_var27837
 	sty ApplyShieldErosion_rightvarInteger_var27837+1
 	; HandleVarBinopB16bit
@@ -10512,7 +10512,7 @@ end_procedure_ApplyShieldErosion
 	; ***********  Defining procedure : CopyShieldSprites
 	;    Procedure type : User-defined procedure
 css_scan_addr	dc.w	0
-css_scan_ptr	= $22
+css_scan_ptr	=    $22
 css_row	dc.b	0
 css_bc	dc.b	0
 css_found	dc.b	0
@@ -10691,7 +10691,7 @@ CopyShieldSprites_rightvarInteger_var28442 = $54
 	; Load16bitvariable : #$2440
 	ldy #$24
 	lda #$40
-CopyShieldSprites_rightvarInteger_var28445 = $56
+CopyShieldSprites_rightvarInteger_var28445 =    $56
 	sta CopyShieldSprites_rightvarInteger_var28445
 	sty CopyShieldSprites_rightvarInteger_var28445+1
 	; Right is PURE NUMERIC : Is word =1
@@ -10841,7 +10841,7 @@ CopyShieldSprites_rightvarInteger_var28517 = $54
 	; Load16bitvariable : #$2440
 	ldy #$24
 	lda #$40
-CopyShieldSprites_rightvarInteger_var28520 = $56
+CopyShieldSprites_rightvarInteger_var28520 =    $56
 	sta CopyShieldSprites_rightvarInteger_var28520
 	sty CopyShieldSprites_rightvarInteger_var28520+1
 	; Right is PURE NUMERIC : Is word =1
@@ -11040,7 +11040,7 @@ end_procedure_DisableShieldLogic
 	; NodeProcedureDecl -1
 	; ***********  Defining procedure : DisplayText
 	;    Procedure type : User-defined procedure
-test_ptr	= $22
+test_ptr	=    $22
 DisplayText_block28560
 DisplayText
 	;asm ("
@@ -12498,7 +12498,7 @@ UpdateTick_binary_clause_temp_var30162 = $54
 	sec
 	sbc #$6
 	 ; end add / sub var with constant
-UpdateTick_binary_clause_temp_2_var30163 = $56
+UpdateTick_binary_clause_temp_2_var30163 =    $56
 	sta UpdateTick_binary_clause_temp_2_var30163
 	lda UpdateTick_binary_clause_temp_var30162
 	cmp UpdateTick_binary_clause_temp_2_var30163;keep
@@ -12851,7 +12851,7 @@ IntermissionChain_edblock30254
 	lda #%00000000  ; CIA#1 port B = inputs
 	sta $dc02             
 	lda $dc00
-	sta $50
+	sta $47
 	jsr callJoystick
 	; Binary clause Simplified: EQUALS
 	lda joystickbutton
@@ -13033,7 +13033,7 @@ StartupChain_edblock30363
 	lda #%00000000  ; CIA#1 port B = inputs
 	sta $dc02             
 	lda $dc00
-	sta $50
+	sta $47
 	jsr callJoystick
 	; Binary clause Simplified: EQUALS
 	lda joystickleft
@@ -13817,7 +13817,7 @@ MainRasterChain_edblock30619
 	lda #%00000000  ; CIA#1 port B = inputs
 	sta $dc02             
 	lda $dc00
-	sta $50
+	sta $47
 	jsr callJoystick
 	; Binary clause Simplified: EQUALS
 	lda joystickbutton
@@ -14489,6 +14489,8 @@ MainProgram_clearloop34553
 ; //call(sidfile_1_play); 
 ; // alternative: keep commented if you prefer raster IRQ playback
 	jsr CreateSolidBlock
+	
+; //EnableIRQ();
 MainProgram_while34554
 MainProgram_loopstart34558
 	; Binary clause Simplified: NOTEQUALS
@@ -14563,17 +14565,11 @@ MainProgram_edblock34585
 	
 ; //if (score_dirty = 1) then
 	jsr DisplayScore
-	; Disable interrupts
-	ldy #$7f    ; $7f = %01111111
-	sty $dc0d   ; Turn off CIAs Timer interrupts ;keep
-	sty $dd0d   ; Turn off CIAs Timer interrupts ;keep
-	lda $dc0d   ; cancel all CIA-IRQs in queue/unprocessed ;keep
-	lda $dd0d   ; cancel all CIA-IRQs in queue/unprocessed ;keep
+	
+; //DisableCIAInterrupts();
 	jsr DisplayHighScore
 	jsr DisplayLevel
 	jsr DisplayLives
-	asl $d019
-	cli
 	jmp MainProgram_while34554
 MainProgram_edblock34557
 MainProgram_loopend34559
