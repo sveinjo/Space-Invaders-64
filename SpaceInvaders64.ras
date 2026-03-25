@@ -61,6 +61,7 @@ var
 	score : integer = 0;    // Player score (integer — byte overflows at a 300pt saucer hit)
 	score_dirty : byte = 1; // 1 = score changed this frame; DisplayScore will refresh the screen
 	level_dirty : byte = 1;
+	spriteColor : byte = WHITE;
 
 	const GET_READY_ROW : byte = 12;  // screen row for text
 	const GET_READY_LINE1_COL : byte = 8;   // "GET READY FOR" (13 chars) centered on 29-char playfield
@@ -226,7 +227,7 @@ var
 	player_sprite_y : byte = PLAYER_POS_Y;
 	
 	// Player respawn system
-	remaining_ships : byte = 3;              // Lives remaining (0-3); game over when reaches 0
+	remaining_ships : byte = 4;              // Lives remaining (0-3); game over when reaches 0
 	lifeLostDirty : byte = 0;                // 1 = lives counter changed, refresh display
 	player_respawn_state : byte = 0;         // 0=normal, 1=exploding, 2=respawning
 	player_respawn_counter : byte = 0;       // Countdown timer for explosion/respawn
@@ -335,6 +336,27 @@ var
 // ShowUFOBullet, UpdateUFOBullet: Enemy shot display and movement
 // CheckShotVsShotCollision: Player vs enemy bullet collision
 // ---------------------------------------------------------------------------
+
+procedure SetSpriteColors();
+begin
+	// Set monster sprite colors
+	sprite_color[monsterSprite1] := spriteColor;
+	sprite_color[monsterSprite2] := spriteColor;
+	sprite_color[monsterSprite3] := spriteColor;
+	sprite_color[monsterSprite4] := spriteColor;
+	
+	// Enemy bullet sprites
+	sprite_color[ES_SHOT_SPRITE1] := CYAN;	
+	sprite_color[ES_SHOT_SPRITE2] := CYAN;	
+	sprite_color[ES_SHOT_SPRITE3] := CYAN;
+	
+	// Player and bullet
+	sprite_color[useSprite] := CYAN;
+	
+	//sprite_color[256] := RED;
+
+	
+end;
 
 procedure ShowUFO();
 var
@@ -1059,7 +1081,7 @@ begin
 ");
 end;
 	
-procedure MakeSprites();
+/*procedure MakeSprites();
 begin	
 	// Set common sprite multicolor registers
 	//sprite_multicolor_reg1:=green;
@@ -1079,7 +1101,7 @@ begin
 	// The sprite is already enabled by MakeMonsters via monsterSprite2, but set
 	// its color here so it is distinct at the top of the screen.
 	//sprite_color[UFO_HW_SPRITE] := light_red;
-end;
+end;*/
 
 
 // ── Nested: Restore buffered starfield chars beneath get-ready text ───────
@@ -2230,7 +2252,7 @@ begin
 	// Update the sprite position on screen for sprite number @useSprite	
 	SpritePos(player_sprite_x, player_sprite_y, useSprite);
 	
-	sprite_color[0] := cyan;
+	//sprite_color[0] := cyan;
 	
 	// Display explosion animation or normal player sprite
 	if player_respawn_state = 1 then
@@ -3804,7 +3826,7 @@ end;
 
 procedure MakeMonsters();
 var
-	monster_sprite_color : byte = cyan;
+	//monster_sprite_color : byte = cyan;
 	lm_level  : byte;  // counter for level loop
 	lm_offset : byte;  // accumulated Y offset for current level
 
@@ -3828,13 +3850,14 @@ begin
 	cached_rightmost_offset := GetRightmostEnemyOffset();
 	cached_leftmost_offset := GetLeftmostEnemyOffset();
 	
-	sprite_color[useSprite]:= monster_sprite_color;
+	//sprite_color[useSprite]:= monster_sprite_color;
 	
+	SetSpriteColors();
 	// Set sprite colors
-	sprite_color[monsterSprite1]:= monster_sprite_color;
-	sprite_color[monsterSprite2]:= monster_sprite_color;
-	sprite_color[monsterSprite3]:= monster_sprite_color;
-	sprite_color[monsterSprite4]:= monster_sprite_color;
+	//sprite_color[monsterSprite1]:= monster_sprite_color;
+	//sprite_color[monsterSprite2]:= monster_sprite_color;
+	//sprite_color[monsterSprite3]:= monster_sprite_color;
+	//sprite_color[monsterSprite4]:= monster_sprite_color;
 	  
 	// Enable all monster sprites
 	//togglebit(sprite_bitmask,monsterSprite1,1);
@@ -3849,11 +3872,11 @@ begin
 	togglebit(SPRITE_STRETCH_X,monsterSprite4,1);
 
 	// Enable UFO bullet sprites
-	sprite_color[ES_SHOT_SPRITE1]:=cyan;
+	//sprite_color[ES_SHOT_SPRITE1]:=cyan;
 	//togglebit(sprite_bitmask,ES_SHOT_SPRITE1,1);
-	sprite_color[ES_SHOT_SPRITE2]:=cyan;
+	//sprite_color[ES_SHOT_SPRITE2]:=cyan;
 	//togglebit(sprite_bitmask,ES_SHOT_SPRITE2,1);
-	sprite_color[ES_SHOT_SPRITE3]:=cyan;
+	//sprite_color[ES_SHOT_SPRITE3]:=cyan;
 	//togglebit(sprite_bitmask,ES_SHOT_SPRITE3,1);
 end;
 
@@ -4382,39 +4405,49 @@ begin
 	if advancelevel_palette_level = 1 then begin
 		pal_col1:=BLUE;   pal_col2:=PURPLE; pal_col3:=GREY;
 		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_BLUE; pal_col6:=DARK_GREY;  // Purple Haze
+		spriteColor := CYAN;
 	end
 	else if advancelevel_palette_level = 2 then begin
-		pal_col1:=DARK_GREY;    pal_col2:=GREEN;  pal_col3:=LIGHT_BLUE;
-		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BLUE;               // RGB
+		pal_col1:=BLUE;  pal_col2:=GREEN;  pal_col3:=GREY;
+		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_GREEN; pal_col6:=DARK_GREY; // Jungle Green
+		spriteColor := GREEN;		
 	end
 	else if advancelevel_palette_level = 3 then begin
-		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=YELLOW;
-		pal_col4:=WHITE;  pal_col5:=LIGHT_BLUE; pal_col6:=BLUE;           // Various			
+		pal_col1:=BLUE;   pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
+		pal_col4:=WHITE;  pal_col5:=CYAN;   pal_col6:=DARK_GREY;          // Ice Blue
+		spriteColor := CYAN;		
 	end
 	else if advancelevel_palette_level = 4 then begin
-		pal_col1:=BLUE;  pal_col2:=GREEN;  pal_col3:=GREY;
-		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_GREEN; pal_col6:=DARK_GREY; // Jungle Green				
+		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=YELLOW;
+		pal_col4:=WHITE;  pal_col5:=LIGHT_BLUE; pal_col6:=BLUE;           // Various
+		spriteColor := RED;
 	end
-	else if advancelevel_palette_level = 5 then begin
-		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=GREY;
-		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BROWN;              // Lava		
+	else if advancelevel_palette_level = 5 then begin		
+		pal_col1:=DARK_GREY;    pal_col2:=GREEN;  pal_col3:=LIGHT_BLUE;
+		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BLUE;               // RGB
+		spriteColor := CYAN;		
 	end
-	else if advancelevel_palette_level = 6 then begin		
-		pal_col1:=BLUE;   pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
-		pal_col4:=WHITE;  pal_col5:=CYAN;   pal_col6:=DARK_GREY;          // Ice Blue					
+	else if advancelevel_palette_level = 6 then begin	
+		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=GREY;
+		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_RED;  pal_col6:=BROWN;      // Red
+		spriteColor := LIGHT_BLUE;			
 	end
 	else if advancelevel_palette_level = 7 then begin
 		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=WHITE;
 		pal_col4:=YELLOW; pal_col5:=YELLOW; pal_col6:=BROWN;              // Gold
+		spriteColor := YELLOW;
 	end
 	else if advancelevel_palette_level = 8 then begin
-		pal_col1:=DARK_GREY; pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
-		pal_col4:=WHITE; pal_col5:=LIGHT_GREY; pal_col6:=DARK_GREY;       // Christmas		
+		/*pal_col1:=DARK_GREY; pal_col2:=LIGHT_BLUE; pal_col3:=GREY;
+		pal_col4:=WHITE; pal_col5:=LIGHT_GREY; pal_col6:=DARK_GREY;       // Christmas*/
+		pal_col1:=BROWN;    pal_col2:=ORANGE; pal_col3:=GREY;
+		pal_col4:=WHITE;  pal_col5:=LIGHT_GREY; pal_col6:=DARK_GREY;      // Silver
+		spriteColor := ORANGE;		
 	end
 	else if advancelevel_palette_level = 9 then begin
-		pal_col1:=RED;    pal_col2:=PURPLE; pal_col3:=GREY;
-		pal_col4:=LIGHT_GREY; pal_col5:=LIGHT_RED;  pal_col6:=BROWN;      // Red
-		
+		pal_col1:=RED;    pal_col2:=ORANGE; pal_col3:=GREY;
+		pal_col4:=WHITE;  pal_col5:=YELLOW; pal_col6:=BROWN;              // Lava		
+		spriteColor := RED;
 	end;
 	pending_palette := 1;
 
@@ -4503,7 +4536,7 @@ begin
 
 	Loop();*/
 	
-	MakeSprites();
+	//MakeSprites();
 	
 	InitSid(sidfile_1_init);
 	//disableciainterrupts();
